@@ -8,7 +8,11 @@ Route::view('/', 'welcome')->name('home');
 Route::prefix('{current_team}')
     ->middleware(['auth', 'verified', EnsureTeamMembership::class])
     ->group(function () {
-        Route::view('dashboard', 'dashboard')->name('dashboard');
+        Route::livewire('dashboard', 'pages::dashboard')->name('dashboard');
+        Route::livewire('dashboard/{topic}', 'pages::topic')->name('topics.show');
+        Route::livewire('dashboard/{topic}/{message}', 'pages::message')->name('messages.show');
+        Route::livewire('agents', 'pages::agents')->name('agents');
+        Route::livewire('agents/{agent}', 'pages::agent')->name('agents.show');
     });
 
 Route::middleware(['auth'])->group(function () {

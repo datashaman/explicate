@@ -11,11 +11,15 @@
             </flux:sidebar.header>
 
             <livewire:team-switcher />
+            <livewire:workspace-switcher />
 
             <flux:sidebar.nav>
                 <flux:sidebar.group :heading="__('Platform')" class="grid">
                     <flux:sidebar.item icon="home" :href="route('dashboard')" :current="request()->routeIs('dashboard')" wire:navigate>
                         {{ __('Dashboard') }}
+                    </flux:sidebar.item>
+                    <flux:sidebar.item icon="cpu-chip" :href="route('agents')" :current="request()->routeIs('agents')" wire:navigate>
+                        {{ __('Agents') }}
                     </flux:sidebar.item>
                 </flux:sidebar.group>
             </flux:sidebar.nav>
@@ -93,6 +97,7 @@
         {{ $slot }}
 
         <livewire:create-team-modal />
+        <livewire:create-workspace-modal />
 
         @persist('toast')
             <flux:toast.group>

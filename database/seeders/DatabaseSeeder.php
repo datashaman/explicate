@@ -2,7 +2,9 @@
 
 namespace Database\Seeders;
 
+use App\Models\Topic;
 use App\Models\User;
+use App\Models\Workspace;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
@@ -15,11 +17,21 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // User::factory(10)->create();
-
-        User::factory()->create([
+        $user = User::factory()->create([
             'name' => 'Test User',
             'email' => 'test@example.com',
+        ]);
+
+        $team = $user->currentTeam;
+
+        $workspace = Workspace::factory()->for($team)->create(['name' => 'My First Workspace']);
+        $user->switchWorkspace($workspace);
+
+        Topic::factory()->for($workspace)->createMany([
+            ['name' => 'Design'],
+            ['name' => 'Engineering'],
+            ['name' => 'Marketing'],
+            ['name' => 'Research'],
         ]);
     }
 }

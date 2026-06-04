@@ -72,6 +72,16 @@ class Team extends Model
     }
 
     /**
+     * Get all workspaces for this team.
+     *
+     * @return HasMany<Workspace, $this>
+     */
+    public function workspaces(): HasMany
+    {
+        return $this->hasMany(Workspace::class);
+    }
+
+    /**
      * Get all invitations for this team.
      *
      * @return HasMany<TeamInvitation, $this>
