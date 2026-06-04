@@ -25,6 +25,20 @@ test('message page loads', function () {
         ->assertSee($this->message->title);
 });
 
+test('message create page loads', function () {
+    $this->actingAs($this->user)
+        ->get(route('messages.create'))
+        ->assertOk()
+        ->assertSee('New message');
+});
+
+test('message create page preselects topic from query string', function () {
+    $this->actingAs($this->user)
+        ->get(route('messages.create', ['topic' => $this->topic->slug]))
+        ->assertOk()
+        ->assertSee($this->topic->name);
+});
+
 test('message page is forbidden for wrong workspace', function () {
     $other = Workspace::factory()->for($this->user->currentTeam)->create();
     $otherTopic = Topic::factory()->for($other)->create();
@@ -71,6 +85,29 @@ test('attachments can be uploaded', function () {
 
     expect($this->message->attachments()->count())->toBe(1);
     expect($this->message->attachments()->first()->filename)->toBe('report.pdf');
+});
+
+test('message can be created from dedicated create page with attachments', function () {
+    Storage::fake('public');
+
+    $this->actingAs($this->user);
+
+    $file = UploadedFile::fake()->create('brief.pdf', 256, 'application/pdf');
+
+    Livewire::test('pages::message-create')
+        ->set('title', 'New draft')
+        ->set('body', 'Draft body')
+        ->set('topicId', $this->topic->id)
+        ->set('uploads', [$file])
+        ->call('create')
+        ->assertHasNoErrors();
+
+    $message = $this->topic->messages()->where('title', 'New draft')->first();
+
+    expect($message)->not->toBeNull();
+    expect($message->body)->toBe('Draft body');
+    expect($message->attachments)->toHaveCount(1);
+    expect($message->attachments->first()->filename)->toBe('brief.pdf');
 });
 
 test('a topic has many messages', function () {

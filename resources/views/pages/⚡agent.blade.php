@@ -12,6 +12,8 @@ use Livewire\Component;
 new #[Title('Agent')] class extends Component {
     public Agent $agent;
 
+    public string $agentName = '';
+
     public string $provider = '';
 
     public string $model = '';
@@ -28,6 +30,8 @@ new #[Title('Agent')] class extends Component {
         );
 
         $latest = $agent->latestVersion;
+
+        $this->agentName = $agent->name;
 
         if ($latest) {
             $this->provider = $latest->provider->value;
@@ -68,6 +72,19 @@ new #[Title('Agent')] class extends Component {
         $this->reasoningEffort = '';
     }
 
+    public function saveDetails(): void
+    {
+        $validated = $this->validate([
+            'agentName' => ['required', 'string', 'max:255'],
+        ]);
+
+        $this->agent->update([
+            'name' => $validated['agentName'],
+        ]);
+
+        Flux::toast(variant: 'success', text: __('Agent saved.'));
+    }
+
     public function saveVersion(): void
     {
         $validated = $this->validate([
@@ -98,6 +115,22 @@ new #[Title('Agent')] class extends Component {
     </div>
 
     <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div>
+            <div class="rounded-lg border border-neutral-200 dark:border-white/10">
+                <div class="border-b border-neutral-100 px-4 py-3 dark:border-white/5">
+                    <flux:heading size="sm">{{ __('Agent details') }}</flux:heading>
+                </div>
+
+                <form wire:submit="saveDetails" class="space-y-4 p-4">
+                    <flux:input wire:model="agentName" :label="__('Name')" type="text" required />
+
+                    <div class="flex justify-end">
+                        <flux:button type="submit" variant="primary">{{ __('Save agent') }}</flux:button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
         {{-- Version form --}}
         <div class="lg:col-span-2">
             <div class="rounded-lg border border-neutral-200 dark:border-white/10">

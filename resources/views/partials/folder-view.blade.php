@@ -78,9 +78,23 @@
                 </button>
             </div>
 
-            <flux:modal.trigger :name="$createModal">
-                <flux:button icon="plus" size="sm">{{ $createLabel }}</flux:button>
-            </flux:modal.trigger>
+            @isset($secondaryCreateHref)
+                <flux:button :href="$secondaryCreateHref" wire:navigate icon="plus" size="sm">{{ $secondaryCreateLabel }}</flux:button>
+            @else
+                @isset($secondaryCreateModal)
+                    <flux:modal.trigger :name="$secondaryCreateModal">
+                        <flux:button icon="plus" size="sm">{{ $secondaryCreateLabel }}</flux:button>
+                    </flux:modal.trigger>
+                @endisset
+            @endisset
+
+            @isset($createHref)
+                <flux:button :href="$createHref" wire:navigate icon="plus" size="sm">{{ $createLabel }}</flux:button>
+            @else
+                <flux:modal.trigger :name="$createModal">
+                    <flux:button icon="plus" size="sm">{{ $createLabel }}</flux:button>
+                </flux:modal.trigger>
+            @endisset
         </div>
     </div>
 

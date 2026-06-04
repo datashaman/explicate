@@ -1,11 +1,14 @@
 <?php
 
 use App\Enums\MessageStatus;
+use App\Enums\Provider;
+use App\Enums\ReasoningEffort;
 use App\Models\Agent;
 use App\Models\Message;
 use App\Models\Topic;
 use Flux\Flux;
 use Illuminate\Support\Facades\Auth;
+use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 
@@ -14,9 +17,15 @@ new #[Title('Topic')] class extends Component {
 
     public string $topicName = '';
 
-    public string $messageTitle = '';
-
     public string $agentName = '';
+
+    public string $agentProvider = '';
+
+    public string $agentModel = '';
+
+    public string $agentReasoningEffort = '';
+
+    public string $agentPrompt = '';
 
     public bool $showArchived = false;
 
@@ -77,6 +86,37 @@ new #[Title('Topic')] class extends Component {
             ->get();
     }
 
+    /** @return list<string> */
+    #[Computed]
+    public function availableAgentModels(): array
+    {
+        if (! $this->agentProvider) {
+            return [];
+        }
+
+        $provider = Provider::tryFrom($this->agentProvider);
+
+        return $provider ? $provider->models() : [];
+    }
+
+    #[Computed]
+    public function showAgentReasoningEffort(): bool
+    {
+        if (! $this->agentProvider) {
+            return false;
+        }
+
+        $provider = Provider::tryFrom($this->agentProvider);
+
+        return $provider?->supportsReasoningEffort() ?? false;
+    }
+
+    public function updatedAgentProvider(): void
+    {
+        $this->agentModel = '';
+        $this->agentReasoningEffort = '';
+    }
+
     public function createAgent(): void
     {
         $workspace = Auth::user()->currentWorkspace;
@@ -85,13 +125,24 @@ new #[Title('Topic')] class extends Component {
 
         $validated = $this->validate([
             'agentName' => ['required', 'string', 'max:255'],
+            'agentProvider' => ['required', 'string', 'in:'.implode(',', array_column(Provider::cases(), 'value'))],
+            'agentModel' => ['required', 'string', 'max:255'],
+            'agentReasoningEffort' => ['nullable', 'string', 'in:'.implode(',', array_column(ReasoningEffort::cases(), 'value'))],
+            'agentPrompt' => ['nullable', 'string'],
         ]);
 
         $agent = $workspace->agents()->create(['name' => $validated['agentName']]);
 
+        $agent->versions()->create([
+            'provider' => $validated['agentProvider'],
+            'model' => $validated['agentModel'],
+            'reasoning_effort' => $validated['agentReasoningEffort'] ?: null,
+            'prompt' => $validated['agentPrompt'] ?: null,
+        ]);
+
         $this->topic->agents()->syncWithoutDetaching($agent);
 
-        $this->reset('agentName');
+        $this->reset('agentName', 'agentProvider', 'agentModel', 'agentReasoningEffort', 'agentPrompt');
 
         Flux::modal('new-agent-for-topic')->close();
 
@@ -120,20 +171,6 @@ new #[Title('Topic')] class extends Component {
         Flux::toast(variant: 'success', text: __('Agent removed.'));
     }
 
-    public function createMessage(): void
-    {
-        $validated = $this->validate([
-            'messageTitle' => ['required', 'string', 'max:255'],
-        ]);
-
-        $this->topic->messages()->create(['title' => $validated['messageTitle']]);
-
-        $this->reset('messageTitle');
-
-        Flux::modal('new-message')->close();
-
-        Flux::toast(variant: 'success', text: __('Message created.'));
-    }
 }; ?>
 
 <div class="flex h-full w-full flex-1 flex-col gap-4">
@@ -146,7 +183,7 @@ new #[Title('Topic')] class extends Component {
         'icon' => 'document-text',
         'iconClass' => 'size-12 text-neutral-400 group-hover:text-neutral-300',
         'emptyText' => __('No messages'),
-        'createModal' => 'new-message',
+        'createHref' => route('messages.create', ['topic' => $topic->slug]),
         'createLabel' => __('New message'),
         'showArchivedModel' => 'showArchived',
         'editNameModel' => 'topicName',
@@ -201,11 +238,36 @@ new #[Title('Topic')] class extends Component {
         <form wire:submit="createAgent" class="space-y-6">
             <div>
                 <flux:heading size="lg">{{ __('New agent') }}</flux:heading>
-                <flux:subheading>{{ __('Create an agent and assign it to this topic.') }}</flux:subheading>
+                <flux:subheading>{{ __('Create an agent, save its first version, and assign it to this topic.') }}</flux:subheading>
             </div>
 
             <flux:input wire:model="agentName" :label="__('Name')" type="text" required autofocus />
 
+            <div class="grid grid-cols-2 gap-4">
+                <flux:select wire:model.live="agentProvider" :label="__('Provider')" placeholder="{{ __('Select provider…') }}" required>
+                    @foreach (Provider::cases() as $providerOption)
+                        <flux:select.option :value="$providerOption->value">{{ $providerOption->label() }}</flux:select.option>
+                    @endforeach
+                </flux:select>
+
+                <flux:select wire:model="agentModel" :label="__('Model')" placeholder="{{ __('Select model…') }}" :disabled="!$agentProvider" required>
+                    @foreach ($this->availableAgentModels as $availableModel)
+                        <flux:select.option :value="$availableModel">{{ $availableModel }}</flux:select.option>
+                    @endforeach
+                </flux:select>
+            </div>
+
+            @if ($this->showAgentReasoningEffort)
+                <flux:select wire:model="agentReasoningEffort" :label="__('Reasoning effort')" placeholder="{{ __('Select effort…') }}">
+                    <flux:select.option value="">{{ __('None') }}</flux:select.option>
+                    @foreach (ReasoningEffort::cases() as $effort)
+                        <flux:select.option :value="$effort->value">{{ $effort->label() }}</flux:select.option>
+                    @endforeach
+                </flux:select>
+            @endif
+
+            <flux:textarea wire:model="agentPrompt" :label="__('Prompt')" rows="8" :placeholder="__('System prompt…')" />
+
             <div class="flex justify-end gap-2">
                 <flux:modal.close>
                     <flux:button variant="filled">{{ __('Cancel') }}</flux:button>
@@ -215,21 +277,4 @@ new #[Title('Topic')] class extends Component {
         </form>
     </flux:modal>
 
-    <flux:modal name="new-message" :show="$errors->isNotEmpty()" focusable class="max-w-sm">
-        <form wire:submit="createMessage" class="space-y-6">
-            <div>
-                <flux:heading size="lg">{{ __('New message') }}</flux:heading>
-                <flux:subheading>{{ __('Give your message a title.') }}</flux:subheading>
-            </div>
-
-            <flux:input wire:model="messageTitle" :label="__('Title')" type="text" required autofocus />
-
-            <div class="flex justify-end gap-2">
-                <flux:modal.close>
-                    <flux:button variant="filled">{{ __('Cancel') }}</flux:button>
-                </flux:modal.close>
-                <flux:button variant="primary" type="submit">{{ __('Create') }}</flux:button>
-            </div>
-        </form>
-    </flux:modal>
 </div>

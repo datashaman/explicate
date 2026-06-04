@@ -1,5 +1,7 @@
 <?php
 
+use App\Enums\Provider;
+use App\Enums\ReasoningEffort;
 use App\Models\Agent;
 use App\Models\Topic;
 use App\Models\User;
@@ -32,10 +34,21 @@ test('agent can be created', function () {
 
     Livewire::test('pages::agents')
         ->set('agentName', 'My Agent')
+        ->set('provider', Provider::OpenAI->value)
+        ->set('model', 'o4-mini')
+        ->set('reasoningEffort', ReasoningEffort::Medium->value)
+        ->set('prompt', 'Be helpful.')
         ->call('createAgent')
         ->assertHasNoErrors();
 
-    expect($this->workspace->agents()->where('name', 'My Agent')->exists())->toBeTrue();
+    $agent = $this->workspace->agents()->where('name', 'My Agent')->first();
+
+    expect($agent)->not->toBeNull();
+    expect($agent->versions)->toHaveCount(1);
+    expect($agent->versions->first()->provider)->toBe(Provider::OpenAI);
+    expect($agent->versions->first()->model)->toBe('o4-mini');
+    expect($agent->versions->first()->reasoning_effort)->toBe(ReasoningEffort::Medium);
+    expect($agent->versions->first()->prompt)->toBe('Be helpful.');
 });
 
 test('agent can be deleted', function () {
@@ -92,4 +105,38 @@ test('available agents excludes already assigned agents', function () {
 
     expect($ids)->toContain($available->id)
         ->not->toContain($assigned->id);
+});
+
+test('agent details can be updated', function () {
+    $agent = Agent::factory()->for($this->workspace)->create();
+
+    $this->actingAs($this->user);
+
+    Livewire::test('pages::agent', ['agent' => $agent])
+        ->set('agentName', 'Renamed Agent')
+        ->call('saveDetails')
+        ->assertHasNoErrors();
+
+    expect($agent->fresh()->name)->toBe('Renamed Agent');
+});
+
+test('topic page can create and assign an agent with first version details', function () {
+    $topic = Topic::factory()->for($this->workspace)->create();
+
+    $this->actingAs($this->user);
+
+    Livewire::test('pages::topic', ['topic' => $topic])
+        ->set('agentName', 'Topic Agent')
+        ->set('agentProvider', Provider::Anthropic->value)
+        ->set('agentModel', 'claude-sonnet-4-6')
+        ->set('agentPrompt', 'Stay focused.')
+        ->call('createAgent')
+        ->assertHasNoErrors();
+
+    $agent = $this->workspace->agents()->where('name', 'Topic Agent')->first();
+
+    expect($agent)->not->toBeNull();
+    expect($topic->agents()->where('agents.id', $agent->id)->exists())->toBeTrue();
+    expect($agent->versions)->toHaveCount(1);
+    expect($agent->versions->first()->model)->toBe('claude-sonnet-4-6');
 });

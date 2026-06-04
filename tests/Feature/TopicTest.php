@@ -63,6 +63,19 @@ test('dashboard shows topics as folders for current workspace', function () {
         ->assertSee($topic->name);
 });
 
+test('dashboard shows new message action', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->for($user->currentTeam)->create();
+    $user->switchWorkspace($workspace);
+
+    Topic::factory()->for($workspace)->create();
+
+    $this->actingAs($user)
+        ->get(route('dashboard'))
+        ->assertOk()
+        ->assertSee(route('messages.create'), escape: false);
+});
+
 test('topic page left aligns message icons in icon view', function () {
     $user = User::factory()->create();
     $workspace = Workspace::factory()->for($user->currentTeam)->create();

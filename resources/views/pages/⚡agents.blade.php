@@ -1,14 +1,25 @@
 <?php
 
+use App\Enums\Provider;
+use App\Enums\ReasoningEffort;
 use App\Models\Agent;
 use App\Models\Workspace;
 use Flux\Flux;
 use Illuminate\Support\Facades\Auth;
+use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 
 new #[Title('Agents')] class extends Component {
     public string $agentName = '';
+
+    public string $provider = '';
+
+    public string $model = '';
+
+    public string $reasoningEffort = '';
+
+    public string $prompt = '';
 
     public function workspace(): ?Workspace
     {
@@ -27,6 +38,37 @@ new #[Title('Agents')] class extends Component {
             : Agent::query()->whereNull('id')->get();
     }
 
+    /** @return list<string> */
+    #[Computed]
+    public function availableModels(): array
+    {
+        if (! $this->provider) {
+            return [];
+        }
+
+        $provider = Provider::tryFrom($this->provider);
+
+        return $provider ? $provider->models() : [];
+    }
+
+    #[Computed]
+    public function showReasoningEffort(): bool
+    {
+        if (! $this->provider) {
+            return false;
+        }
+
+        $provider = Provider::tryFrom($this->provider);
+
+        return $provider?->supportsReasoningEffort() ?? false;
+    }
+
+    public function updatedProvider(): void
+    {
+        $this->model = '';
+        $this->reasoningEffort = '';
+    }
+
     public function createAgent(): void
     {
         $workspace = $this->workspace();
@@ -35,11 +77,22 @@ new #[Title('Agents')] class extends Component {
 
         $validated = $this->validate([
             'agentName' => ['required', 'string', 'max:255'],
+            'provider' => ['required', 'string', 'in:'.implode(',', array_column(Provider::cases(), 'value'))],
+            'model' => ['required', 'string', 'max:255'],
+            'reasoningEffort' => ['nullable', 'string', 'in:'.implode(',', array_column(ReasoningEffort::cases(), 'value'))],
+            'prompt' => ['nullable', 'string'],
         ]);
 
-        $workspace->agents()->create(['name' => $validated['agentName']]);
+        $agent = $workspace->agents()->create(['name' => $validated['agentName']]);
 
-        $this->reset('agentName');
+        $agent->versions()->create([
+            'provider' => $validated['provider'],
+            'model' => $validated['model'],
+            'reasoning_effort' => $validated['reasoningEffort'] ?: null,
+            'prompt' => $validated['prompt'] ?: null,
+        ]);
+
+        $this->reset('agentName', 'provider', 'model', 'reasoningEffort', 'prompt');
 
         Flux::modal('new-agent')->close();
 
@@ -75,7 +128,9 @@ new #[Title('Agents')] class extends Component {
                 @foreach ($this->agents() as $agent)
                     <div class="flex items-center gap-3 px-4 py-3">
                         <flux:icon name="cpu-chip" class="size-5 shrink-0 text-neutral-400" />
-                        <span class="flex-1 text-sm text-neutral-700 dark:text-neutral-300">{{ $agent->name }}</span>
+                        <a href="{{ route('agents.show', ['agent' => $agent->slug]) }}" wire:navigate class="flex-1 text-sm text-neutral-700 hover:underline dark:text-neutral-300">
+                            {{ $agent->name }}
+                        </a>
                         <flux:button
                             wire:click="deleteAgent({{ $agent->id }})"
                             wire:confirm="{{ __('Delete this agent?') }}"
@@ -97,10 +152,35 @@ new #[Title('Agents')] class extends Component {
             <form wire:submit="createAgent" class="space-y-6">
                 <div>
                     <flux:heading size="lg">{{ __('New agent') }}</flux:heading>
-                    <flux:subheading>{{ __('Give your agent a name.') }}</flux:subheading>
+                    <flux:subheading>{{ __('Set up your agent and create its first version.') }}</flux:subheading>
                 </div>
 
                 <flux:input wire:model="agentName" :label="__('Name')" type="text" required autofocus />
+
+                <div class="grid grid-cols-2 gap-4">
+                    <flux:select wire:model.live="provider" :label="__('Provider')" placeholder="{{ __('Select provider…') }}" required>
+                        @foreach (Provider::cases() as $providerOption)
+                            <flux:select.option :value="$providerOption->value">{{ $providerOption->label() }}</flux:select.option>
+                        @endforeach
+                    </flux:select>
+
+                    <flux:select wire:model="model" :label="__('Model')" placeholder="{{ __('Select model…') }}" :disabled="!$provider" required>
+                        @foreach ($this->availableModels as $availableModel)
+                            <flux:select.option :value="$availableModel">{{ $availableModel }}</flux:select.option>
+                        @endforeach
+                    </flux:select>
+                </div>
+
+                @if ($this->showReasoningEffort)
+                    <flux:select wire:model="reasoningEffort" :label="__('Reasoning effort')" placeholder="{{ __('Select effort…') }}">
+                        <flux:select.option value="">{{ __('None') }}</flux:select.option>
+                        @foreach (ReasoningEffort::cases() as $effort)
+                            <flux:select.option :value="$effort->value">{{ $effort->label() }}</flux:select.option>
+                        @endforeach
+                    </flux:select>
+                @endif
+
+                <flux:textarea wire:model="prompt" :label="__('Prompt')" rows="8" :placeholder="__('System prompt…')" />
 
                 <div class="flex justify-end gap-2">
                     <flux:modal.close>

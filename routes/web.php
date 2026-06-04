@@ -9,6 +9,7 @@ Route::prefix('{current_team}')
     ->middleware(['auth', 'verified', EnsureTeamMembership::class])
     ->group(function () {
         Route::livewire('dashboard', 'pages::dashboard')->name('dashboard');
+        Route::livewire('dashboard/new-message', 'pages::message-create')->name('messages.create');
         Route::livewire('dashboard/{topic}', 'pages::topic')->name('topics.show');
         Route::livewire('dashboard/{topic}/{message}', 'pages::message')->name('messages.show');
         Route::livewire('agents', 'pages::agents')->name('agents');

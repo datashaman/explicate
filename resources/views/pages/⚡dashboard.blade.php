@@ -79,6 +79,8 @@ new #[Title('Dashboard')] class extends Component {
             'emptyText' => __('No topics'),
             'createModal' => 'new-topic',
             'createLabel' => __('New topic'),
+            'secondaryCreateHref' => route('messages.create'),
+            'secondaryCreateLabel' => __('New message'),
             'showArchivedModel' => 'showArchived',
         ])
 
@@ -99,6 +101,7 @@ new #[Title('Dashboard')] class extends Component {
                 </div>
             </form>
         </flux:modal>
+
     @else
         <div class="flex flex-1 flex-col items-center justify-center gap-4">
             <div class="text-center">
