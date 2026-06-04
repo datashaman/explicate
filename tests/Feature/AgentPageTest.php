@@ -20,6 +20,15 @@ test('agents page loads', function () {
         ->assertOk();
 });
 
+test('agent detail page uses main and sidebar layout', function () {
+    $agent = Agent::factory()->for($this->workspace)->create();
+
+    $this->actingAs($this->user)
+        ->get(route('agents.show', ['agent' => $agent->slug]))
+        ->assertOk()
+        ->assertSee('xl:grid-cols-[minmax(0,1.7fr)_22rem]', escape: false);
+});
+
 test('agents page shows workspace agents', function () {
     $agent = Agent::factory()->for($this->workspace)->create();
 

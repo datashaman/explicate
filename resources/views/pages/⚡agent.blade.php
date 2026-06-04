@@ -107,32 +107,32 @@ new #[Title('Agent')] class extends Component {
 
 <div class="flex h-full w-full flex-1 flex-col gap-6">
     {{-- Header --}}
-    <div class="flex items-center gap-2">
+    <div class="flex flex-col gap-3 border-b border-neutral-100 pb-4 dark:border-white/5">
         <flux:breadcrumbs>
             <flux:breadcrumbs.item :href="route('agents')" wire:navigate>{{ __('Agents') }}</flux:breadcrumbs.item>
             <flux:breadcrumbs.item>{{ $agent->name }}</flux:breadcrumbs.item>
         </flux:breadcrumbs>
+
+        <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+                <flux:heading size="xl">{{ $agent->name }}</flux:heading>
+                <flux:subheading>{{ __('Configure the agent identity, then save prompt/model snapshots as versions.') }}</flux:subheading>
+            </div>
+
+            @if ($agent->latestVersion)
+                <div class="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm dark:border-white/10 dark:bg-white/5">
+                    <div class="font-medium text-neutral-700 dark:text-neutral-300">{{ __('Latest version') }}: v{{ $agent->latestVersion->version }}</div>
+                    <div class="text-neutral-500 dark:text-neutral-400">
+                        {{ $agent->latestVersion->provider->label() }} / {{ $agent->latestVersion->model }}
+                    </div>
+                </div>
+            @endif
+        </div>
     </div>
 
-    <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div>
-            <div class="rounded-lg border border-neutral-200 dark:border-white/10">
-                <div class="border-b border-neutral-100 px-4 py-3 dark:border-white/5">
-                    <flux:heading size="sm">{{ __('Agent details') }}</flux:heading>
-                </div>
-
-                <form wire:submit="saveDetails" class="space-y-4 p-4">
-                    <flux:input wire:model="agentName" :label="__('Name')" type="text" required />
-
-                    <div class="flex justify-end">
-                        <flux:button type="submit" variant="primary">{{ __('Save agent') }}</flux:button>
-                    </div>
-                </form>
-            </div>
-        </div>
-
+    <div class="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1.7fr)_22rem]">
         {{-- Version form --}}
-        <div class="lg:col-span-2">
+        <div class="order-2 xl:order-1">
             <div class="rounded-lg border border-neutral-200 dark:border-white/10">
                 <div class="border-b border-neutral-100 px-4 py-3 dark:border-white/5">
                     <flux:heading size="sm">{{ __('New version') }}</flux:heading>
@@ -172,44 +172,60 @@ new #[Title('Agent')] class extends Component {
             </div>
         </div>
 
-        {{-- Version history --}}
-        <div>
-            <div class="rounded-lg border border-neutral-200 dark:border-white/10">
-                <div class="border-b border-neutral-100 px-4 py-3 dark:border-white/5">
-                    <flux:heading size="sm">{{ __('Version history') }}</flux:heading>
+        <div class="order-1 xl:order-2 xl:sticky xl:top-6">
+            <div class="flex flex-col gap-6">
+                <div class="rounded-lg border border-neutral-200 dark:border-white/10">
+                    <div class="border-b border-neutral-100 px-4 py-3 dark:border-white/5">
+                        <flux:heading size="sm">{{ __('Agent details') }}</flux:heading>
+                    </div>
+
+                    <form wire:submit="saveDetails" class="space-y-4 p-4">
+                        <flux:input wire:model="agentName" :label="__('Name')" type="text" required />
+
+                        <div class="flex justify-end">
+                            <flux:button type="submit" variant="primary">{{ __('Save agent') }}</flux:button>
+                        </div>
+                    </form>
                 </div>
 
-                @php $versions = $agent->versions()->orderByDesc('version')->get(); @endphp
+                {{-- Version history --}}
+                <div class="rounded-lg border border-neutral-200 dark:border-white/10">
+                    <div class="border-b border-neutral-100 px-4 py-3 dark:border-white/5">
+                        <flux:heading size="sm">{{ __('Version history') }}</flux:heading>
+                    </div>
 
-                @if ($versions->isEmpty())
-                    <div class="px-4 py-6 text-center">
-                        <flux:text class="text-sm text-neutral-400 dark:text-neutral-600">{{ __('No versions yet.') }}</flux:text>
-                    </div>
-                @else
-                    <div class="divide-y divide-neutral-100 dark:divide-white/5">
-                        @foreach ($versions as $version)
-                            <div class="px-4 py-3">
-                                <div class="flex items-center justify-between">
-                                    <flux:badge color="zinc" size="sm">v{{ $version->version }}</flux:badge>
-                                    <flux:text class="text-xs text-neutral-400">{{ $version->created_at->diffForHumans() }}</flux:text>
-                                </div>
-                                <div class="mt-1.5 space-y-0.5">
-                                    <flux:text class="text-xs text-neutral-600 dark:text-neutral-400">
-                                        {{ $version->provider->label() }} / {{ $version->model }}
-                                    </flux:text>
-                                    @if ($version->reasoning_effort)
-                                        <flux:text class="text-xs text-neutral-500">
-                                            {{ __('Reasoning:') }} {{ $version->reasoning_effort->label() }}
+                    @php $versions = $agent->versions()->orderByDesc('version')->get(); @endphp
+
+                    @if ($versions->isEmpty())
+                        <div class="px-4 py-6 text-center">
+                            <flux:text class="text-sm text-neutral-400 dark:text-neutral-600">{{ __('No versions yet.') }}</flux:text>
+                        </div>
+                    @else
+                        <div class="divide-y divide-neutral-100 dark:divide-white/5">
+                            @foreach ($versions as $version)
+                                <div class="px-4 py-3">
+                                    <div class="flex items-center justify-between">
+                                        <flux:badge color="zinc" size="sm">v{{ $version->version }}</flux:badge>
+                                        <flux:text class="text-xs text-neutral-400">{{ $version->created_at->diffForHumans() }}</flux:text>
+                                    </div>
+                                    <div class="mt-1.5 space-y-0.5">
+                                        <flux:text class="text-xs text-neutral-600 dark:text-neutral-400">
+                                            {{ $version->provider->label() }} / {{ $version->model }}
                                         </flux:text>
-                                    @endif
-                                    @if ($version->prompt)
-                                        <flux:text class="line-clamp-2 text-xs text-neutral-400">{{ $version->prompt }}</flux:text>
-                                    @endif
+                                        @if ($version->reasoning_effort)
+                                            <flux:text class="text-xs text-neutral-500">
+                                                {{ __('Reasoning:') }} {{ $version->reasoning_effort->label() }}
+                                            </flux:text>
+                                        @endif
+                                        @if ($version->prompt)
+                                            <flux:text class="line-clamp-2 text-xs text-neutral-400">{{ $version->prompt }}</flux:text>
+                                        @endif
+                                    </div>
                                 </div>
-                            </div>
-                        @endforeach
-                    </div>
-                @endif
+                            @endforeach
+                        </div>
+                    @endif
+                </div>
             </div>
         </div>
     </div>
