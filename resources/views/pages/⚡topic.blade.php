@@ -203,6 +203,7 @@ new #[Layout('layouts::workspace'), Title('Topic')] class extends Component {
                     ['label' => Auth::user()->currentWorkspace?->name, 'href' => route('dashboard')],
                     ['label' => $topic->name],
                 ],
+                'titleLabel' => __('Messages'),
                 'items' => collect($this->items()),
                 'icon' => 'document-text',
                 'iconClass' => 'size-12 text-neutral-400 group-hover:text-neutral-300',
@@ -210,9 +211,8 @@ new #[Layout('layouts::workspace'), Title('Topic')] class extends Component {
                 'createHref' => route('messages.create', ['topic' => $topic->slug]),
                 'createLabel' => __('New message'),
                 'showArchivedModel' => 'showArchived',
-                'editNameModel' => 'topicName',
-                'editNameAction' => 'saveName',
-                'editNameDispatch' => 'name-saved',
+                'toolbarClass' => 'border-b border-neutral-300 bg-emerald-50 px-4 py-3 dark:border-white/10 dark:bg-emerald-500/10',
+                'contentClass' => 'overflow-auto px-4 py-4',
             ])
         </div>
 

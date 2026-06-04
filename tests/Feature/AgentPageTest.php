@@ -100,6 +100,35 @@ test('agent can be unassigned from a topic', function () {
     expect($topic->agents()->where('agents.id', $agent->id)->exists())->toBeFalse();
 });
 
+test('agent can be assigned to a selected topic from the dashboard component', function () {
+    $agent = Agent::factory()->for($this->workspace)->create();
+    $topic = Topic::factory()->for($this->workspace)->create(['slug' => 'dashboard-topic']);
+
+    $this->actingAs($this->user);
+
+    Livewire::test('pages::dashboard')
+        ->set('selectedTopicSlug', $topic->slug)
+        ->call('assignAgent', $agent->id)
+        ->assertHasNoErrors();
+
+    expect($topic->agents()->where('agents.id', $agent->id)->exists())->toBeTrue();
+});
+
+test('agent can be unassigned from a selected topic from the dashboard component', function () {
+    $agent = Agent::factory()->for($this->workspace)->create();
+    $topic = Topic::factory()->for($this->workspace)->create(['slug' => 'dashboard-topic']);
+    $topic->agents()->attach($agent);
+
+    $this->actingAs($this->user);
+
+    Livewire::test('pages::dashboard')
+        ->set('selectedTopicSlug', $topic->slug)
+        ->call('unassignAgent', $agent->id)
+        ->assertHasNoErrors();
+
+    expect($topic->agents()->where('agents.id', $agent->id)->exists())->toBeFalse();
+});
+
 test('available agents excludes already assigned agents', function () {
     $assigned = Agent::factory()->for($this->workspace)->create();
     $available = Agent::factory()->for($this->workspace)->create();

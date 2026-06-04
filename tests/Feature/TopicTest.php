@@ -68,7 +68,9 @@ test('dashboard shows topics as folders for current workspace', function () {
         ->assertSee('Topics')
         ->assertSee('Messages')
         ->assertSee($topic->name)
-        ->assertSee($message->title);
+        ->assertDontSee($message->title)
+        ->assertSee('Select a topic')
+        ->assertSee('Choose a topic to view its messages.');
 });
 
 test('dashboard shows selected topic in the main panel', function () {
@@ -138,7 +140,78 @@ test('dashboard shows new message action', function () {
     $this->actingAs($user)
         ->get(route('dashboard'))
         ->assertOk()
-        ->assertSee(route('messages.create'), escape: false);
+        ->assertDontSee(route('messages.create'), escape: false);
+});
+
+test('dashboard shows mobile bottom navigation with topics active by default', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->for($user->currentTeam)->create();
+    $user->switchWorkspace($workspace);
+
+    Topic::factory()->for($workspace)->create();
+
+    $this->actingAs($user)
+        ->get(route('dashboard'))
+        ->assertOk()
+        ->assertSee('data-mobile-nav="topics"', escape: false)
+        ->assertSee('data-mobile-nav="messages"', escape: false)
+        ->assertSee('data-mobile-nav="agents"', escape: false)
+        ->assertSee('aria-pressed="true"', escape: false)
+        ->assertSee('data-mobile-panel="topics"', escape: false)
+        ->assertSee('min-h-[calc(100dvh-4rem)]', escape: false)
+        ->assertSee('Agents');
+});
+
+test('dashboard can render the topics mobile panel as active', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->for($user->currentTeam)->create();
+    $user->switchWorkspace($workspace);
+
+    Topic::factory()->for($workspace)->create();
+
+    $this->actingAs($user)
+        ->get(route('dashboard', ['panel' => 'topics']))
+        ->assertOk()
+        ->assertSee('data-mobile-nav="topics"', escape: false)
+        ->assertSee('aria-pressed="true"', escape: false)
+        ->assertSee('hidden xl:flex', escape: false);
+});
+
+test('dashboard without a selected topic does not allow top-level messages view', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->for($user->currentTeam)->create();
+    $user->switchWorkspace($workspace);
+
+    Topic::factory()->for($workspace)->create();
+
+    $this->actingAs($user)
+        ->get(route('dashboard', ['panel' => 'messages']))
+        ->assertOk()
+        ->assertSee('Select a topic')
+        ->assertSee('data-mobile-panel="topics"', escape: false)
+        ->assertDontSee('New message')
+        ->assertSee('data-mobile-nav="messages"', escape: false)
+        ->assertSee('disabled', escape: false);
+});
+
+test('dashboard selected topic shows attach and detach actions in the agents rail', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->for($user->currentTeam)->create();
+    $user->switchWorkspace($workspace);
+
+    $topic = Topic::factory()->for($workspace)->create(['slug' => 'selected-topic']);
+    $attachedAgent = Agent::factory()->for($workspace)->create(['name' => 'Attached Agent']);
+    $availableAgent = Agent::factory()->for($workspace)->create(['name' => 'Available Agent']);
+
+    $topic->agents()->attach($attachedAgent);
+
+    $this->actingAs($user)
+        ->get(route('dashboard', ['topic' => $topic->slug, 'panel' => 'agents']))
+        ->assertOk()
+        ->assertSee('Attached Agent')
+        ->assertSee('Available Agent')
+        ->assertSee('Attach')
+        ->assertSee('Detach');
 });
 
 test('topic page left aligns message icons in icon view', function () {
@@ -152,6 +225,7 @@ test('topic page left aligns message icons in icon view', function () {
     $this->actingAs($user)
         ->get(route('topics.show', ['topic' => $topic->slug]))
         ->assertOk()
+        ->assertSee('Messages')
         ->assertSee('Workspace agents')
         ->assertSee('x-if="view === \'icons\'"', escape: false)
         ->assertSee('x-if="view === \'list\'"', escape: false);

@@ -8,11 +8,61 @@
 @isset($editNameDispatch) x-on:{{ $editNameDispatch }}.window="editing = false" @endisset
 @class([$rootClass ?? null])
 >
+    @php
+        $splitLastBreadcrumb = $splitLastBreadcrumb ?? false;
+        $leadingBreadcrumbs = $splitLastBreadcrumb && count($breadcrumbs) > 1 ? array_slice($breadcrumbs, 0, -1) : $breadcrumbs;
+        $lastBreadcrumb = $splitLastBreadcrumb && count($breadcrumbs) > 1 ? end($breadcrumbs) : null;
+        $titleLabel = $titleLabel ?? null;
+        $toolbarClass = $toolbarClass ?? null;
+        $contentClass = $contentClass ?? 'mt-4 overflow-auto';
+    @endphp
+
     {{-- Toolbar --}}
-    <div class="flex items-center justify-between gap-4">
-        {{-- Breadcrumbs / inline name editor --}}
-        <div class="flex min-w-0 items-center gap-2">
-            @isset($editNameModel)
+    <div @class(['flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between', $toolbarClass])>
+        @if ($titleLabel)
+            <div class="flex items-center justify-between gap-3">
+                <flux:heading size="sm">{{ $titleLabel }}</flux:heading>
+
+                @isset($createHref)
+                    <flux:button :href="$createHref" wire:navigate icon="plus" size="sm">{{ $createLabel }}</flux:button>
+                @else
+                    <flux:modal.trigger :name="$createModal">
+                        <flux:button icon="plus" size="sm">{{ $createLabel }}</flux:button>
+                    </flux:modal.trigger>
+                @endisset
+            </div>
+
+            <div class="flex w-full flex-wrap items-center justify-between gap-2 sm:w-auto sm:shrink-0 sm:flex-nowrap sm:justify-end sm:gap-3">
+                @isset($showArchivedModel)
+                    <div x-data="{
+                        init() {
+                            const stored = localStorage.getItem('show-archived');
+                            if (stored !== null) $wire.set('{{ $showArchivedModel }}', stored === 'true');
+                            $watch('$wire.{{ $showArchivedModel }}', v => localStorage.setItem('show-archived', v));
+                        }
+                    }">
+                        <flux:checkbox wire:model.live="{{ $showArchivedModel }}" :label="__('Show archived')" />
+                    </div>
+                @endisset
+
+                <div class="flex items-center rounded-lg border border-neutral-200 dark:border-white/10">
+                    <button @click="setView('icons')" title="{{ __('Icon view') }}"
+                            :class="view === 'icons' ? 'bg-neutral-100 dark:bg-white/10 text-neutral-900 dark:text-white' : 'text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300'"
+                            class="rounded-l-lg p-1.5 transition-colors">
+                        <flux:icon name="squares-2x2" variant="mini" class="size-4" />
+                    </button>
+                    <div class="w-px self-stretch bg-neutral-200 dark:bg-white/10"></div>
+                    <button @click="setView('list')" title="{{ __('List view') }}"
+                            :class="view === 'list' ? 'bg-neutral-100 dark:bg-white/10 text-neutral-900 dark:text-white' : 'text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300'"
+                            class="rounded-r-lg p-1.5 transition-colors">
+                        <flux:icon name="list-bullet" variant="mini" class="size-4" />
+                    </button>
+                </div>
+            </div>
+        @else
+            {{-- Breadcrumbs / inline name editor --}}
+            <div class="flex min-w-0 items-center gap-2">
+                @if (isset($editNameModel))
                 {{-- All but last breadcrumb --}}
                 @if (count($breadcrumbs) > 1)
                     <flux:breadcrumbs>
@@ -40,67 +90,82 @@
                     <flux:button type="button" size="sm" x-on:click="cancelEdit">{{ __('Cancel') }}</flux:button>
                 </form>
             @else
-                <flux:breadcrumbs>
-                    @foreach ($breadcrumbs as $crumb)
-                        @if (isset($crumb['href']))
-                            <flux:breadcrumbs.item :href="$crumb['href']" wire:navigate>{{ $crumb['label'] }}</flux:breadcrumbs.item>
-                        @else
-                            <flux:breadcrumbs.item>{{ $crumb['label'] }}</flux:breadcrumbs.item>
-                        @endif
-                    @endforeach
-                </flux:breadcrumbs>
-            @endisset
-        </div>
-
-        <div class="flex shrink-0 items-center gap-3">
-            @isset($showArchivedModel)
-                <div x-data="{
-                    init() {
-                        const stored = localStorage.getItem('show-archived');
-                        if (stored !== null) $wire.set('{{ $showArchivedModel }}', stored === 'true');
-                        $watch('$wire.{{ $showArchivedModel }}', v => localStorage.setItem('show-archived', v));
-                    }
-                }">
-                    <flux:checkbox wire:model.live="{{ $showArchivedModel }}" :label="__('Show archived')" />
-                </div>
-            @endisset
-
-            <div class="flex items-center rounded-lg border border-neutral-200 dark:border-white/10">
-                <button @click="setView('icons')" title="{{ __('Icon view') }}"
-                        :class="view === 'icons' ? 'bg-neutral-100 dark:bg-white/10 text-neutral-900 dark:text-white' : 'text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300'"
-                        class="rounded-l-lg p-1.5 transition-colors">
-                    <flux:icon name="squares-2x2" variant="mini" class="size-4" />
-                </button>
-                <div class="w-px self-stretch bg-neutral-200 dark:bg-white/10"></div>
-                <button @click="setView('list')" title="{{ __('List view') }}"
-                        :class="view === 'list' ? 'bg-neutral-100 dark:bg-white/10 text-neutral-900 dark:text-white' : 'text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300'"
-                        class="rounded-r-lg p-1.5 transition-colors">
-                    <flux:icon name="list-bullet" variant="mini" class="size-4" />
-                </button>
+                @if ($splitLastBreadcrumb && $lastBreadcrumb)
+                    <flux:breadcrumbs>
+                        @foreach ($leadingBreadcrumbs as $crumb)
+                            @if (isset($crumb['href']))
+                                <flux:breadcrumbs.item :href="$crumb['href']" wire:navigate>{{ $crumb['label'] }}</flux:breadcrumbs.item>
+                            @else
+                                <flux:breadcrumbs.item>{{ $crumb['label'] }}</flux:breadcrumbs.item>
+                            @endif
+                        @endforeach
+                    </flux:breadcrumbs>
+                    <span class="text-neutral-300 dark:text-neutral-600">/</span>
+                    <span class="text-sm text-neutral-700 dark:text-neutral-300">{{ $lastBreadcrumb['label'] }}</span>
+                @else
+                    <flux:breadcrumbs>
+                        @foreach ($breadcrumbs as $crumb)
+                            @if (isset($crumb['href']))
+                                <flux:breadcrumbs.item :href="$crumb['href']" wire:navigate>{{ $crumb['label'] }}</flux:breadcrumbs.item>
+                            @else
+                                <flux:breadcrumbs.item>{{ $crumb['label'] }}</flux:breadcrumbs.item>
+                            @endif
+                        @endforeach
+                    </flux:breadcrumbs>
+                @endif
+                @endif
             </div>
 
-            @isset($secondaryCreateHref)
-                <flux:button :href="$secondaryCreateHref" wire:navigate icon="plus" size="sm">{{ $secondaryCreateLabel }}</flux:button>
-            @else
-                @isset($secondaryCreateModal)
-                    <flux:modal.trigger :name="$secondaryCreateModal">
-                        <flux:button icon="plus" size="sm">{{ $secondaryCreateLabel }}</flux:button>
+            <div class="flex w-full flex-wrap items-center justify-between gap-2 sm:w-auto sm:shrink-0 sm:flex-nowrap sm:justify-end sm:gap-3">
+                @isset($showArchivedModel)
+                    <div x-data="{
+                        init() {
+                            const stored = localStorage.getItem('show-archived');
+                            if (stored !== null) $wire.set('{{ $showArchivedModel }}', stored === 'true');
+                            $watch('$wire.{{ $showArchivedModel }}', v => localStorage.setItem('show-archived', v));
+                        }
+                    }">
+                        <flux:checkbox wire:model.live="{{ $showArchivedModel }}" :label="__('Show archived')" />
+                    </div>
+                @endisset
+
+                <div class="flex items-center rounded-lg border border-neutral-200 dark:border-white/10">
+                    <button @click="setView('icons')" title="{{ __('Icon view') }}"
+                            :class="view === 'icons' ? 'bg-neutral-100 dark:bg-white/10 text-neutral-900 dark:text-white' : 'text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300'"
+                            class="rounded-l-lg p-1.5 transition-colors">
+                        <flux:icon name="squares-2x2" variant="mini" class="size-4" />
+                    </button>
+                    <div class="w-px self-stretch bg-neutral-200 dark:bg-white/10"></div>
+                    <button @click="setView('list')" title="{{ __('List view') }}"
+                            :class="view === 'list' ? 'bg-neutral-100 dark:bg-white/10 text-neutral-900 dark:text-white' : 'text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300'"
+                            class="rounded-r-lg p-1.5 transition-colors">
+                        <flux:icon name="list-bullet" variant="mini" class="size-4" />
+                    </button>
+                </div>
+
+                @isset($secondaryCreateHref)
+                    <flux:button :href="$secondaryCreateHref" wire:navigate icon="plus" size="sm">{{ $secondaryCreateLabel }}</flux:button>
+                @else
+                    @isset($secondaryCreateModal)
+                        <flux:modal.trigger :name="$secondaryCreateModal">
+                            <flux:button icon="plus" size="sm">{{ $secondaryCreateLabel }}</flux:button>
+                        </flux:modal.trigger>
+                    @endisset
+                @endisset
+
+                @isset($createHref)
+                    <flux:button :href="$createHref" wire:navigate icon="plus" size="sm">{{ $createLabel }}</flux:button>
+                @else
+                    <flux:modal.trigger :name="$createModal">
+                        <flux:button icon="plus" size="sm">{{ $createLabel }}</flux:button>
                     </flux:modal.trigger>
                 @endisset
-            @endisset
-
-            @isset($createHref)
-                <flux:button :href="$createHref" wire:navigate icon="plus" size="sm">{{ $createLabel }}</flux:button>
-            @else
-                <flux:modal.trigger :name="$createModal">
-                    <flux:button icon="plus" size="sm">{{ $createLabel }}</flux:button>
-                </flux:modal.trigger>
-            @endisset
-        </div>
+            </div>
+        @endif
     </div>
 
     {{-- Content --}}
-    <div @class(['mt-4 overflow-auto', $contentClass ?? null])>
+    <div @class([$contentClass])>
         @if ($items->isNotEmpty())
             <template x-if="view === 'icons'">
                 <div class="flex flex-wrap justify-start gap-6 content-start">

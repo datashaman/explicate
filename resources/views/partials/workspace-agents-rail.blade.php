@@ -4,10 +4,16 @@
     'assignedAgentIds' => [],
     'assignAction' => null,
     'unassignAction' => null,
+    'panelId' => null,
+    'asideClass' => null,
+    'containerClass' => null,
 ])
 
-<aside class="xl:sticky xl:top-6">
-    <div class="flex flex-col overflow-hidden rounded-xl border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] xl:h-full xl:min-h-[24rem] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none">
+<aside @if ($panelId) id="{{ $panelId }}" @endif @class(['xl:sticky xl:top-6', $asideClass])>
+    <div @class([
+        'flex flex-col overflow-hidden rounded-xl border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] xl:h-full xl:min-h-[24rem] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none',
+        $containerClass,
+    ])>
         <div class="flex items-center justify-between gap-3 border-b border-neutral-300 bg-amber-50 px-4 py-3 dark:border-white/10 dark:bg-amber-500/10">
             <flux:heading size="sm">{{ __('Workspace agents') }}</flux:heading>
             <flux:modal.trigger :name="$createModal">
@@ -16,11 +22,11 @@
         </div>
 
         @if ($agents->isEmpty())
-            <div class="flex flex-1 items-start bg-white px-4 py-6 text-center dark:bg-zinc-900/20">
+            <div class="bg-white px-4 py-6 text-center xl:flex xl:flex-1 xl:items-start dark:bg-zinc-900/20">
                 <flux:text class="text-sm text-neutral-400 dark:text-neutral-600">{{ __('No agents in this workspace.') }}</flux:text>
             </div>
         @else
-            <div class="flex-1 divide-y divide-neutral-200 overflow-auto bg-white dark:divide-white/5 dark:bg-zinc-900/20">
+            <div class="divide-y divide-neutral-200 bg-white xl:flex-1 xl:overflow-auto dark:divide-white/5 dark:bg-zinc-900/20">
                 @foreach ($agents as $agent)
                     @php $isAssigned = in_array($agent->id, $assignedAgentIds, true); @endphp
 

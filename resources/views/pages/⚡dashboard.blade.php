@@ -18,6 +18,9 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
     #[Url(as: 'topic')]
     public ?string $selectedTopicSlug = null;
 
+    #[Url(as: 'panel')]
+    public string $mobilePanel = 'topics';
+
     public string $topicName = '';
 
     public string $agentName = '';
@@ -31,6 +34,11 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
     public string $prompt = '';
 
     public bool $showArchived = false;
+
+    public function mount(): void
+    {
+        $this->normalizeMobilePanel();
+    }
 
     public function workspace(): ?\App\Models\Workspace
     {
@@ -46,6 +54,20 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         }
 
         return $workspace->topics()->where('slug', $this->selectedTopicSlug)->first();
+    }
+
+    /**
+     * @return list<int>
+     */
+    public function assignedAgentIds(): array
+    {
+        $topic = $this->selectedTopic();
+
+        if (! $topic) {
+            return [];
+        }
+
+        return $topic->agents()->pluck('agents.id')->all();
     }
 
     /**
@@ -79,26 +101,6 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                 'messages as published_count' => fn ($q) => $q->where('status', MessageStatus::Published),
                 'messages as archived_count' => fn ($q) => $q->where('status', MessageStatus::Archived),
             ])
-            ->get();
-    }
-
-    /**
-     * @return \Illuminate\Database\Eloquent\Collection<int, Message>
-     */
-    public function workspaceMessages(): \Illuminate\Database\Eloquent\Collection
-    {
-        $workspace = $this->workspace();
-
-        if (! $workspace) {
-            return Message::query()->whereNull('id')->get();
-        }
-
-        return Message::query()
-            ->with('topic')
-            ->whereHas('topic', fn ($query) => $query->where('workspace_id', $workspace->id))
-            ->when(! $this->showArchived, fn ($query) => $query->where('status', '!=', MessageStatus::Archived))
-            ->orderByDesc('updated_at')
-            ->orderByDesc('id')
             ->get();
     }
 
@@ -158,6 +160,28 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         $this->reasoningEffort = '';
     }
 
+    public function updatedMobilePanel(): void
+    {
+        $this->normalizeMobilePanel();
+    }
+
+    public function showMobilePanel(string $panel): void
+    {
+        $this->mobilePanel = $panel;
+        $this->normalizeMobilePanel();
+    }
+
+    private function normalizeMobilePanel(): void
+    {
+        if (! in_array($this->mobilePanel, ['topics', 'messages', 'agents'], true)) {
+            $this->mobilePanel = 'topics';
+        }
+
+        if (! $this->selectedTopic() && $this->mobilePanel === 'messages') {
+            $this->mobilePanel = 'topics';
+        }
+    }
+
     public function createTopic(): void
     {
         $workspace = $this->workspace();
@@ -206,12 +230,53 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
         Flux::toast(variant: 'success', text: __('Agent created.'));
     }
+
+    public function assignAgent(int $agentId): void
+    {
+        $topic = $this->selectedTopic();
+
+        abort_unless($topic, 422);
+
+        $agent = Auth::user()->currentWorkspace
+            ->agents()
+            ->findOrFail($agentId);
+
+        $topic->agents()->syncWithoutDetaching($agent);
+
+        Flux::toast(variant: 'success', text: __('Agent assigned.'));
+    }
+
+    public function unassignAgent(int $agentId): void
+    {
+        $topic = $this->selectedTopic();
+
+        abort_unless($topic, 422);
+
+        $topic->agents()->detach($agentId);
+
+        Flux::toast(variant: 'success', text: __('Agent removed.'));
+    }
 }; ?>
+
+@php
+    $mobilePanelMinHeight = 'min-h-[calc(100dvh-4rem)]';
+@endphp
 
 <div class="flex h-full w-full flex-col gap-3 xl:flex-1">
     @if ($this->workspace())
+        @php
+            $hasSelectedTopic = (bool) $this->selectedTopic();
+        @endphp
+
         <div class="grid grid-cols-1 items-stretch gap-3 xl:flex-1 xl:auto-rows-fr xl:grid-cols-[16rem_minmax(0,1fr)_19rem]">
-            <section class="flex flex-col overflow-hidden rounded-xl border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] xl:h-full xl:min-h-[24rem] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none">
+            <section
+                id="topics-panel"
+                data-mobile-panel="topics"
+                @class([
+                    "scroll-mt-4 {$mobilePanelMinHeight} flex flex-col overflow-hidden rounded-xl border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] xl:h-full xl:min-h-[24rem] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none",
+                    'hidden xl:flex' => $this->mobilePanel !== 'topics',
+                ])
+            >
                 <div class="flex items-center justify-between gap-3 border-b border-neutral-300 bg-blue-50 px-4 py-3 dark:border-white/10 dark:bg-blue-500/10">
                     <flux:heading size="sm">{{ __('Topics') }}</flux:heading>
                     <flux:modal.trigger name="new-topic">
@@ -220,13 +285,13 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                 </div>
 
                 @if ($this->topics()->isEmpty())
-                    <div class="flex flex-1 items-start bg-white px-4 py-6 dark:bg-zinc-900/20">
+                    <div class="bg-white px-4 py-6 xl:flex xl:flex-1 xl:items-start dark:bg-zinc-900/20">
                         <flux:text class="text-sm text-neutral-400 dark:text-neutral-600">{{ __('No topics') }}</flux:text>
                     </div>
                 @else
-                    <div class="flex-1 divide-y divide-neutral-200 overflow-auto bg-white dark:divide-white/5 dark:bg-zinc-900/20">
+                    <div class="divide-y divide-neutral-200 bg-white xl:flex-1 xl:overflow-auto dark:divide-white/5 dark:bg-zinc-900/20">
                         @foreach ($this->topics() as $topic)
-                            <a href="{{ route('dashboard', ['topic' => $topic->slug]) }}" wire:navigate
+                            <a href="{{ route('dashboard', ['topic' => $topic->slug, 'panel' => 'messages']) }}" wire:navigate
                                @class([
                                    'flex items-center gap-3 px-4 py-3 hover:bg-neutral-100 dark:hover:bg-white/5',
                                    'bg-blue-100/80 dark:bg-blue-500/15' => $selectedTopicSlug === $topic->slug,
@@ -255,12 +320,20 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             </section>
 
             @if ($this->selectedTopic())
-                <div class="flex flex-col overflow-hidden rounded-xl border border-neutral-300 bg-white p-4 shadow-sm shadow-black/[0.04] xl:h-full xl:min-h-[24rem] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none">
+                <section
+                    id="messages-panel"
+                    data-mobile-panel="messages"
+                    @class([
+                        "scroll-mt-4 {$mobilePanelMinHeight} flex flex-col overflow-hidden rounded-xl border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] xl:h-full xl:min-h-[24rem] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none",
+                        'hidden xl:flex' => $this->mobilePanel !== 'messages',
+                    ])
+                >
                     @include('partials.folder-view', [
                         'breadcrumbs' => [
                             ['label' => $this->workspace()->name, 'href' => route('dashboard')],
                             ['label' => $this->selectedTopic()->name],
                         ],
+                        'titleLabel' => __('Messages'),
                         'items' => collect($this->selectedTopicItems()),
                         'icon' => 'document-text',
                         'iconClass' => 'size-12 text-neutral-400 group-hover:text-neutral-300',
@@ -268,50 +341,102 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                         'createHref' => route('messages.create', ['topic' => $this->selectedTopic()->slug]),
                         'createLabel' => __('New message'),
                         'showArchivedModel' => 'showArchived',
-                        'rootClass' => 'flex h-full flex-col',
-                        'contentClass' => 'flex-1 min-h-0',
+                        'toolbarClass' => 'border-b border-neutral-300 bg-emerald-50 px-4 py-3 dark:border-white/10 dark:bg-emerald-500/10',
+                        'rootClass' => 'flex flex-col xl:h-full',
+                        'contentClass' => 'overflow-auto px-4 py-4 xl:flex-1 xl:min-h-0',
                     ])
-                </div>
+                </section>
             @else
-                <section class="flex flex-col overflow-hidden rounded-xl border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] xl:h-full xl:min-h-[24rem] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none">
+                <section
+                    id="messages-panel"
+                    data-mobile-panel="messages"
+                    @class([
+                        "scroll-mt-4 {$mobilePanelMinHeight} flex flex-col overflow-hidden rounded-xl border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] xl:h-full xl:min-h-[24rem] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none",
+                        'hidden xl:flex' => $this->mobilePanel !== 'messages',
+                    ])
+                >
                     <div class="flex items-center justify-between gap-3 border-b border-neutral-300 bg-emerald-50 px-4 py-3 dark:border-white/10 dark:bg-emerald-500/10">
-                        <div class="flex items-center gap-3">
-                            <flux:heading size="sm">{{ __('Messages') }}</flux:heading>
-                            <flux:checkbox wire:model.live="showArchived" :label="__('Show archived')" />
-                        </div>
-
-                        <flux:button :href="route('messages.create')" wire:navigate icon="plus" size="xs">{{ __('New message') }}</flux:button>
+                        <flux:heading size="sm">{{ __('Messages') }}</flux:heading>
                     </div>
 
-                    @if ($this->workspaceMessages()->isEmpty())
-                        <div class="flex flex-1 items-start bg-white px-4 py-6 dark:bg-zinc-900/20">
-                            <flux:text class="text-sm text-neutral-400 dark:text-neutral-600">{{ __('No messages') }}</flux:text>
+                    <div class="flex flex-1 items-center justify-center px-6 py-10 text-center">
+                        <div class="space-y-2">
+                            <flux:heading size="sm">{{ __('Select a topic') }}</flux:heading>
+                            <flux:text class="text-sm text-neutral-400 dark:text-neutral-600">
+                                {{ __('Choose a topic to view its messages.') }}
+                            </flux:text>
                         </div>
-                    @else
-                        <div class="flex-1 divide-y divide-neutral-200 overflow-auto bg-white dark:divide-white/5 dark:bg-zinc-900/20">
-                            @foreach ($this->workspaceMessages() as $message)
-                                <a href="{{ route('messages.show', ['topic' => $message->topic->slug, 'message' => $message->slug]) }}" wire:navigate
-                                   class="flex items-center gap-3 px-4 py-3 hover:bg-neutral-100 dark:hover:bg-white/5">
-                                    <div class="flex size-8 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-neutral-500 dark:bg-white/10 dark:text-neutral-300">
-                                        <flux:icon name="document-text" class="size-4" />
-                                    </div>
-                                    <div class="min-w-0 flex-1">
-                                        <div class="truncate text-sm font-medium text-neutral-700 dark:text-neutral-300">{{ $message->title }}</div>
-                                        <div class="truncate text-xs text-neutral-400 dark:text-neutral-500">{{ $message->topic->name }}</div>
-                                    </div>
-                                    <flux:badge :color="$message->status->color()" size="sm">{{ $message->status->label() }}</flux:badge>
-                                </a>
-                            @endforeach
-                        </div>
-                    @endif
+                    </div>
                 </section>
             @endif
 
-            @include('partials.workspace-agents-rail', [
-                'agents' => $this->agents(),
-                'createModal' => 'new-dashboard-agent',
-            ])
+            <div
+                data-mobile-panel="agents"
+                @class([
+                    'xl:block',
+                    'hidden xl:block' => $this->mobilePanel !== 'agents',
+                ])
+            >
+                @include('partials.workspace-agents-rail', [
+                    'agents' => $this->agents(),
+                    'createModal' => 'new-dashboard-agent',
+                    'panelId' => 'agents-panel',
+                    'containerClass' => $mobilePanelMinHeight,
+                    'assignedAgentIds' => $this->selectedTopic() ? $this->assignedAgentIds() : [],
+                    'assignAction' => $this->selectedTopic() ? 'assignAgent' : null,
+                    'unassignAction' => $this->selectedTopic() ? 'unassignAgent' : null,
+                ])
+            </div>
         </div>
+
+        <nav class="fixed inset-x-0 bottom-0 z-40 bg-white/95 px-2 py-2 backdrop-blur xl:hidden dark:bg-zinc-900/95">
+            <div class="grid grid-cols-3 gap-2">
+                <button
+                    type="button"
+                    wire:click="showMobilePanel('topics')"
+                    data-mobile-nav="topics"
+                    aria-pressed="{{ $this->mobilePanel === 'topics' ? 'true' : 'false' }}"
+                    @class([
+                        'flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition',
+                        'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-400/30 dark:bg-blue-500/15 dark:text-blue-200' => $this->mobilePanel === 'topics',
+                        'border-neutral-200 bg-neutral-50 text-neutral-700 dark:border-white/10 dark:bg-white/5 dark:text-neutral-200' => $this->mobilePanel !== 'topics',
+                    ])
+                >
+                    <flux:icon name="hashtag" class="size-4" />
+                    <span>{{ __('Topics') }}</span>
+                </button>
+                <button
+                    type="button"
+                    @if ($hasSelectedTopic) wire:click="showMobilePanel('messages')" @endif
+                    data-mobile-nav="messages"
+                    aria-pressed="{{ $this->mobilePanel === 'messages' ? 'true' : 'false' }}"
+                    @disabled(! $hasSelectedTopic)
+                    @class([
+                        'flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition',
+                        'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-500/15 dark:text-emerald-200' => $hasSelectedTopic && $this->mobilePanel === 'messages',
+                        'border-neutral-200 bg-neutral-50 text-neutral-700 dark:border-white/10 dark:bg-white/5 dark:text-neutral-200' => $hasSelectedTopic && $this->mobilePanel !== 'messages',
+                        'cursor-not-allowed border-neutral-200 bg-neutral-50 text-neutral-300 opacity-60 dark:border-white/10 dark:bg-white/5 dark:text-neutral-600' => ! $hasSelectedTopic,
+                    ])
+                >
+                    <flux:icon name="document-text" class="size-4" />
+                    <span>{{ __('Messages') }}</span>
+                </button>
+                <button
+                    type="button"
+                    wire:click="showMobilePanel('agents')"
+                    data-mobile-nav="agents"
+                    aria-pressed="{{ $this->mobilePanel === 'agents' ? 'true' : 'false' }}"
+                    @class([
+                        'flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition',
+                        'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-400/30 dark:bg-amber-500/15 dark:text-amber-200' => $this->mobilePanel === 'agents',
+                        'border-neutral-200 bg-neutral-50 text-neutral-700 dark:border-white/10 dark:bg-white/5 dark:text-neutral-200' => $this->mobilePanel !== 'agents',
+                    ])
+                >
+                    <flux:icon name="cpu-chip" class="size-4" />
+                    <span>{{ __('Agents') }}</span>
+                </button>
+            </div>
+        </nav>
 
         <flux:modal name="new-topic" :show="$errors->isNotEmpty()" focusable class="max-w-sm">
             <form wire:submit="createTopic" class="space-y-6">
