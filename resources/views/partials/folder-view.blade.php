@@ -1,6 +1,7 @@
 <div x-data="{
     view: localStorage.getItem('folder-view-mode') || 'icons',
     setView(v) { this.view = v; localStorage.setItem('folder-view-mode', v); },
+    controlsOpen: false,
     editing: false,
     startEdit() { this.editing = true; this.$nextTick(() => this.$refs.nameInput?.focus()); },
     cancelEdit() { this.editing = false; @isset($editNameModel) $wire.set('{{ $editNameModel }}', '{{ addslashes(end($breadcrumbs)['label']) }}'); @endisset },
@@ -23,16 +24,34 @@
             <div class="flex items-center justify-between gap-3">
                 <flux:heading size="sm">{{ $titleLabel }}</flux:heading>
 
-                @isset($createHref)
-                    <flux:button :href="$createHref" wire:navigate icon="plus" size="sm">{{ $createLabel }}</flux:button>
-                @else
-                    <flux:modal.trigger :name="$createModal">
-                        <flux:button icon="plus" size="sm">{{ $createLabel }}</flux:button>
-                    </flux:modal.trigger>
-                @endisset
+                <div class="flex items-center gap-2">
+                    <flux:button
+                        x-on:click="controlsOpen = !controlsOpen"
+                        x-bind:aria-expanded="controlsOpen ? 'true' : 'false'"
+                        icon="cog-6-tooth"
+                        variant="filled"
+                        size="xs"
+                        class="aspect-square px-0"
+                        data-test="folder-controls-toggle"
+                    />
+
+                    @isset($createHref)
+                        <flux:button :href="$createHref" wire:navigate icon="plus" size="xs">{{ $createLabel }}</flux:button>
+                    @else
+                        <flux:modal.trigger :name="$createModal">
+                            <flux:button icon="plus" size="xs">{{ $createLabel }}</flux:button>
+                        </flux:modal.trigger>
+                    @endisset
+                </div>
             </div>
 
-            <div class="flex w-full flex-wrap items-center justify-between gap-2 sm:w-auto sm:shrink-0 sm:flex-nowrap sm:justify-end sm:gap-3">
+            <div
+                x-show="controlsOpen"
+                x-cloak
+                x-transition.opacity.duration.150ms
+                class="flex w-full flex-wrap items-center justify-between gap-2"
+                data-test="folder-controls-drawer"
+            >
                 @isset($showArchivedModel)
                     <div x-data="{
                         init() {

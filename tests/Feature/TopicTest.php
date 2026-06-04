@@ -102,7 +102,7 @@ test('dashboard shows workspace agents in the right rail', function () {
     $this->actingAs($user)
         ->get(route('dashboard'))
         ->assertOk()
-        ->assertSee('Workspace agents')
+        ->assertSee('Agents')
         ->assertSee('New agent')
         ->assertSee($agent->name);
 });
@@ -226,7 +226,9 @@ test('topic page left aligns message icons in icon view', function () {
         ->get(route('topics.show', ['topic' => $topic->slug]))
         ->assertOk()
         ->assertSee('Messages')
-        ->assertSee('Workspace agents')
+        ->assertSee('Agents')
+        ->assertSee('data-test="folder-controls-toggle"', escape: false)
+        ->assertSee('data-test="folder-controls-drawer"', escape: false)
         ->assertSee('x-if="view === \'icons\'"', escape: false)
         ->assertSee('x-if="view === \'list\'"', escape: false);
 });

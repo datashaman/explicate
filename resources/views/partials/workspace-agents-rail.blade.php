@@ -15,7 +15,7 @@
         $containerClass,
     ])>
         <div class="flex items-center justify-between gap-3 border-b border-neutral-300 bg-amber-50 px-4 py-3 dark:border-white/10 dark:bg-amber-500/10">
-            <flux:heading size="sm">{{ __('Workspace agents') }}</flux:heading>
+            <flux:heading size="sm">{{ __('Agents') }}</flux:heading>
             <flux:modal.trigger :name="$createModal">
                 <flux:button icon="plus" size="xs">{{ __('New agent') }}</flux:button>
             </flux:modal.trigger>
