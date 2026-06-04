@@ -9,10 +9,11 @@ use App\Models\Topic;
 use Flux\Flux;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Computed;
+use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 
-new #[Title('Topic')] class extends Component {
+new #[Layout('layouts::workspace'), Title('Topic')] class extends Component {
     public Topic $topic;
 
     public string $topicName = '';
@@ -86,6 +87,25 @@ new #[Title('Topic')] class extends Component {
             ->get();
     }
 
+    /**
+     * @return \Illuminate\Database\Eloquent\Collection<int, Agent>
+     */
+    public function workspaceAgents(): \Illuminate\Database\Eloquent\Collection
+    {
+        return Auth::user()->currentWorkspace
+            ->agents()
+            ->with('latestVersion')
+            ->get();
+    }
+
+    /**
+     * @return list<int>
+     */
+    public function assignedAgentIds(): array
+    {
+        return $this->topic->agents()->pluck('agents.id')->all();
+    }
+
     /** @return list<string> */
     #[Computed]
     public function availableAgentModels(): array
@@ -149,13 +169,15 @@ new #[Title('Topic')] class extends Component {
         Flux::toast(variant: 'success', text: __('Agent created and assigned.'));
     }
 
-    public function assignAgent(): void
+    public function assignAgent(?int $agentId = null): void
     {
-        abort_unless($this->assignAgentId, 422);
+        $agentId ??= $this->assignAgentId;
+
+        abort_unless($agentId, 422);
 
         $agent = Auth::user()->currentWorkspace
             ->agents()
-            ->findOrFail($this->assignAgentId);
+            ->findOrFail($agentId);
 
         $this->topic->agents()->syncWithoutDetaching($agent);
 
@@ -174,64 +196,33 @@ new #[Title('Topic')] class extends Component {
 }; ?>
 
 <div class="flex h-full w-full flex-1 flex-col gap-4">
-    @include('partials.folder-view', [
-        'breadcrumbs' => [
-            ['label' => Auth::user()->currentWorkspace?->name, 'href' => route('dashboard')],
-            ['label' => $topic->name],
-        ],
-        'items' => collect($this->items()),
-        'icon' => 'document-text',
-        'iconClass' => 'size-12 text-neutral-400 group-hover:text-neutral-300',
-        'emptyText' => __('No messages'),
-        'createHref' => route('messages.create', ['topic' => $topic->slug]),
-        'createLabel' => __('New message'),
-        'showArchivedModel' => 'showArchived',
-        'editNameModel' => 'topicName',
-        'editNameAction' => 'saveName',
-        'editNameDispatch' => 'name-saved',
-    ])
+    <div class="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_19rem]">
+        <div>
+            @include('partials.folder-view', [
+                'breadcrumbs' => [
+                    ['label' => Auth::user()->currentWorkspace?->name, 'href' => route('dashboard')],
+                    ['label' => $topic->name],
+                ],
+                'items' => collect($this->items()),
+                'icon' => 'document-text',
+                'iconClass' => 'size-12 text-neutral-400 group-hover:text-neutral-300',
+                'emptyText' => __('No messages'),
+                'createHref' => route('messages.create', ['topic' => $topic->slug]),
+                'createLabel' => __('New message'),
+                'showArchivedModel' => 'showArchived',
+                'editNameModel' => 'topicName',
+                'editNameAction' => 'saveName',
+                'editNameDispatch' => 'name-saved',
+            ])
+        </div>
 
-    {{-- Agents --}}
-    <div class="flex flex-col gap-2 border-t border-neutral-100 pt-4 dark:border-white/5">
-        <flux:heading size="sm">{{ __('Agents') }}</flux:heading>
-
-        @php $workspaceHasAgents = Auth::user()->currentWorkspace->agents()->exists(); @endphp
-
-        @if (!$workspaceHasAgents)
-            <div class="flex items-center gap-2">
-                <flux:text class="text-sm text-neutral-400 dark:text-neutral-600">{{ __('No agents in this workspace.') }}</flux:text>
-                <flux:modal.trigger name="new-agent-for-topic">
-                    <flux:button size="xs" icon="plus">{{ __('Create agent') }}</flux:button>
-                </flux:modal.trigger>
-            </div>
-        @else
-            <div class="flex flex-wrap items-center gap-2">
-                @foreach ($topic->agents as $agent)
-                    <div class="flex items-center gap-1 rounded-full border border-neutral-200 bg-neutral-50 py-0.5 pl-3 pr-1 text-sm dark:border-white/10 dark:bg-white/5">
-                        <flux:icon name="cpu-chip" class="size-3.5 text-neutral-400" />
-                        <span class="text-neutral-700 dark:text-neutral-300">{{ $agent->name }}</span>
-                        <flux:button
-                            wire:click="unassignAgent({{ $agent->id }})"
-                            icon="x-mark"
-                            variant="ghost"
-                            size="xs"
-                            class="size-5 text-neutral-400 hover:text-red-500"
-                        />
-                    </div>
-                @endforeach
-
-                @if ($this->availableAgents()->isNotEmpty())
-                    <form wire:submit="assignAgent" class="flex items-center gap-2">
-                        <flux:select wire:model="assignAgentId" size="sm" class="w-40" placeholder="{{ __('Assign agent…') }}">
-                            @foreach ($this->availableAgents() as $agent)
-                                <flux:select.option :value="$agent->id">{{ $agent->name }}</flux:select.option>
-                            @endforeach
-                        </flux:select>
-                        <flux:button type="submit" size="sm" icon="plus" :disabled="!$assignAgentId" />
-                    </form>
-                @endif
-            </div>
-        @endif
+        @include('partials.workspace-agents-rail', [
+            'agents' => $this->workspaceAgents(),
+            'createModal' => 'new-agent-for-topic',
+            'assignedAgentIds' => $this->assignedAgentIds(),
+            'assignAction' => 'assignAgent',
+            'unassignAction' => 'unassignAgent',
+        ])
     </div>
 
     <flux:modal name="new-agent-for-topic" focusable class="max-w-sm">

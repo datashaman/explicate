@@ -8,11 +8,12 @@ use Flux\Flux;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 
-new #[Title('Message')] class extends Component {
+new #[Layout('layouts::workspace'), Title('Message')] class extends Component {
     use WithFileUploads;
 
     public Topic $topic;

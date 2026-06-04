@@ -6,6 +6,7 @@
     cancelEdit() { this.editing = false; @isset($editNameModel) $wire.set('{{ $editNameModel }}', '{{ addslashes(end($breadcrumbs)['label']) }}'); @endisset },
 }"
 @isset($editNameDispatch) x-on:{{ $editNameDispatch }}.window="editing = false" @endisset
+@class([$rootClass ?? null])
 >
     {{-- Toolbar --}}
     <div class="flex items-center justify-between gap-4">
@@ -99,7 +100,7 @@
     </div>
 
     {{-- Content --}}
-    <div class="mt-4 overflow-auto">
+    <div @class(['mt-4 overflow-auto', $contentClass ?? null])>
         @if ($items->isNotEmpty())
             <template x-if="view === 'icons'">
                 <div class="flex flex-wrap justify-start gap-6 content-start">
