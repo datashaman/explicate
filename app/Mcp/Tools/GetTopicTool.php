@@ -1,0 +1,76 @@
+<?php
+
+namespace App\Mcp\Tools;
+
+use App\Mcp\TopicForgeContext;
+use App\Models\User;
+use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Laravel\Mcp\Request;
+use Laravel\Mcp\Response;
+use Laravel\Mcp\ResponseFactory;
+use Laravel\Mcp\Server\Attributes\Description;
+use Laravel\Mcp\Server\Tool;
+use Laravel\Mcp\Server\Tools\Annotations\IsIdempotent;
+use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
+
+#[Description('Get a topic and its attached agents inside an accessible workspace.')]
+#[IsReadOnly]
+#[IsIdempotent]
+class GetTopicTool extends Tool
+{
+    public function __construct(protected TopicForgeContext $context) {}
+
+    /**
+     * Handle the tool request.
+     */
+    public function handle(Request $request): Response|ResponseFactory
+    {
+        $validated = $request->validate([
+            'topic_slug' => ['required', 'string'],
+            'workspace_slug' => ['nullable', 'string'],
+        ]);
+
+        /** @var User $user */
+        $user = $this->context->requireUser($request->user());
+        $topic = $this->context->topicFor($user, $validated['topic_slug'], $validated['workspace_slug'] ?? null);
+        $topic->load(['agents.latestVersion', 'workspace']);
+
+        return Response::structured([
+            'workspace' => $topic->workspace->only(['id', 'name', 'slug']),
+            'topic' => [
+                'id' => $topic->id,
+                'name' => $topic->name,
+                'slug' => $topic->slug,
+                'messages_count' => $topic->messages()->count(),
+                'resource_uri' => "topic-forge://workspaces/{$topic->workspace->slug}/topics/{$topic->slug}",
+            ],
+            'agents' => $topic->agents
+                ->map(fn ($agent) => [
+                    'id' => $agent->id,
+                    'name' => $agent->name,
+                    'slug' => $agent->slug,
+                    'latest_version' => $agent->latestVersion?->version,
+                    'latest_model' => $agent->latestVersion?->model,
+                ])
+                ->values()
+                ->all(),
+        ]);
+    }
+
+    /**
+     * Get the tool's input schema.
+     *
+     * @return array<string, JsonSchema>
+     */
+    public function schema(JsonSchema $schema): array
+    {
+        return [
+            'topic_slug' => $schema->string()
+                ->description('The topic slug to fetch.')
+                ->required(),
+            'workspace_slug' => $schema->string()
+                ->description('Optional workspace slug. Defaults to the authenticated user\'s current workspace.')
+                ->nullable(),
+        ];
+    }
+}
