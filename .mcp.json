@@ -6,6 +6,14 @@
                 "artisan",
                 "boost:mcp"
             ]
+        },
+        "topic-forge-local": {
+            "command": "php",
+            "args": [
+                "artisan",
+                "mcp:start",
+                "topic-forge"
+            ]
         }
     }
 }
