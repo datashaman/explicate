@@ -13,6 +13,7 @@
 
                 <div class="flex min-w-0 items-center gap-2">
                     <livewire:workspace-switcher />
+                    <x-desktop-user-menu :showTeam="false" />
                 </div>
             </header>
 

@@ -7,6 +7,7 @@ use App\Models\Message;
 use App\Models\Topic;
 use App\Models\Workspace;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 
@@ -102,12 +103,13 @@ test('published message page shows sender and recipient principals', function ()
 
 test('message list metadata uses sender recipient fallback and timestamp labels', function () {
     $senderPrincipal = $this->workspace->principalForUser($this->user);
+    $updatedAt = now()->subMinutes(5);
 
     $this->message->timestamps = false;
     $this->message->forceFill([
         'status' => MessageStatus::Published,
         'sender_principal_id' => $senderPrincipal->id,
-        'updated_at' => now()->subMinutes(5),
+        'updated_at' => $updatedAt,
     ])->save();
 
     expect($this->message->fresh()->load('sender.user')->listMeta(
@@ -117,8 +119,36 @@ test('message list metadata uses sender recipient fallback and timestamp labels'
     ))->toBe([
         ['label' => 'From', 'value' => $this->user->name],
         ['label' => 'To', 'value' => $this->topic->name],
-        ['label' => 'Sent', 'value' => '5 minutes ago'],
+        ['label' => 'Sent', 'value' => '5 minutes ago', 'title' => $updatedAt->timezone(config('app.timezone'))->isoFormat('LLLL')],
     ]);
+});
+
+test('message list timestamp titles use the user timezone when provided', function () {
+    $updatedAt = now()->setTimezone('UTC')->setTime(12, 0);
+
+    Date::setTestNow($updatedAt);
+
+    try {
+        $this->message->timestamps = false;
+        $this->message->forceFill([
+            'status' => MessageStatus::Published,
+            'updated_at' => $updatedAt,
+        ])->save();
+
+        expect($this->message->fresh()->listMeta(
+            showSender: false,
+            showRecipient: false,
+            timezone: 'Africa/Johannesburg',
+        ))->toBe([
+            [
+                'label' => 'Sent',
+                'value' => '0 seconds ago',
+                'title' => $updatedAt->copy()->timezone('Africa/Johannesburg')->isoFormat('LLLL'),
+            ],
+        ]);
+    } finally {
+        Date::setTestNow();
+    }
 });
 
 test('message list sort values are normalized for deterministic column sorting', function () {

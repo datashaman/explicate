@@ -206,7 +206,7 @@ new #[Title('Agent')] class extends Component {
                                 <div class="px-4 py-3">
                                     <div class="flex items-center justify-between">
                                         <flux:badge color="zinc" size="sm">v{{ $version->version }}</flux:badge>
-                                        <flux:text class="text-xs text-neutral-400">{{ $version->created_at->diffForHumans() }}</flux:text>
+                                        <flux:text class="text-xs text-neutral-400" :title="$version->created_at->timezone(Auth::user()->displayTimezone())->isoFormat('LLLL')">{{ $version->created_at->diffForHumans() }}</flux:text>
                                     </div>
                                     <div class="mt-1.5 space-y-0.5">
                                         <flux:text class="text-xs text-neutral-600 dark:text-neutral-400">

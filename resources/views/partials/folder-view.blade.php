@@ -319,6 +319,7 @@
                         @php
                             $itemKey = md5($item['href']);
                             $metaByLabel = collect($item['meta'] ?? [])->mapWithKeys(fn ($meta) => [$meta['label'] => $meta['value']]);
+                            $metaTitlesByLabel = collect($item['meta'] ?? [])->mapWithKeys(fn ($meta) => [$meta['label'] => $meta['title'] ?? null]);
                             $columnLabels = [
                                 'from' => __('From'),
                                 'to' => __('To'),
@@ -345,7 +346,7 @@
                                             @if (!empty($item['meta']))
                                                 <span class="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-neutral-500 sm:hidden dark:text-neutral-400">
                                                     @foreach ($item['meta'] as $meta)
-                                                        <span class="max-w-full truncate">
+                                                        <span class="max-w-full truncate" @if (!empty($meta['title'])) title="{{ $meta['title'] }}" @endif>
                                                             <span class="text-neutral-400 dark:text-neutral-500">{{ $meta['label'] }}:</span>
                                                             {{ $meta['value'] }}
                                                         </span>
@@ -365,13 +366,13 @@
                                         @php
                                             $columnLabel = $columnLabels[$column['key']] ?? $column['label'];
                                             $columnValue = $metaByLabel[$columnLabel] ?? null;
+                                            $columnTitle = $metaTitlesByLabel[$columnLabel] ?? null;
                                         @endphp
                                         <span
                                             @class(['hidden truncate text-xs text-neutral-500 sm:block dark:text-neutral-400', $column['class'] ?? null])
-                                            @if ($columnValue) title="{{ $columnLabel }}: {{ $columnValue }}" @endif
+                                            @if ($columnTitle) title="{{ $columnTitle }}" @endif
                                         >
                                             @if ($columnValue)
-                                                <span class="text-neutral-400 dark:text-neutral-500">{{ $columnLabel }}:</span>
                                                 {{ $columnValue }}
                                             @endif
                                         </span>
@@ -389,7 +390,7 @@
                                     @if (!empty($item['meta']))
                                         <span class="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-neutral-500 sm:hidden dark:text-neutral-400">
                                             @foreach ($item['meta'] as $meta)
-                                                <span class="max-w-full truncate">
+                                                <span class="max-w-full truncate" @if (!empty($meta['title'])) title="{{ $meta['title'] }}" @endif>
                                                     <span class="text-neutral-400 dark:text-neutral-500">{{ $meta['label'] }}:</span>
                                                     {{ $meta['value'] }}
                                                 </span>
@@ -400,7 +401,7 @@
                                 @if (!empty($item['meta']))
                                     <div class="hidden shrink-0 items-center gap-3 sm:flex">
                                         @foreach ($item['meta'] as $meta)
-                                            <span class="w-28 truncate text-xs text-neutral-500 dark:text-neutral-400" title="{{ $meta['label'] }}: {{ $meta['value'] }}">
+                                            <span class="w-28 truncate text-xs text-neutral-500 dark:text-neutral-400" @if (!empty($meta['title'])) title="{{ $meta['title'] }}" @endif>
                                                 <span class="text-neutral-400 dark:text-neutral-500">{{ $meta['label'] }}:</span>
                                                 {{ $meta['value'] }}
                                             </span>

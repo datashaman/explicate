@@ -323,7 +323,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             ->map(fn (Message $message) => [
                 'href' => route('dashboard', ['topic' => $topic->slug, 'message' => $message->slug, 'panel' => 'messages']),
                 'name' => $message->title,
-                'meta' => $message->listMeta(showSender: true, showRecipient: false),
+                'meta' => $message->listMeta(showSender: true, showRecipient: false, timezone: Auth::user()->displayTimezone()),
                 'attachments_count' => $message->attachments_count,
                 'sort' => $message->listSortValues(dateKey: 'sent'),
                 'badge' => $message->status === MessageStatus::Published ? null : [
@@ -370,6 +370,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                     showSender: $folder['slug'] !== 'sent',
                     showRecipient: $folder['slug'] !== 'inbox',
                     recipientFallback: $message->topic->name,
+                    timezone: Auth::user()->displayTimezone(),
                 ),
                 'attachments_count' => $message->attachments_count,
                 'sort' => $message->listSortValues(
@@ -1044,18 +1045,14 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
     }
 }; ?>
 
-@php
-    $mobilePanelMinHeight = 'min-h-[calc(100dvh-4rem)]';
-@endphp
-
-<div class="flex h-full w-full flex-col gap-3 xl:flex-1">
+<div class="flex min-h-0 w-full flex-1">
     @if ($this->workspace())
         @php
             $hasSelectedMessagesPanel = (bool) ($this->selectedTopic() || $this->selectedSystemFolder() || $this->isCreatingMessage());
         @endphp
 
         <div @class([
-            'grid grid-cols-1 items-stretch gap-3 xl:flex-1 xl:auto-rows-fr',
+            'grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)] items-stretch gap-3 xl:auto-rows-fr',
             'xl:grid-cols-[16rem_minmax(0,1fr)_32rem]' => $this->selectedAgent(),
             'xl:grid-cols-[16rem_minmax(0,1fr)_19rem]' => ! $this->selectedAgent(),
         ])>
@@ -1063,7 +1060,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                 id="topics-panel"
                 data-mobile-panel="topics"
                 @class([
-                    "scroll-mt-4 {$mobilePanelMinHeight} flex flex-col overflow-hidden rounded-xl border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] xl:h-full xl:min-h-[24rem] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none",
+                    'scroll-mt-4 flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none',
                     'hidden xl:flex' => $this->mobilePanel !== 'topics',
                 ])
             >
@@ -1134,7 +1131,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                     id="messages-panel"
                     data-mobile-panel="messages"
                     @class([
-                        "scroll-mt-4 {$mobilePanelMinHeight} flex flex-col overflow-hidden rounded-xl border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] xl:h-full xl:min-h-[24rem] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none",
+                        'scroll-mt-4 flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none',
                         'hidden xl:flex' => $this->mobilePanel !== 'messages',
                     ])
                 >
@@ -1361,7 +1358,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                     id="messages-panel"
                     data-mobile-panel="messages"
                     @class([
-                        "scroll-mt-4 {$mobilePanelMinHeight} flex flex-col overflow-hidden rounded-xl border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] xl:h-full xl:min-h-[24rem] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none",
+                        'scroll-mt-4 flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none',
                         'hidden xl:flex' => $this->mobilePanel !== 'messages',
                     ])
                 >
@@ -1386,13 +1383,13 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             <div
                 data-mobile-panel="agents"
                 @class([
-                    'xl:block',
+                    'h-full min-h-0 xl:block',
                     'hidden xl:block' => $this->mobilePanel !== 'agents',
                 ])
             >
                 @if ($selectedDashboardAgent = $this->selectedAgent())
-                    <aside id="agents-panel" class="xl:h-full">
-                        <div class="{{ $mobilePanelMinHeight }} flex flex-col overflow-hidden rounded-xl border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] xl:h-full xl:min-h-[24rem] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none" data-test="dashboard-agent-panel">
+                    <aside id="agents-panel" class="h-full min-h-0">
+                        <div class="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none" data-test="dashboard-agent-panel">
                             <div class="flex items-center justify-between gap-3 border-b border-neutral-300 bg-amber-50 px-4 py-3 dark:border-white/10 dark:bg-amber-500/10">
                                 <flux:heading size="sm" class="min-w-0 flex-1 truncate">{{ $selectedDashboardAgent->name }}</flux:heading>
 
@@ -1477,7 +1474,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                                                 <div class="px-4 py-3">
                                                     <div class="flex items-center justify-between gap-3">
                                                         <flux:badge color="zinc" size="sm">v{{ $version->version }}</flux:badge>
-                                                        <flux:text class="text-xs text-neutral-400">{{ $version->created_at->diffForHumans() }}</flux:text>
+                                                        <flux:text class="text-xs text-neutral-400" :title="$version->created_at->timezone(Auth::user()->displayTimezone())->isoFormat('LLLL')">{{ $version->created_at->diffForHumans() }}</flux:text>
                                                     </div>
                                                     <div class="mt-1.5 space-y-0.5">
                                                         <flux:text class="text-xs text-neutral-600 dark:text-neutral-400">
@@ -1505,8 +1502,8 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                         'agents' => $this->agents(),
                         'createModal' => 'new-dashboard-agent',
                         'panelId' => 'agents-panel',
-                        'asideClass' => 'xl:h-full',
-                        'containerClass' => $mobilePanelMinHeight,
+                        'asideClass' => 'h-full min-h-0',
+                        'containerClass' => 'h-full min-h-0 xl:min-h-0',
                         'sticky' => false,
                         'assignedAgentIds' => $this->selectedTopic() ? $this->assignedAgentIds() : [],
                         'assignAction' => $this->selectedTopic() ? 'assignAgent' : null,

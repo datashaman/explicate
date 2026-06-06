@@ -192,9 +192,9 @@ class Message extends Model
     }
 
     /**
-     * @return list<array{label: string, value: string}>
+     * @return list<array{label: string, value: string, title?: string}>
      */
-    public function listMeta(bool $showSender, bool $showRecipient, ?string $recipientFallback = null): array
+    public function listMeta(bool $showSender, bool $showRecipient, ?string $recipientFallback = null, ?string $timezone = null): array
     {
         $meta = [];
 
@@ -213,6 +213,7 @@ class Message extends Model
         $meta[] = [
             'label' => $this->status === MessageStatus::Draft ? __('Saved') : __('Sent'),
             'value' => $this->updated_at->diffForHumans(),
+            'title' => $this->updated_at->timezone($timezone ?: config('app.timezone'))->isoFormat('LLLL'),
         ];
 
         return $meta;

@@ -32,3 +32,17 @@ test('workspace layout renders the workspace switcher', function () {
         ->assertOk()
         ->assertSee('data-test="workspace-switcher-trigger"', false);
 });
+
+test('workspace layout renders the user settings menu', function () {
+    $user = User::factory()->create();
+
+    $response = $this
+        ->actingAs($user)
+        ->get(route('dashboard'));
+
+    $response
+        ->assertOk()
+        ->assertSee('data-test="sidebar-menu-button"', false)
+        ->assertSee(route('profile.edit'), false)
+        ->assertSee('Settings');
+});

@@ -1,15 +1,14 @@
 <?php
 
-use Livewire\Component;
+use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
+use Livewire\Component;
 
-new #[Title('Appearance settings')] class extends Component {
+new #[Layout('layouts::workspace'), Title('Appearance settings')] class extends Component {
     //
 }; ?>
 
-<section class="w-full">
-    @include('partials.settings-heading')
-
+<section class="flex w-full flex-1">
     <flux:heading class="sr-only">{{ __('Appearance settings') }}</flux:heading>
 
     <x-pages::settings.layout :heading="__('Appearance')" :subheading="__('Update the appearance settings for your account')">

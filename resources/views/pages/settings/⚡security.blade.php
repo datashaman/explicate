@@ -7,6 +7,7 @@ use Illuminate\Validation\ValidationException;
 use Laravel\Fortify\Actions\DisableTwoFactorAuthentication;
 use Laravel\Fortify\Features;
 use Laravel\Fortify\Fortify;
+use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 /* @chisel-passkeys */
@@ -17,7 +18,7 @@ use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
 /* @end-chisel-2fa */
 
-new #[Title('Security settings')] class extends Component {
+new #[Layout('layouts::workspace'), Title('Security settings')] class extends Component {
     use PasswordValidationRules;
 
     public string $current_password = '';
@@ -115,7 +116,9 @@ new #[Title('Security settings')] class extends Component {
                 'name' => $passkey->name,
                 'authenticator' => $passkey->authenticator,
                 'created_at_diff' => $passkey->created_at->diffForHumans(),
+                'created_at_title' => $passkey->created_at->timezone(auth()->user()->displayTimezone())->isoFormat('LLLL'),
                 'last_used_at_diff' => $passkey->last_used_at?->diffForHumans(),
+                'last_used_at_title' => $passkey->last_used_at?->timezone(auth()->user()->displayTimezone())->isoFormat('LLLL'),
             ])
             ->toArray();
     }
@@ -182,9 +185,7 @@ new #[Title('Security settings')] class extends Component {
     /* @end-chisel-2fa */
 }; ?>
 
-<section class="w-full">
-    @include('partials.settings-heading')
-
+<section class="flex w-full flex-1">
     <flux:heading class="sr-only">{{ __('Security settings') }}</flux:heading>
 
     <x-pages::settings.layout :heading="__('Update password')" :subheading="__('Ensure your account is using a long, random password to stay secure')">
@@ -292,10 +293,10 @@ new #[Title('Security settings')] class extends Component {
                                             @endif
                                         </div>
                                         <p class="text-zinc-500 dark:text-zinc-400 text-xs">
-                                            {{ __('Added :time', ['time' => $passkey['created_at_diff']]) }}
+                                            <span title="{{ $passkey['created_at_title'] }}">{{ __('Added :time', ['time' => $passkey['created_at_diff']]) }}</span>
                                             @if ($passkey['last_used_at_diff'])
                                                 <span class="opacity-50 mx-1">/</span>
-                                                {{ __('Last used :time', ['time' => $passkey['last_used_at_diff']]) }}
+                                                <span title="{{ $passkey['last_used_at_title'] }}">{{ __('Last used :time', ['time' => $passkey['last_used_at_diff']]) }}</span>
                                             @endif
                                         </p>
                                     </div>

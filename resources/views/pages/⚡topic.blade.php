@@ -72,7 +72,7 @@ new #[Layout('layouts::workspace'), Title('Topic')] class extends Component {
             ->map(fn (Message $message) => [
                 'href' => route('messages.show', ['message' => $message]),
                 'name' => $message->title,
-                'meta' => $message->listMeta(showSender: true, showRecipient: false),
+                'meta' => $message->listMeta(showSender: true, showRecipient: false, timezone: Auth::user()->displayTimezone()),
                 'attachments_count' => $message->attachments_count,
                 'sort' => $message->listSortValues(dateKey: 'sent'),
                 'badge' => $message->status === MessageStatus::Published ? null : [

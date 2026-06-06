@@ -887,9 +887,7 @@ test('dashboard shows mobile bottom navigation with topics active by default', f
         ->assertSee('data-mobile-nav="agents"', escape: false)
         ->assertSee('aria-pressed="true"', escape: false)
         ->assertSee('data-mobile-panel="topics"', escape: false)
-        ->assertSee('min-h-[calc(100dvh-4rem)]', escape: false)
         ->assertSee('data-mobile-panel="agents"', escape: false)
-        ->assertSee('xl:h-full', escape: false)
         ->assertDontSee('xl:sticky xl:top-6')
         ->assertSee('Agents');
 });
