@@ -136,6 +136,19 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         return $topic->posts()->where('slug', $this->selectedPostSlug)->first();
     }
 
+    public function postsPanelReturnRoute(): string
+    {
+        if ($folder = $this->selectedSystemFolder()) {
+            return route('dashboard', ['folder' => $folder['slug'], 'panel' => 'posts']);
+        }
+
+        if ($topic = $this->selectedTopic()) {
+            return route('dashboard', ['topic' => $topic->slug, 'panel' => 'posts']);
+        }
+
+        return route('dashboard');
+    }
+
     public function selectedAgent(): ?Agent
     {
         $workspace = $this->workspace();
@@ -1013,7 +1026,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                         <div class="flex items-center justify-between gap-3 border-b border-neutral-300 bg-emerald-50 px-4 py-3 dark:border-white/10 dark:bg-emerald-500/10">
                             <flux:heading size="sm" class="min-w-0 flex-1 truncate">{{ __('New post') }}</flux:heading>
 
-                            <flux:button :href="$this->selectedTopic() ? route('dashboard', ['topic' => $this->selectedTopic()->slug, 'panel' => 'posts']) : route('dashboard')" wire:navigate size="xs" variant="filled" icon="arrow-left">
+                            <flux:button :href="$this->postsPanelReturnRoute()" wire:navigate size="xs" variant="filled" icon="arrow-left">
                                 {{ __('Inbox') }}
                             </flux:button>
                         </div>
@@ -1056,7 +1069,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                             </div>
 
                             <div class="flex justify-end gap-2">
-                                <flux:button :href="$this->selectedTopic() ? route('dashboard', ['topic' => $this->selectedTopic()->slug, 'panel' => 'posts']) : route('dashboard')" wire:navigate variant="filled">
+                                <flux:button :href="$this->postsPanelReturnRoute()" wire:navigate variant="filled">
                                     {{ __('Cancel') }}
                                 </flux:button>
                                 <flux:button type="submit" form="dashboard-new-post-form" variant="filled" data-test="new-post-save-draft" wire:loading.attr="disabled" wire:target="newPostUploads">{{ __('Save draft') }}</flux:button>
@@ -1067,7 +1080,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                         <div class="flex items-center justify-between gap-3 border-b border-neutral-300 bg-emerald-50 px-4 py-3 dark:border-white/10 dark:bg-emerald-500/10">
                             <flux:heading size="sm" class="min-w-0 flex-1 truncate">{{ $selectedDashboardPost->title }}</flux:heading>
 
-                            <flux:button :href="route('dashboard', ['topic' => $this->selectedTopic()->slug, 'panel' => 'posts'])" wire:navigate size="xs" variant="filled" icon="arrow-left">
+                            <flux:button :href="$this->postsPanelReturnRoute()" wire:navigate size="xs" variant="filled" icon="arrow-left">
                                 {{ __('Inbox') }}
                             </flux:button>
                         </div>

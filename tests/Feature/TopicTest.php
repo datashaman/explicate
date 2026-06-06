@@ -228,6 +228,27 @@ test('dashboard inbox folder shows all published topic inbox', function () {
         ->assertSeeText('Design');
 });
 
+test('dashboard post panel returns to the selected folder before the post topic', function () {
+    [$user, $workspace] = userWithWorkspace();
+
+    $topic = Topic::factory()->for($workspace)->create(['name' => 'Design', 'slug' => 'design']);
+    $post = Post::factory()->for($topic)->create([
+        'title' => 'Inbox post',
+        'status' => PostStatus::Published,
+        'sender_principal_id' => $workspace->principalForUser($user)->id,
+    ]);
+
+    $this->actingAs($user);
+
+    $component = Livewire::test('pages::dashboard');
+    $component->instance()->selectedSystemFolderSlug = 'inbox';
+    $component->instance()->selectedTopicSlug = $topic->slug;
+    $component->instance()->selectedPostSlug = $post->slug;
+
+    expect($component->instance()->postsPanelReturnRoute())
+        ->toBe(route('dashboard', ['folder' => 'inbox', 'panel' => 'posts']));
+});
+
 test('dashboard archived folder shows archived inbox', function () {
     [$user, $workspace] = userWithWorkspace();
 
