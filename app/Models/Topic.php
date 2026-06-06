@@ -86,7 +86,15 @@ class Topic extends Model
      */
     public function messages(): HasMany
     {
-        return $this->hasMany(Message::class)->orderBy('name');
+        return $this->hasMany(Message::class)->orderBy('title');
+    }
+
+    /**
+     * @return HasMany<Thread, $this>
+     */
+    public function threads(): HasMany
+    {
+        return $this->hasMany(Thread::class)->orderByDesc('updated_at');
     }
 
     /**

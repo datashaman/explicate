@@ -2,34 +2,30 @@
 
 namespace Database\Factories;
 
-use App\Enums\MessageStatus;
-use App\Models\Message;
+use App\Models\Thread;
 use App\Models\Topic;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
 /**
- * @extends Factory<Message>
+ * @extends Factory<Thread>
  */
-class MessageFactory extends Factory
+class ThreadFactory extends Factory
 {
     /**
+     * Define the model's default state.
+     *
      * @return array<string, mixed>
      */
     public function definition(): array
     {
-        $name = fake()->unique()->words(3, true);
+        $title = fake()->unique()->words(3, true);
 
         return [
             'topic_id' => Topic::factory(),
-            'thread_id' => null,
-            'sender_principal_id' => null,
-            'recipient_principal_id' => null,
-            'title' => $name,
+            'title' => $title,
             'slug' => fn (array $attributes): string => Str::slug($attributes['title']),
-            'ulid' => fn (): string => (string) Str::ulid(),
-            'body' => fake()->optional()->paragraphs(3, true),
-            'status' => MessageStatus::Draft,
+            'summary' => fake()->optional()->paragraph(),
         ];
     }
 

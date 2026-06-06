@@ -65,7 +65,6 @@ new #[Layout('layouts::workspace'), Title('Topic')] class extends Component {
             ->withCount('attachments')
             ->when(! $this->showArchived, fn ($q) => $q->where('status', '!=', MessageStatus::Archived))
             ->where('status', '!=', MessageStatus::Draft)
-            ->whereNull('recipient_principal_id')
             ->orderByDesc('updated_at')
             ->orderByDesc('id')
             ->get()
@@ -212,17 +211,17 @@ new #[Layout('layouts::workspace'), Title('Topic')] class extends Component {
                     ['label' => Auth::user()->currentWorkspace?->name, 'href' => route('dashboard')],
                     ['label' => $topic->name],
                 ],
-                'titleLabel' => __('Messages'),
+                'titleLabel' => __('Updates'),
                 'items' => collect($this->items()),
                 'icon' => 'document-text',
                 'iconClass' => 'size-12 text-neutral-400 group-hover:text-neutral-300',
-                'emptyText' => __('No messages'),
+                'emptyText' => __('No updates'),
                 'createHref' => route('messages.create', ['topic' => $topic->slug]),
-                'createLabel' => __('New message'),
+                'createLabel' => __('New update'),
                 'createTest' => 'topic-new-message-button',
                 'showArchivedModel' => 'showArchived',
                 'listColumns' => [
-                    ['key' => 'name', 'label' => __('Message'), 'class' => 'min-w-0 flex-1'],
+                    ['key' => 'name', 'label' => __('Update'), 'class' => 'min-w-0 flex-1'],
                     ['key' => 'from', 'label' => __('From'), 'class' => 'w-28 shrink-0'],
                     ['key' => 'sent', 'label' => __('Sent'), 'class' => 'w-28 shrink-0'],
                     ['key' => 'attachments', 'label' => __('Attachments'), 'class' => 'w-24 shrink-0'],
