@@ -126,7 +126,7 @@ test('dashboard shows system folders with workspace post counts', function () {
 test('dashboard system draft folder shows draft posts across topics', function () {
     [$user, $workspace] = userWithWorkspace();
 
-    $design = Topic::factory()->for($workspace)->create(['slug' => 'design']);
+    $design = Topic::factory()->for($workspace)->create(['name' => 'Design', 'slug' => 'design']);
     $engineering = Topic::factory()->for($workspace)->create(['slug' => 'engineering']);
     $userPrincipal = $workspace->principalForUser($user);
 
@@ -153,6 +153,11 @@ test('dashboard system draft folder shows draft posts across topics', function (
             'post' => $designDraft->slug,
             'panel' => 'posts',
         ])), escape: false)
+        ->assertDontSee('data-test="folder-list-sort-from"', escape: false)
+        ->assertDontSeeText('Author')
+        ->assertSee('data-test="folder-list-sort-to"', escape: false)
+        ->assertSeeText('Topic:')
+        ->assertSeeText('Design')
         ->assertSeeText('Saved:')
         ->assertSeeText('7 minutes ago')
         ->assertSee('data-test="folder-list-sort-saved"', escape: false)

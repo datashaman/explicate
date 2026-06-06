@@ -393,7 +393,10 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             ['key' => 'name', 'label' => __('Post'), 'class' => 'min-w-0 flex-1'],
         ];
 
-        $columns[] = ['key' => 'from', 'label' => __('Author'), 'class' => 'w-28 shrink-0'];
+        if (! ($folder && $folder['slug'] === 'drafts')) {
+            $columns[] = ['key' => 'from', 'label' => __('Author'), 'class' => 'w-28 shrink-0'];
+        }
+
         $columns[] = ['key' => 'to', 'label' => __('Topic'), 'class' => 'w-28 shrink-0'];
 
         $columns[] = ['key' => $folder && $folder['slug'] === 'drafts' ? 'saved' : 'sent', 'label' => $dateLabel, 'class' => 'w-28 shrink-0'];
