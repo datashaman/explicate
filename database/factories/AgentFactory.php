@@ -22,7 +22,7 @@ class AgentFactory extends Factory
         return [
             'workspace_id' => Workspace::factory(),
             'name' => $name,
-            'slug' => Str::slug($name),
+            'slug' => fn (array $attributes): string => Str::slug($attributes['name']),
         ];
     }
 

@@ -30,18 +30,16 @@ test('message page loads', function () {
         ->assertDontSee('data-flux-breadcrumbs', escape: false);
 });
 
-test('message create page loads', function () {
+test('message create route redirects to the dashboard message panel', function () {
     $this->actingAs($this->user)
         ->get(route('messages.create'))
-        ->assertOk()
-        ->assertSee('New message');
+        ->assertRedirect(route('dashboard', ['action' => 'new-message', 'panel' => 'messages']));
 });
 
-test('message create page preselects topic from query string', function () {
+test('message create route preserves the selected topic in the dashboard message panel', function () {
     $this->actingAs($this->user)
         ->get(route('messages.create', ['topic' => $this->topic->slug]))
-        ->assertOk()
-        ->assertSee($this->topic->name);
+        ->assertRedirect(route('dashboard', ['action' => 'new-message', 'panel' => 'messages', 'topic' => $this->topic->slug]));
 });
 
 test('message page does not resolve topics outside the current workspace', function () {

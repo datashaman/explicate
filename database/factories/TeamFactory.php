@@ -22,7 +22,7 @@ class TeamFactory extends Factory
 
         return [
             'name' => $name,
-            'slug' => Str::slug($name),
+            'slug' => fn (array $attributes): string => Str::slug($attributes['name']),
             'is_personal' => false,
         ];
     }

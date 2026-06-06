@@ -835,7 +835,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 <div class="flex h-full w-full flex-col gap-3 xl:flex-1">
     @if ($this->workspace())
         @php
-            $hasSelectedMessagesPanel = (bool) ($this->selectedTopic() || $this->selectedSystemFolder());
+            $hasSelectedMessagesPanel = (bool) ($this->selectedTopic() || $this->selectedSystemFolder() || $this->isCreatingMessage());
         @endphp
 
         <div @class([
@@ -908,7 +908,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                 @endif
             </section>
 
-            @if ($this->selectedTopic() || $this->selectedSystemFolder())
+            @if ($this->selectedTopic() || $this->selectedSystemFolder() || $this->isCreatingMessage())
                 @php
                     $selectedDashboardMessage = $this->selectedMessage();
                     $selectedDashboardFolder = $this->selectedSystemFolder();
@@ -922,11 +922,11 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                         'hidden xl:flex' => $this->mobilePanel !== 'messages',
                     ])
                 >
-                    @if ($this->isCreatingMessage() && $this->selectedTopic())
+                    @if ($this->isCreatingMessage())
                         <div class="flex items-center justify-between gap-3 border-b border-neutral-300 bg-emerald-50 px-4 py-3 dark:border-white/10 dark:bg-emerald-500/10">
                             <flux:heading size="sm" class="min-w-0 flex-1 truncate">{{ __('New message') }}</flux:heading>
 
-                            <flux:button :href="route('dashboard', ['topic' => $this->selectedTopic()->slug, 'panel' => 'messages'])" wire:navigate size="xs" variant="filled" icon="arrow-left">
+                            <flux:button :href="$this->selectedTopic() ? route('dashboard', ['topic' => $this->selectedTopic()->slug, 'panel' => 'messages']) : route('dashboard')" wire:navigate size="xs" variant="filled" icon="arrow-left">
                                 {{ __('Messages') }}
                             </flux:button>
                         </div>
@@ -982,7 +982,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                                 </div>
 
                                 <div class="flex justify-end gap-2">
-                                    <flux:button :href="route('dashboard', ['topic' => $this->selectedTopic()->slug, 'panel' => 'messages'])" wire:navigate variant="filled">
+                                    <flux:button :href="$this->selectedTopic() ? route('dashboard', ['topic' => $this->selectedTopic()->slug, 'panel' => 'messages']) : route('dashboard')" wire:navigate variant="filled">
                                         {{ __('Cancel') }}
                                     </flux:button>
                                     <flux:button type="submit" variant="filled">{{ __('Save draft') }}</flux:button>
@@ -1076,14 +1076,14 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                         @include('partials.folder-view', [
                             'breadcrumbs' => [
                                 ['label' => $this->workspace()->name, 'href' => route('dashboard')],
-                                ['label' => $selectedDashboardFolder['name'] ?? $this->selectedTopic()->name],
+                                ['label' => $selectedDashboardFolder['name'] ?? $this->selectedTopic()?->name ?? __('New message')],
                             ],
                             'titleLabel' => __('Messages'),
                             'items' => collect($selectedDashboardFolder ? $this->selectedSystemFolderItems() : $this->selectedTopicItems()),
                             'icon' => 'document-text',
                             'iconClass' => 'size-12 text-neutral-400 group-hover:text-neutral-300',
                             'emptyText' => __('No messages'),
-                            'createHref' => $this->selectedTopic() ? route('dashboard', ['topic' => $this->selectedTopic()->slug, 'action' => 'new-message', 'panel' => 'messages']) : route('messages.create'),
+                            'createHref' => $this->selectedTopic() ? route('dashboard', ['topic' => $this->selectedTopic()->slug, 'action' => 'new-message', 'panel' => 'messages']) : route('dashboard', ['action' => 'new-message', 'panel' => 'messages']),
                             'createLabel' => __('New message'),
                             'showArchivedModel' => 'showArchived',
                             'toolbarClass' => 'border-b border-neutral-300 bg-emerald-50 px-4 py-3 dark:border-white/10 dark:bg-emerald-500/10',
@@ -1103,6 +1103,9 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                 >
                     <div class="flex items-center justify-between gap-3 border-b border-neutral-300 bg-emerald-50 px-4 py-3 dark:border-white/10 dark:bg-emerald-500/10">
                         <flux:heading size="sm">{{ __('Messages') }}</flux:heading>
+                        <flux:button :href="route('dashboard', ['action' => 'new-message', 'panel' => 'messages'])" wire:navigate size="xs" icon="plus">
+                            {{ __('New message') }}
+                        </flux:button>
                     </div>
 
                     <div class="flex flex-1 items-center justify-center px-6 py-10 text-center">

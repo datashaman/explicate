@@ -599,6 +599,23 @@ test('dashboard shows new message form in the main panel', function () {
         ->assertSee('Design');
 });
 
+test('dashboard shows new message form in the message panel without a selected topic', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->for($user->currentTeam)->create();
+    $user->switchWorkspace($workspace);
+
+    $topic = Topic::factory()->for($workspace)->create(['name' => 'Design', 'slug' => 'design']);
+
+    $this->actingAs($user)
+        ->get(route('dashboard', ['action' => 'new-message', 'panel' => 'messages']))
+        ->assertOk()
+        ->assertSee('data-test="dashboard-message-create-panel"', escape: false)
+        ->assertSee('New message')
+        ->assertSee('Save draft')
+        ->assertSee('Send')
+        ->assertSee($topic->name);
+});
+
 test('dashboard can create a draft message in the main panel', function () {
     $user = User::factory()->create();
     $workspace = Workspace::factory()->for($user->currentTeam)->create();
@@ -757,7 +774,7 @@ test('dashboard can render the topics mobile panel as active', function () {
         ->assertSee('hidden xl:flex', escape: false);
 });
 
-test('dashboard without a selected topic does not allow top-level messages view', function () {
+test('dashboard without a selected topic shows a top-level new message action', function () {
     $user = User::factory()->create();
     $workspace = Workspace::factory()->for($user->currentTeam)->create();
     $user->switchWorkspace($workspace);
@@ -769,7 +786,8 @@ test('dashboard without a selected topic does not allow top-level messages view'
         ->assertOk()
         ->assertSee('Select a topic')
         ->assertSee('data-mobile-panel="topics"', escape: false)
-        ->assertDontSee('New message')
+        ->assertSee('New message')
+        ->assertSee(e(route('dashboard', ['action' => 'new-message', 'panel' => 'messages'])), escape: false)
         ->assertSee('data-mobile-nav="messages"', escape: false)
         ->assertSee('disabled', escape: false);
 });

@@ -41,7 +41,18 @@ Route::bind('agent', function (string $value): Agent {
 Route::middleware(['auth', 'verified', EnsureTeamMembership::class])
     ->group(function () {
         Route::livewire('dashboard', 'pages::dashboard')->name('dashboard');
-        Route::livewire('messages/new', 'pages::message-create')->name('messages.create');
+        Route::get('messages/new', function () {
+            $parameters = [
+                'action' => 'new-message',
+                'panel' => 'messages',
+            ];
+
+            if (request()->filled('topic')) {
+                $parameters['topic'] = request()->query('topic');
+            }
+
+            return redirect()->route('dashboard', $parameters);
+        })->name('messages.create');
         Route::livewire('topics/{topic}', 'pages::topic')->name('topics.show');
         Route::livewire('topics/{topic}/messages/{message}', 'pages::message')->name('messages.show');
         Route::livewire('agents', 'pages::agents')->name('agents');

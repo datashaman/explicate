@@ -24,7 +24,7 @@ class WorkspaceFactory extends Factory
         return [
             'team_id' => Team::factory(),
             'name' => $name,
-            'slug' => Str::slug($name),
+            'slug' => fn (array $attributes): string => Str::slug($attributes['name']),
         ];
     }
 

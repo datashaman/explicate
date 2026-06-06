@@ -210,7 +210,7 @@ new #[Layout('layouts::workspace'), Title('Topic')] class extends Component {
                 'icon' => 'document-text',
                 'iconClass' => 'size-12 text-neutral-400 group-hover:text-neutral-300',
                 'emptyText' => __('No messages'),
-                'createHref' => route('messages.create', ['topic' => $topic->slug]),
+                'createHref' => route('dashboard', ['topic' => $topic->slug, 'action' => 'new-message', 'panel' => 'messages']),
                 'createLabel' => __('New message'),
                 'showArchivedModel' => 'showArchived',
                 'toolbarClass' => 'border-b border-neutral-300 bg-emerald-50 px-4 py-3 dark:border-white/10 dark:bg-emerald-500/10',
