@@ -36,7 +36,7 @@
                     />
 
                     @isset($createHref)
-                        <flux:button :href="$createHref" wire:navigate icon="plus" size="xs">{{ $createLabel }}</flux:button>
+                        <flux:button :href="$createHref" wire:navigate icon="plus" size="xs" data-test="{{ isset($createTest) ? $createTest.'-mobile' : 'folder-create-button-mobile' }}">{{ $createLabel }}</flux:button>
                     @else
                         <flux:modal.trigger :name="$createModal">
                             <flux:button icon="plus" size="xs">{{ $createLabel }}</flux:button>
@@ -72,7 +72,7 @@
                     </div>
 
                     @isset($createHref)
-                        <flux:button :href="$createHref" wire:navigate icon="plus" size="xs">{{ $createLabel }}</flux:button>
+                        <flux:button :href="$createHref" wire:navigate icon="plus" size="xs" data-test="{{ isset($createTest) ? $createTest.'-desktop' : 'folder-create-button-desktop' }}">{{ $createLabel }}</flux:button>
                     @else
                         <flux:modal.trigger :name="$createModal">
                             <flux:button icon="plus" size="xs">{{ $createLabel }}</flux:button>

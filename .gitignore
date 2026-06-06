@@ -21,5 +21,6 @@ yarn-error.log
 /.idea
 /.nova
 /.playwright-mcp
+/tests/Browser/Screenshots
 /.vscode
 /.zed

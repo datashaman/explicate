@@ -19,12 +19,13 @@ Route::bind('topic', function (string $value): Topic {
 });
 
 Route::bind('message', function (string $value): Message {
-    $topic = request()->route('topic');
+    $workspace = request()->user()?->currentWorkspace;
 
-    abort_unless($topic instanceof Topic, 404);
+    abort_unless($workspace, 404);
 
-    return $topic->messages()
-        ->where('slug', $value)
+    return Message::query()
+        ->where('ulid', $value)
+        ->whereHas('topic', fn ($query) => $query->where('workspace_id', $workspace->id))
         ->firstOrFail();
 });
 
@@ -41,20 +42,9 @@ Route::bind('agent', function (string $value): Agent {
 Route::middleware(['auth', 'verified', EnsureTeamMembership::class])
     ->group(function () {
         Route::livewire('dashboard', 'pages::dashboard')->name('dashboard');
-        Route::get('messages/new', function () {
-            $parameters = [
-                'action' => 'new-message',
-                'panel' => 'messages',
-            ];
-
-            if (request()->filled('topic')) {
-                $parameters['topic'] = request()->query('topic');
-            }
-
-            return redirect()->route('dashboard', $parameters);
-        })->name('messages.create');
+        Route::livewire('messages/new', 'pages::dashboard')->name('messages.create');
         Route::livewire('topics/{topic}', 'pages::topic')->name('topics.show');
-        Route::livewire('topics/{topic}/messages/{message}', 'pages::message')->name('messages.show');
+        Route::livewire('messages/{message}', 'pages::message')->name('messages.show');
         Route::livewire('agents', 'pages::agents')->name('agents');
         Route::livewire('agents/{agent}', 'pages::agent')->name('agents.show');
     });

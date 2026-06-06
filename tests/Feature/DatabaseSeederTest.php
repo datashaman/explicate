@@ -25,11 +25,13 @@ test('database seeder creates demo workspace content', function () {
     expect($designTopic)->not->toBeNull();
     expect($designTopic->slug)->toBe('design');
     expect($designTopic->messages()->count())->toBeGreaterThanOrEqual(2);
+    expect($designTopic->messages()->whereNotNull('ulid')->count())->toBe($designTopic->messages()->count());
     expect($designTopic->agents()->count())->toBeGreaterThanOrEqual(2);
 
     expect($engineeringTopic)->not->toBeNull();
     expect($engineeringTopic->slug)->toBe('engineering');
     expect($engineeringTopic->messages()->count())->toBeGreaterThanOrEqual(2);
+    expect($engineeringTopic->messages()->whereNotNull('ulid')->count())->toBe($engineeringTopic->messages()->count());
 
     $writerAgent = $user->currentWorkspace->agents()->where('name', 'Writer')->first();
 
@@ -50,5 +52,6 @@ test('factories derive slugs from overridden names and titles', function () {
         ->and($workspace->slug)->toBe('context-proof')
         ->and($topic->slug)->toBe('product-strategy')
         ->and($agent->slug)->toBe('seo-analyst')
-        ->and($message->slug)->toBe('launch-plan');
+        ->and($message->slug)->toBe('launch-plan')
+        ->and($message->ulid)->not->toBeNull();
 });

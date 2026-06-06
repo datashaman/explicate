@@ -274,7 +274,7 @@ test('dashboard routes do not include team or workspace slugs', function () {
 
     expect(route('dashboard', absolute: false))->toBe('/dashboard')
         ->and(route('topics.show', ['topic' => $topic->slug], false))->toBe('/topics/current-topic')
-        ->and(route('messages.show', ['topic' => $topic->slug, 'message' => 'current-message'], false))->toBe('/topics/current-topic/messages/current-message')
+        ->and(route('messages.show', ['message' => 'current-message'], false))->toBe('/messages/current-message')
         ->and(route('messages.create', ['topic' => $topic->slug], false))->toBe('/messages/new?topic=current-topic');
 });
 
@@ -326,7 +326,7 @@ test('dashboard shows selected topic in the main panel', function () {
         ->assertSee('Selected Topic')
         ->assertSee($selectedMessage->title)
         ->assertSee(e(route('dashboard', ['topic' => $selectedTopic->slug, 'message' => $selectedMessage->slug, 'panel' => 'messages'])), escape: false)
-        ->assertDontSee(route('messages.show', ['topic' => $selectedTopic->slug, 'message' => $selectedMessage->slug]), escape: false)
+        ->assertDontSee(route('messages.show', ['message' => $selectedMessage]), escape: false)
         ->assertDontSee('Direct message')
         ->assertDontSee('Other message');
 });
@@ -578,8 +578,8 @@ test('dashboard shows new message action', function () {
     $this->actingAs($user)
         ->get(route('dashboard', ['topic' => $topic->slug]))
         ->assertOk()
-        ->assertSee(e(route('dashboard', ['topic' => $topic->slug, 'action' => 'new-message', 'panel' => 'messages'])), escape: false)
-        ->assertDontSee(route('messages.create'), escape: false);
+        ->assertSee(e(route('messages.create', ['topic' => $topic->slug])), escape: false)
+        ->assertDontSee(e(route('dashboard', ['topic' => $topic->slug, 'action' => 'new-message', 'panel' => 'messages'])), escape: false);
 });
 
 test('dashboard shows new message form in the main panel', function () {
@@ -590,7 +590,7 @@ test('dashboard shows new message form in the main panel', function () {
     $topic = Topic::factory()->for($workspace)->create(['name' => 'Design', 'slug' => 'design']);
 
     $this->actingAs($user)
-        ->get(route('dashboard', ['topic' => $topic->slug, 'action' => 'new-message', 'panel' => 'messages']))
+        ->get(route('messages.create', ['topic' => $topic->slug]))
         ->assertOk()
         ->assertSee('data-test="dashboard-message-create-panel"', escape: false)
         ->assertSee('New message')
@@ -607,7 +607,7 @@ test('dashboard shows new message form in the message panel without a selected t
     $topic = Topic::factory()->for($workspace)->create(['name' => 'Design', 'slug' => 'design']);
 
     $this->actingAs($user)
-        ->get(route('dashboard', ['action' => 'new-message', 'panel' => 'messages']))
+        ->get(route('messages.create'))
         ->assertOk()
         ->assertSee('data-test="dashboard-message-create-panel"', escape: false)
         ->assertSee('New message')
@@ -737,6 +737,34 @@ test('dashboard can send a new message to an agent principal', function () {
         ->and($message->status)->toBe(MessageStatus::Published);
 });
 
+test('dashboard defaults a principal recipient when none reached the server', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->for($user->currentTeam)->create();
+    $user->switchWorkspace($workspace);
+    $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
+    $senderPrincipal = $workspace->principalForUser($user);
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::dashboard')
+        ->set('selectedTopicSlug', $topic->slug)
+        ->set('panelAction', 'new-message')
+        ->set('newMessageTitle', 'Default dashboard recipient')
+        ->set('newMessageBody', 'Direct body')
+        ->set('newMessageTarget', 'principal')
+        ->set('newMessageTopicId', $topic->id)
+        ->set('newMessageRecipientPrincipalId', null)
+        ->call('sendDashboardMessage')
+        ->assertHasNoErrors();
+
+    $message = $topic->messages()->where('title', 'Default dashboard recipient')->first();
+
+    expect($message)->not->toBeNull()
+        ->and($message->sender_principal_id)->toBe($senderPrincipal->id)
+        ->and($message->recipient_principal_id)->toBe($senderPrincipal->id)
+        ->and($message->status)->toBe(MessageStatus::Published);
+});
+
 test('dashboard shows mobile bottom navigation with topics active by default', function () {
     $user = User::factory()->create();
     $workspace = Workspace::factory()->for($user->currentTeam)->create();
@@ -787,7 +815,7 @@ test('dashboard without a selected topic shows a top-level new message action', 
         ->assertSee('Select a topic')
         ->assertSee('data-mobile-panel="topics"', escape: false)
         ->assertSee('New message')
-        ->assertSee(e(route('dashboard', ['action' => 'new-message', 'panel' => 'messages'])), escape: false)
+        ->assertSee(e(route('messages.create')), escape: false)
         ->assertSee('data-mobile-nav="messages"', escape: false)
         ->assertSee('disabled', escape: false);
 });

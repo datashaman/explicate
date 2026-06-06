@@ -22,7 +22,7 @@ beforeEach(function () {
 
 test('message page loads', function () {
     $this->actingAs($this->user)
-        ->get(route('messages.show', ['topic' => $this->topic->slug, 'message' => $this->message->slug]))
+        ->get(route('messages.show', ['message' => $this->message]))
         ->assertOk()
         ->assertSee($this->message->title)
         ->assertSee('data-test="message-panel"', escape: false)
@@ -33,13 +33,16 @@ test('message page loads', function () {
 test('message create route redirects to the dashboard message panel', function () {
     $this->actingAs($this->user)
         ->get(route('messages.create'))
-        ->assertRedirect(route('dashboard', ['action' => 'new-message', 'panel' => 'messages']));
+        ->assertOk()
+        ->assertSee('data-test="dashboard-message-create-panel"', escape: false);
 });
 
-test('message create route preserves the selected topic in the dashboard message panel', function () {
+test('message create route uses the selected topic query as the form default', function () {
     $this->actingAs($this->user)
         ->get(route('messages.create', ['topic' => $this->topic->slug]))
-        ->assertRedirect(route('dashboard', ['action' => 'new-message', 'panel' => 'messages', 'topic' => $this->topic->slug]));
+        ->assertOk()
+        ->assertSee('data-test="dashboard-message-create-panel"', escape: false)
+        ->assertSee('&quot;newMessageTopicId&quot;:'.$this->topic->id, escape: false);
 });
 
 test('message page does not resolve topics outside the current workspace', function () {
@@ -48,14 +51,14 @@ test('message page does not resolve topics outside the current workspace', funct
     $otherMessage = Message::factory()->for($otherTopic)->create();
 
     $this->actingAs($this->user)
-        ->get(route('messages.show', ['topic' => $otherTopic->slug, 'message' => $otherMessage->slug]))
+        ->get(route('messages.show', ['message' => $otherMessage]))
         ->assertNotFound();
 });
 
 test('draft message can be saved', function () {
     $this->actingAs($this->user);
 
-    Livewire::test('pages::message', ['topic' => $this->topic, 'message' => $this->message])
+    Livewire::test('pages::message', ['message' => $this->message])
         ->set('body', 'Hello world')
         ->call('save')
         ->assertHasNoErrors();
@@ -69,7 +72,7 @@ test('draft message recipient can be changed to an agent principal', function ()
 
     $this->actingAs($this->user);
 
-    Livewire::test('pages::message', ['topic' => $this->topic, 'message' => $this->message])
+    Livewire::test('pages::message', ['message' => $this->message])
         ->set('title', 'Agent draft')
         ->set('target', 'principal')
         ->set('recipientPrincipalId', $agentPrincipal->id)
@@ -93,7 +96,7 @@ test('published message page shows sender and recipient principals', function ()
     ]);
 
     $this->actingAs($this->user)
-        ->get(route('messages.show', ['topic' => $this->topic->slug, 'message' => $this->message->slug]))
+        ->get(route('messages.show', ['message' => $this->message]))
         ->assertOk()
         ->assertSee('From')
         ->assertSee($this->user->name)
@@ -106,7 +109,7 @@ test('published message cannot be saved', function () {
 
     $this->actingAs($this->user);
 
-    Livewire::test('pages::message', ['topic' => $this->topic, 'message' => $this->message])
+    Livewire::test('pages::message', ['message' => $this->message])
         ->set('body', 'Hello world')
         ->call('save')
         ->assertForbidden();
@@ -119,7 +122,7 @@ test('attachments can be uploaded', function () {
 
     $file = UploadedFile::fake()->create('report.pdf', 512, 'application/pdf');
 
-    Livewire::test('pages::message', ['topic' => $this->topic, 'message' => $this->message])
+    Livewire::test('pages::message', ['message' => $this->message])
         ->set('uploads', [$file])
         ->call('uploadAttachments')
         ->assertHasNoErrors();
@@ -194,6 +197,47 @@ test('message can be sent to a user from dedicated create page', function () {
         ->and($message->sender_principal_id)->toBe($senderPrincipal->id)
         ->and($message->recipient_principal_id)->toBe($recipientPrincipal->id)
         ->and($message->status)->toBe(MessageStatus::Published);
+});
+
+test('dedicated create page defaults a principal recipient when none reached the server', function () {
+    $this->actingAs($this->user);
+
+    $senderPrincipal = $this->workspace->principalForUser($this->user);
+
+    Livewire::test('pages::message-create')
+        ->set('title', 'Default recipient')
+        ->set('body', 'Direct body')
+        ->set('target', 'principal')
+        ->set('topicId', $this->topic->id)
+        ->set('recipientPrincipalId', null)
+        ->call('send')
+        ->assertHasNoErrors();
+
+    $message = $this->topic->messages()->where('title', 'Default recipient')->first();
+
+    expect($message)->not->toBeNull()
+        ->and($message->sender_principal_id)->toBe($senderPrincipal->id)
+        ->and($message->recipient_principal_id)->toBe($senderPrincipal->id)
+        ->and($message->status)->toBe(MessageStatus::Published);
+});
+
+test('draft message defaults a principal recipient when none reached the server', function () {
+    $this->actingAs($this->user);
+
+    $senderPrincipal = $this->workspace->principalForUser($this->user);
+
+    Livewire::test('pages::message', ['message' => $this->message])
+        ->set('title', 'Default draft recipient')
+        ->set('target', 'principal')
+        ->set('recipientPrincipalId', null)
+        ->call('publish')
+        ->assertHasNoErrors();
+
+    expect($this->message->fresh())
+        ->title->toBe('Default draft recipient')
+        ->sender_principal_id->toBe($senderPrincipal->id)
+        ->recipient_principal_id->toBe($senderPrincipal->id)
+        ->status->toBe(MessageStatus::Published);
 });
 
 test('a topic has many messages', function () {

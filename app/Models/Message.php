@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
-#[Fillable(['topic_id', 'sender_principal_id', 'recipient_principal_id', 'title', 'slug', 'body', 'status'])]
+#[Fillable(['topic_id', 'sender_principal_id', 'recipient_principal_id', 'title', 'slug', 'ulid', 'body', 'status'])]
 class Message extends Model
 {
     /** @use HasFactory<MessageFactory> */
@@ -31,6 +31,10 @@ class Message extends Model
         parent::boot();
 
         static::creating(function (Message $message) {
+            if (empty($message->ulid)) {
+                $message->ulid = (string) Str::ulid();
+            }
+
             if (empty($message->slug)) {
                 $message->slug = static::generateUniqueSlug($message->topic_id, $message->title);
             }
@@ -109,6 +113,6 @@ class Message extends Model
 
     public function getRouteKeyName(): string
     {
-        return 'slug';
+        return 'ulid';
     }
 }

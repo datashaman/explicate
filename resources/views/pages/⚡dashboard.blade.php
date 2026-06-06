@@ -85,6 +85,10 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
     public function mount(): void
     {
+        if ($this->isCreateRoute()) {
+            $this->mobilePanel = 'messages';
+        }
+
         $this->normalizeMobilePanel();
         $this->syncSelectedMessageFields();
         $this->syncNewMessageTopic();
@@ -151,7 +155,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
     public function isCreatingMessage(): bool
     {
-        return $this->panelAction === 'new-message';
+        return $this->isCreateRoute() || $this->panelAction === 'new-message';
     }
 
     /** @return list<array{slug: string, name: string, icon: string, count: int}> */
@@ -484,6 +488,16 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         }
     }
 
+    public function updatedNewMessageTarget(): void
+    {
+        $this->normalizeNewMessageRecipient();
+    }
+
+    public function updatedMessageTarget(): void
+    {
+        $this->normalizeMessageRecipient();
+    }
+
     public function showMobilePanel(string $panel): void
     {
         $this->mobilePanel = $panel;
@@ -496,7 +510,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             $this->mobilePanel = 'topics';
         }
 
-        if (! $this->selectedTopic() && ! $this->selectedSystemFolder() && $this->mobilePanel === 'messages') {
+        if (! $this->selectedTopic() && ! $this->selectedSystemFolder() && ! $this->isCreatingMessage() && $this->mobilePanel === 'messages') {
             $this->mobilePanel = 'topics';
         }
     }
@@ -566,6 +580,9 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
         abort_unless($workspace, 403);
 
+        $this->normalizeNewMessageTopic();
+        $this->normalizeNewMessageRecipient();
+
         $validated = $this->validate([
             'newMessageTitle' => ['required', 'string', 'max:255'],
             'newMessageBody' => ['nullable', 'string'],
@@ -573,6 +590,13 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             'newMessageTopicId' => ['required', 'integer'],
             'newMessageRecipientPrincipalId' => ['nullable', 'required_if:newMessageTarget,principal', 'integer'],
             'newMessageUploads.*' => ['file', 'max:51200'],
+        ], [], [
+            'newMessageTitle' => __('title'),
+            'newMessageBody' => __('body'),
+            'newMessageTarget' => __('delivery target'),
+            'newMessageTopicId' => __('topic'),
+            'newMessageRecipientPrincipalId' => __('recipient'),
+            'newMessageUploads.*' => __('attachment'),
         ]);
 
         $topic = $workspace->topics()->findOrFail($validated['newMessageTopicId']);
@@ -720,6 +744,11 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             'messageBody' => ['nullable', 'string'],
             'messageTarget' => ['required', 'string', 'in:topic,principal'],
             'messageRecipientPrincipalId' => ['nullable', 'required_if:messageTarget,principal', 'integer'],
+        ], [], [
+            'messageTitle' => __('title'),
+            'messageBody' => __('body'),
+            'messageTarget' => __('delivery target'),
+            'messageRecipientPrincipalId' => __('recipient'),
         ]);
 
         $workspace = $this->workspace();
@@ -812,7 +841,52 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
         if ($topic) {
             $this->newMessageTopicId = $topic->id;
+
+            return;
         }
+
+        if ($this->isCreatingMessage() && ! $this->newMessageTopicId) {
+            $this->newMessageTopicId = $this->workspace()?->topics()->value('id');
+        }
+    }
+
+    private function normalizeNewMessageTopic(): void
+    {
+        if ($this->newMessageTopicId) {
+            return;
+        }
+
+        $this->syncNewMessageTopic();
+    }
+
+    private function isCreateRoute(): bool
+    {
+        return request()->routeIs('messages.create');
+    }
+
+    private function normalizeNewMessageRecipient(): void
+    {
+        $this->newMessageRecipientPrincipalId = $this->defaultRecipientPrincipalId(
+            $this->newMessageTarget,
+            $this->newMessageRecipientPrincipalId
+        );
+    }
+
+    private function normalizeMessageRecipient(): void
+    {
+        $this->messageRecipientPrincipalId = $this->defaultRecipientPrincipalId(
+            $this->messageTarget,
+            $this->messageRecipientPrincipalId
+        );
+    }
+
+    private function defaultRecipientPrincipalId(string $target, ?int $currentPrincipalId = null): ?int
+    {
+        if ($target !== 'principal') {
+            return null;
+        }
+
+        return $currentPrincipalId ?: $this->availablePrincipals->first()?->id;
     }
 
     private function syncSelectedAgentFields(): void
@@ -934,14 +1008,14 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                         <div class="flex flex-1 flex-col gap-6 overflow-auto px-4 py-4 xl:min-h-0" data-test="dashboard-message-create-panel">
                             <form wire:submit="createDashboardMessage" class="flex flex-col gap-6">
                                 <div class="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_10rem_16rem]">
-                                    <flux:input wire:model="newMessageTitle" :label="__('Title')" required autofocus />
+                                    <flux:input wire:model="newMessageTitle" :label="__('Title')" required autofocus data-test="new-message-title" />
 
-                                    <flux:select wire:model.live="newMessageTarget" :label="__('To')" required>
+                                    <flux:select wire:model.live="newMessageTarget" :label="__('To')" required data-test="new-message-target">
                                         <flux:select.option value="topic">{{ __('Topic') }}</flux:select.option>
                                         <flux:select.option value="principal">{{ __('Principal') }}</flux:select.option>
                                     </flux:select>
 
-                                    <flux:select wire:model="newMessageTopicId" :label="__('Topic')" placeholder="{{ __('Select a topic…') }}" required>
+                                    <flux:select wire:model="newMessageTopicId" :label="__('Topic')" placeholder="{{ __('Select a topic…') }}" required data-test="new-message-topic">
                                         @foreach ($this->availableTopics as $topic)
                                             <flux:select.option :value="$topic->id">{{ $topic->name }}</flux:select.option>
                                         @endforeach
@@ -949,7 +1023,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                                 </div>
 
                                 @if ($newMessageTarget === 'principal')
-                                    <flux:select wire:model="newMessageRecipientPrincipalId" :label="__('Recipient')" placeholder="{{ __('Select a principal…') }}" required>
+                                    <flux:select wire:model="newMessageRecipientPrincipalId" :label="__('Recipient')" placeholder="{{ __('Select a principal…') }}" required data-test="new-message-recipient">
                                         @foreach ($this->availableRecipients as $recipient)
                                             <flux:select.option :value="$recipient->id">
                                                 {{ $recipient->label() }} · {{ $recipient->type === \App\Models\Principal::TypeAgent ? __('Agent') : __('User') }}
@@ -958,7 +1032,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                                     </flux:select>
                                 @endif
 
-                                <flux:textarea wire:model="newMessageBody" :label="__('Body')" :placeholder="__('Write something...')" rows="12" />
+                                <flux:textarea wire:model="newMessageBody" :label="__('Body')" :placeholder="__('Write something...')" rows="12" data-test="new-message-body" />
 
                                 <div class="flex flex-col gap-3">
                                     <flux:heading size="sm">{{ __('Attachments') }}</flux:heading>
@@ -985,8 +1059,8 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                                     <flux:button :href="$this->selectedTopic() ? route('dashboard', ['topic' => $this->selectedTopic()->slug, 'panel' => 'messages']) : route('dashboard')" wire:navigate variant="filled">
                                         {{ __('Cancel') }}
                                     </flux:button>
-                                    <flux:button type="submit" variant="filled">{{ __('Save draft') }}</flux:button>
-                                    <flux:button wire:click="sendDashboardMessage" type="button" variant="primary">{{ __('Send') }}</flux:button>
+                                    <flux:button type="submit" variant="filled" data-test="new-message-save-draft">{{ __('Save draft') }}</flux:button>
+                                    <flux:button wire:click="sendDashboardMessage" type="button" variant="primary" data-test="new-message-send">{{ __('Send') }}</flux:button>
                                 </div>
                             </form>
                         </div>
@@ -1083,8 +1157,9 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                             'icon' => 'document-text',
                             'iconClass' => 'size-12 text-neutral-400 group-hover:text-neutral-300',
                             'emptyText' => __('No messages'),
-                            'createHref' => $this->selectedTopic() ? route('dashboard', ['topic' => $this->selectedTopic()->slug, 'action' => 'new-message', 'panel' => 'messages']) : route('dashboard', ['action' => 'new-message', 'panel' => 'messages']),
+                            'createHref' => $this->selectedTopic() ? route('messages.create', ['topic' => $this->selectedTopic()->slug]) : route('messages.create'),
                             'createLabel' => __('New message'),
+                            'createTest' => 'dashboard-new-message-button',
                             'showArchivedModel' => 'showArchived',
                             'toolbarClass' => 'border-b border-neutral-300 bg-emerald-50 px-4 py-3 dark:border-white/10 dark:bg-emerald-500/10',
                             'rootClass' => 'flex flex-col xl:h-full',
@@ -1103,7 +1178,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                 >
                     <div class="flex items-center justify-between gap-3 border-b border-neutral-300 bg-emerald-50 px-4 py-3 dark:border-white/10 dark:bg-emerald-500/10">
                         <flux:heading size="sm">{{ __('Messages') }}</flux:heading>
-                        <flux:button :href="route('dashboard', ['action' => 'new-message', 'panel' => 'messages'])" wire:navigate size="xs" icon="plus">
+                        <flux:button :href="route('messages.create')" wire:navigate size="xs" icon="plus" data-test="dashboard-new-message-button">
                             {{ __('New message') }}
                         </flux:button>
                     </div>

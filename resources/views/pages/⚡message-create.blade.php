@@ -105,11 +105,18 @@ new #[Title('New Message')] class extends Component {
         $this->createMessage(MessageStatus::Published);
     }
 
+    public function updatedTarget(): void
+    {
+        $this->normalizeRecipient();
+    }
+
     private function createMessage(MessageStatus $status): void
     {
         $workspace = Auth::user()->currentWorkspace;
 
         abort_unless($workspace, 403);
+
+        $this->normalizeRecipient();
 
         $validated = $this->validate([
             'title' => ['required', 'string', 'max:255'],
@@ -118,6 +125,11 @@ new #[Title('New Message')] class extends Component {
             'topicId' => ['required', 'integer'],
             'recipientPrincipalId' => ['nullable', 'required_if:target,principal', 'integer'],
             'uploads.*' => ['file', 'max:51200'],
+        ], [], [
+            'target' => __('delivery target'),
+            'topicId' => __('topic'),
+            'recipientPrincipalId' => __('recipient'),
+            'uploads.*' => __('attachment'),
         ]);
 
         $topic = $workspace->topics()->findOrFail($validated['topicId']);
@@ -158,7 +170,18 @@ new #[Title('New Message')] class extends Component {
 
         Flux::toast(variant: 'success', text: $status === MessageStatus::Draft ? __('Draft created.') : __('Message added.'));
 
-        $this->redirectRoute('messages.show', ['topic' => $topic->slug, 'message' => $message->slug], navigate: true);
+        $this->redirectRoute('messages.show', ['message' => $message], navigate: true);
+    }
+
+    private function normalizeRecipient(): void
+    {
+        if ($this->target !== 'principal') {
+            $this->recipientPrincipalId = null;
+
+            return;
+        }
+
+        $this->recipientPrincipalId = $this->recipientPrincipalId ?: $this->availablePrincipals->first()?->id;
     }
 }; ?>
 

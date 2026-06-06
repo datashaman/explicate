@@ -26,6 +26,7 @@ class MessageFactory extends Factory
             'recipient_principal_id' => null,
             'title' => $name,
             'slug' => fn (array $attributes): string => Str::slug($attributes['title']),
+            'ulid' => fn (): string => (string) Str::ulid(),
             'body' => fake()->optional()->paragraphs(3, true),
             'status' => MessageStatus::Draft,
         ];

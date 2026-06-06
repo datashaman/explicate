@@ -34,15 +34,16 @@ new #[Layout('layouts::workspace'), Title('Message')] class extends Component {
     /** @var array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile> */
     public array $uploads = [];
 
-    public function mount(Topic $topic, Message $message): void
+    public function mount(Message $message): void
     {
+        $topic = $message->topic;
+
         abort_unless(
             Auth::user()->currentWorkspace?->id === $topic->workspace_id,
             403
         );
 
-        abort_unless($message->topic_id === $topic->id, 404);
-
+        $this->topic = $topic;
         $this->title = $message->title;
         $this->body = $message->body ?? '';
         $this->target = $message->recipient_principal_id ? 'principal' : 'topic';
@@ -88,11 +89,16 @@ new #[Layout('layouts::workspace'), Title('Message')] class extends Component {
     {
         abort_unless($this->message->status === MessageStatus::Draft, 403);
 
+        $this->normalizeRecipient();
+
         $validated = $this->validate([
             'title' => ['required', 'string', 'max:255'],
             'body' => ['nullable', 'string'],
             'target' => ['required', 'string', 'in:topic,principal'],
             'recipientPrincipalId' => ['nullable', 'required_if:target,principal', 'integer'],
+        ], [], [
+            'target' => __('delivery target'),
+            'recipientPrincipalId' => __('recipient'),
         ]);
 
         $this->message->update([
@@ -104,15 +110,25 @@ new #[Layout('layouts::workspace'), Title('Message')] class extends Component {
         Flux::toast(variant: 'success', text: __('Saved.'));
     }
 
+    public function updatedTarget(): void
+    {
+        $this->normalizeRecipient();
+    }
+
     public function publish(): void
     {
         abort_unless($this->message->status === MessageStatus::Draft, 403);
+
+        $this->normalizeRecipient();
 
         $validated = $this->validate([
             'title' => ['required', 'string', 'max:255'],
             'body' => ['nullable', 'string'],
             'target' => ['required', 'string', 'in:topic,principal'],
             'recipientPrincipalId' => ['nullable', 'required_if:target,principal', 'integer'],
+        ], [], [
+            'target' => __('delivery target'),
+            'recipientPrincipalId' => __('recipient'),
         ]);
 
         $workspace = Auth::user()->currentWorkspace;
@@ -212,6 +228,17 @@ new #[Layout('layouts::workspace'), Title('Message')] class extends Component {
             ->whereKey($validated['recipientPrincipalId'])
             ->firstOrFail()
             ->id;
+    }
+
+    private function normalizeRecipient(): void
+    {
+        if ($this->target !== 'principal') {
+            $this->recipientPrincipalId = null;
+
+            return;
+        }
+
+        $this->recipientPrincipalId = $this->recipientPrincipalId ?: $this->availablePrincipals->first()?->id;
     }
 }; ?>
 
