@@ -115,7 +115,7 @@ test('dashboard archived toggle only filters the selected messages list', functi
         ->assertSee('data-test="topic-design-draft-count"', escape: false)
         ->assertSee('title="Draft messages"', escape: false)
         ->assertSee('data-test="topic-design-published-count"', escape: false)
-        ->assertSee('title="Published messages"', escape: false)
+        ->assertSee('title="Messages"', escape: false)
         ->assertDontSee('Design archived')
         ->assertDontSee('data-test="topic-design-archived-count"', escape: false)
         ->assertDontSee('data-test="topic-engineering-archived-count"', escape: false);
@@ -208,7 +208,7 @@ test('dashboard shows selected draft message in the main panel', function () {
         ->assertSee('Draft body')
         ->assertDontSee('data-flux-breadcrumbs', escape: false)
         ->assertSee('Save draft')
-        ->assertSee('Publish');
+        ->assertSee('Send');
 });
 
 test('dashboard can save selected draft message', function () {
@@ -302,7 +302,8 @@ test('dashboard shows new message form in the main panel', function () {
         ->assertOk()
         ->assertSee('data-test="dashboard-message-create-panel"', escape: false)
         ->assertSee('New message')
-        ->assertSee('Create draft')
+        ->assertSee('Save draft')
+        ->assertSee('Send')
         ->assertSee('Design');
 });
 
@@ -330,7 +331,36 @@ test('dashboard can create a draft message in the main panel', function () {
     $message = $topic->messages()->where('title', 'New draft')->first();
 
     expect($message)->not->toBeNull()
-        ->and($message->body)->toBe('Draft body');
+        ->and($message->body)->toBe('Draft body')
+        ->and($message->status)->toBe(MessageStatus::Draft);
+});
+
+test('dashboard can make a new message actionable in the main panel', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->for($user->currentTeam)->create();
+    $user->switchWorkspace($workspace);
+
+    $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::dashboard')
+        ->set('selectedTopicSlug', $topic->slug)
+        ->set('panelAction', 'new-message')
+        ->set('newMessageTitle', 'Ready to send')
+        ->set('newMessageBody', 'Actionable body')
+        ->set('newMessageTopicId', $topic->id)
+        ->call('sendDashboardMessage')
+        ->assertHasNoErrors()
+        ->assertSet('panelAction', null)
+        ->assertSet('selectedTopicSlug', $topic->slug)
+        ->assertSet('selectedMessageSlug', 'ready-to-send');
+
+    $message = $topic->messages()->where('title', 'Ready to send')->first();
+
+    expect($message)->not->toBeNull()
+        ->and($message->body)->toBe('Actionable body')
+        ->and($message->status)->toBe(MessageStatus::Published);
 });
 
 test('dashboard shows mobile bottom navigation with topics active by default', function () {

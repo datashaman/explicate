@@ -113,6 +113,23 @@ test('message can be created from dedicated create page with attachments', funct
     expect($message->attachments->first()->filename)->toBe('brief.pdf');
 });
 
+test('message can be made actionable from dedicated create page', function () {
+    $this->actingAs($this->user);
+
+    Livewire::test('pages::message-create')
+        ->set('title', 'Ready to send')
+        ->set('body', 'Actionable body')
+        ->set('topicId', $this->topic->id)
+        ->call('send')
+        ->assertHasNoErrors();
+
+    $message = $this->topic->messages()->where('title', 'Ready to send')->first();
+
+    expect($message)->not->toBeNull()
+        ->and($message->body)->toBe('Actionable body')
+        ->and($message->status)->toBe(MessageStatus::Published);
+});
+
 test('a topic has many messages', function () {
     Message::factory()->count(2)->for($this->topic)->create();
 

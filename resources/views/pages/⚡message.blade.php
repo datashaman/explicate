@@ -146,7 +146,7 @@ new #[Layout('layouts::workspace'), Title('Message')] class extends Component {
                         <div class="flex shrink-0 items-center gap-2">
                             <flux:badge :color="$message->status->color()" size="sm">{{ $message->status->label() }}</flux:badge>
                             <flux:button wire:click="archive" type="button" size="sm" icon="archive-box">{{ __('Archive') }}</flux:button>
-                            <flux:button wire:click="publish" type="button" size="sm" variant="primary" icon="arrow-up-circle">{{ __('Publish') }}</flux:button>
+                            <flux:button wire:click="publish" type="button" size="sm" variant="primary" icon="paper-airplane">{{ __('Send') }}</flux:button>
                         </div>
                     </div>
 
@@ -157,17 +157,16 @@ new #[Layout('layouts::workspace'), Title('Message')] class extends Component {
                     </div>
                 </form>
             @else
-                {{-- Published / Archived: read-only --}}
+                {{-- Non-draft messages are read-only. --}}
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <flux:heading size="xl" class="min-w-0 flex-1 truncate">{{ $message->title }}</flux:heading>
 
                     <div class="flex shrink-0 items-center gap-2">
-                        <flux:badge :color="$message->status->color()" size="sm">{{ $message->status->label() }}</flux:badge>
-
                         @if ($message->status === App\Enums\MessageStatus::Published)
-                            <flux:button wire:click="unpublish" size="sm" icon="arrow-down-circle">{{ __('Unpublish') }}</flux:button>
+                            <flux:button wire:click="unpublish" size="sm" icon="arrow-uturn-left">{{ __('Return to draft') }}</flux:button>
                             <flux:button wire:click="archive" size="sm" icon="archive-box">{{ __('Archive') }}</flux:button>
                         @elseif ($message->status === App\Enums\MessageStatus::Archived)
+                            <flux:badge :color="$message->status->color()" size="sm">{{ $message->status->label() }}</flux:badge>
                             <flux:button wire:click="unarchive" size="sm" icon="archive-box-x-mark">{{ __('Unarchive') }}</flux:button>
                         @endif
                     </div>

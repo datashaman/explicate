@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\MessageStatus;
 use App\Models\Topic;
 use Flux\Flux;
 use Illuminate\Support\Facades\Auth;
@@ -56,6 +57,16 @@ new #[Title('New Message')] class extends Component {
 
     public function create(): void
     {
+        $this->createMessage(MessageStatus::Draft);
+    }
+
+    public function send(): void
+    {
+        $this->createMessage(MessageStatus::Published);
+    }
+
+    private function createMessage(MessageStatus $status): void
+    {
         $workspace = Auth::user()->currentWorkspace;
 
         abort_unless($workspace, 403);
@@ -72,6 +83,7 @@ new #[Title('New Message')] class extends Component {
         $message = $topic->messages()->create([
             'title' => $validated['title'],
             'body' => $validated['body'] ?: null,
+            'status' => $status,
         ]);
 
         foreach ($this->uploads as $upload) {
@@ -90,7 +102,7 @@ new #[Title('New Message')] class extends Component {
             ]);
         }
 
-        Flux::toast(variant: 'success', text: __('Message created.'));
+        Flux::toast(variant: 'success', text: $status === MessageStatus::Draft ? __('Draft created.') : __('Message added.'));
 
         $this->redirectRoute('messages.show', ['topic' => $topic->slug, 'message' => $message->slug], navigate: true);
     }
@@ -142,7 +154,8 @@ new #[Title('New Message')] class extends Component {
             <flux:button :href="request()->query('topic') ? route('topics.show', ['topic' => request()->query('topic')]) : route('dashboard')" wire:navigate variant="filled">
                 {{ __('Cancel') }}
             </flux:button>
-            <flux:button type="submit" variant="primary">{{ __('Create draft') }}</flux:button>
+            <flux:button type="submit" variant="filled">{{ __('Save draft') }}</flux:button>
+            <flux:button wire:click="send" type="button" variant="primary">{{ __('Send') }}</flux:button>
         </div>
     </form>
 </div>

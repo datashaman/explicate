@@ -56,7 +56,7 @@ new #[Layout('layouts::workspace'), Title('Topic')] class extends Component {
     }
 
     /**
-     * @return list<array{href: string, name: string, badge: array{label: string, color: string}}>
+     * @return list<array{href: string, name: string, badge: array{label: string, color: string}|null}>
      */
     public function items(): array
     {
@@ -66,7 +66,7 @@ new #[Layout('layouts::workspace'), Title('Topic')] class extends Component {
             ->map(fn (Message $message) => [
                 'href' => route('messages.show', ['topic' => $this->topic->slug, 'message' => $message->slug]),
                 'name' => $message->title,
-                'badge' => [
+                'badge' => $message->status === MessageStatus::Published ? null : [
                     'label' => $message->status->label(),
                     'color' => $message->status->color(),
                 ],

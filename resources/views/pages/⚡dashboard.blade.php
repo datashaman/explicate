@@ -146,7 +146,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
     }
 
     /**
-     * @return list<array{href: string, name: string, badge: array{label: string, color: string}}>
+     * @return list<array{href: string, name: string, badge: array{label: string, color: string}|null}>
      */
     public function selectedTopicItems(): array
     {
@@ -162,7 +162,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             ->map(fn (Message $message) => [
                 'href' => route('dashboard', ['topic' => $topic->slug, 'message' => $message->slug, 'panel' => 'messages']),
                 'name' => $message->title,
-                'badge' => [
+                'badge' => $message->status === MessageStatus::Published ? null : [
                     'label' => $message->status->label(),
                     'color' => $message->status->color(),
                 ],
@@ -315,6 +315,16 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
     public function createDashboardMessage(): void
     {
+        $this->createDashboardMessageWithStatus(MessageStatus::Draft);
+    }
+
+    public function sendDashboardMessage(): void
+    {
+        $this->createDashboardMessageWithStatus(MessageStatus::Published);
+    }
+
+    private function createDashboardMessageWithStatus(MessageStatus $status): void
+    {
         $workspace = $this->workspace();
 
         abort_unless($workspace, 403);
@@ -331,6 +341,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         $message = $topic->messages()->create([
             'title' => $validated['newMessageTitle'],
             'body' => $validated['newMessageBody'] ?: null,
+            'status' => $status,
         ]);
 
         foreach ($this->newMessageUploads as $upload) {
@@ -357,7 +368,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         $this->newMessageTopicId = $topic->id;
         $this->syncSelectedMessageFields();
 
-        Flux::toast(variant: 'success', text: __('Message created.'));
+        Flux::toast(variant: 'success', text: $status === MessageStatus::Draft ? __('Draft created.') : __('Message added.'));
     }
 
     public function assignAgent(int $agentId): void
@@ -516,7 +527,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                                         <flux:badge color="zinc" size="sm" title="{{ __('Draft messages') }}" data-test="topic-{{ $topic->slug }}-draft-count" data-count="{{ $topic->draft_count }}">{{ $topic->draft_count }}</flux:badge>
                                     @endif
                                     @if ($topic->published_count > 0)
-                                        <flux:badge color="green" size="sm" title="{{ __('Published messages') }}" data-test="topic-{{ $topic->slug }}-published-count" data-count="{{ $topic->published_count }}">{{ $topic->published_count }}</flux:badge>
+                                        <flux:badge color="green" size="sm" title="{{ __('Messages') }}" data-test="topic-{{ $topic->slug }}-published-count" data-count="{{ $topic->published_count }}">{{ $topic->published_count }}</flux:badge>
                                     @endif
                                     @if ($showArchived && $selectedTopicSlug === $topic->slug && $topic->archived_count > 0)
                                         <flux:badge color="yellow" size="sm" title="{{ __('Archived messages') }}" data-test="topic-{{ $topic->slug }}-archived-count" data-count="{{ $topic->archived_count }}">{{ $topic->archived_count }}</flux:badge>
@@ -587,7 +598,8 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                                     <flux:button :href="route('dashboard', ['topic' => $this->selectedTopic()->slug, 'panel' => 'messages'])" wire:navigate variant="filled">
                                         {{ __('Cancel') }}
                                     </flux:button>
-                                    <flux:button type="submit" variant="primary">{{ __('Create draft') }}</flux:button>
+                                    <flux:button type="submit" variant="filled">{{ __('Save draft') }}</flux:button>
+                                    <flux:button wire:click="sendDashboardMessage" type="button" variant="primary">{{ __('Send') }}</flux:button>
                                 </div>
                             </form>
                         </div>
@@ -609,7 +621,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                                         <div class="flex shrink-0 items-center gap-2">
                                             <flux:badge :color="$selectedDashboardMessage->status->color()" size="sm">{{ $selectedDashboardMessage->status->label() }}</flux:badge>
                                             <flux:button wire:click="archiveSelectedMessage" type="button" size="sm" icon="archive-box">{{ __('Archive') }}</flux:button>
-                                            <flux:button wire:click="publishSelectedMessage" type="button" size="sm" variant="primary" icon="arrow-up-circle">{{ __('Publish') }}</flux:button>
+                                            <flux:button wire:click="publishSelectedMessage" type="button" size="sm" variant="primary" icon="paper-airplane">{{ __('Send') }}</flux:button>
                                         </div>
                                     </div>
 
@@ -624,12 +636,11 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                                     <flux:heading size="xl" class="min-w-0 flex-1 truncate">{{ $selectedDashboardMessage->title }}</flux:heading>
 
                                     <div class="flex shrink-0 items-center gap-2">
-                                        <flux:badge :color="$selectedDashboardMessage->status->color()" size="sm">{{ $selectedDashboardMessage->status->label() }}</flux:badge>
-
                                         @if ($selectedDashboardMessage->status === MessageStatus::Published)
-                                            <flux:button wire:click="unpublishSelectedMessage" size="sm" icon="arrow-down-circle">{{ __('Unpublish') }}</flux:button>
+                                            <flux:button wire:click="unpublishSelectedMessage" size="sm" icon="arrow-uturn-left">{{ __('Return to draft') }}</flux:button>
                                             <flux:button wire:click="archiveSelectedMessage" size="sm" icon="archive-box">{{ __('Archive') }}</flux:button>
                                         @elseif ($selectedDashboardMessage->status === MessageStatus::Archived)
+                                            <flux:badge :color="$selectedDashboardMessage->status->color()" size="sm">{{ $selectedDashboardMessage->status->label() }}</flux:badge>
                                             <flux:button wire:click="unarchiveSelectedMessage" size="sm" icon="archive-box-x-mark">{{ __('Unarchive') }}</flux:button>
                                         @endif
                                     </div>
