@@ -130,6 +130,30 @@ test('dashboard system draft folder shows draft messages across topics', functio
         ->assertDontSee('Engineering sent');
 });
 
+test('dashboard inbox does not show draft messages', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->for($user->currentTeam)->create();
+    $user->switchWorkspace($workspace);
+
+    $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
+
+    Message::factory()->for($topic)->create([
+        'title' => 'Hidden draft',
+        'status' => MessageStatus::Draft,
+    ]);
+
+    Message::factory()->for($topic)->create([
+        'title' => 'Visible message',
+        'status' => MessageStatus::Published,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('dashboard', ['folder' => 'inbox', 'panel' => 'messages']))
+        ->assertOk()
+        ->assertSee('Visible message')
+        ->assertDontSee('Hidden draft');
+});
+
 test('dashboard archived toggle only filters the selected messages list', function () {
     $user = User::factory()->create();
     $workspace = Workspace::factory()->for($user->currentTeam)->create();
@@ -167,9 +191,9 @@ test('dashboard archived toggle only filters the selected messages list', functi
     $this->actingAs($user)
         ->get(route('dashboard', ['topic' => $design->slug]))
         ->assertOk()
-        ->assertSee('Design draft')
-        ->assertSee('data-test="topic-design-draft-count"', escape: false)
-        ->assertSee('title="Draft messages"', escape: false)
+        ->assertDontSee('Design draft')
+        ->assertDontSee('data-test="topic-design-draft-count"', escape: false)
+        ->assertDontSee('title="Draft messages"', escape: false)
         ->assertSee('data-test="topic-design-published-count"', escape: false)
         ->assertSee('title="Messages"', escape: false)
         ->assertDontSee('Design archived')
@@ -231,7 +255,10 @@ test('dashboard shows selected topic in the main panel', function () {
     $selectedTopic = Topic::factory()->for($workspace)->create(['name' => 'Selected Topic', 'slug' => 'selected-topic']);
     $otherTopic = Topic::factory()->for($workspace)->create(['name' => 'Other Topic', 'slug' => 'other-topic']);
 
-    $selectedMessage = Message::factory()->for($selectedTopic)->create(['title' => 'Selected message']);
+    $selectedMessage = Message::factory()->for($selectedTopic)->create([
+        'title' => 'Selected message',
+        'status' => MessageStatus::Published,
+    ]);
     Message::factory()->for($otherTopic)->create(['title' => 'Other message']);
 
     $this->actingAs($user)
@@ -596,7 +623,7 @@ test('topic page left aligns message icons in icon view', function () {
     $user->switchWorkspace($workspace);
 
     $topic = Topic::factory()->for($workspace)->create();
-    Message::factory()->for($topic)->create();
+    Message::factory()->for($topic)->create(['status' => MessageStatus::Published]);
 
     $this->actingAs($user)
         ->get(route('topics.show', ['topic' => $topic->slug]))

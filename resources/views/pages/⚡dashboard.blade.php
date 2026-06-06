@@ -158,7 +158,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                 'slug' => 'inbox',
                 'name' => __('Inbox'),
                 'icon' => 'inbox',
-                'count' => (int) (($counts[MessageStatus::Published->value] ?? 0) + ($counts[MessageStatus::Draft->value] ?? 0)),
+                'count' => (int) ($counts[MessageStatus::Published->value] ?? 0),
             ],
             [
                 'slug' => 'draft',
@@ -236,6 +236,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
         return $topic->messages()
             ->when(! $this->showArchived, fn ($query) => $query->where('status', '!=', MessageStatus::Archived))
+            ->where('status', '!=', MessageStatus::Draft)
             ->get()
             ->map(fn (Message $message) => [
                 'href' => route('dashboard', ['topic' => $topic->slug, 'message' => $message->slug, 'panel' => 'messages']),
@@ -265,7 +266,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             ->whereHas('topic', fn ($query) => $query->where('workspace_id', $workspace->id))
             ->when($folder['slug'] === 'draft', fn ($query) => $query->where('status', MessageStatus::Draft))
             ->when($folder['slug'] === 'sent', fn ($query) => $query->where('status', MessageStatus::Published))
-            ->when($folder['slug'] === 'inbox', fn ($query) => $query->whereIn('status', [MessageStatus::Draft, MessageStatus::Published]))
+            ->when($folder['slug'] === 'inbox', fn ($query) => $query->where('status', MessageStatus::Published))
             ->when(! $this->showArchived, fn ($query) => $query->where('status', '!=', MessageStatus::Archived))
             ->latest()
             ->get()
@@ -787,9 +788,6 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                                     <div class="truncate text-sm font-medium text-neutral-700 dark:text-neutral-300">{{ $topic->name }}</div>
                                 </div>
                                 <div class="flex shrink-0 items-center gap-1">
-                                    @if ($topic->draft_count > 0)
-                                        <flux:badge color="zinc" size="sm" title="{{ __('Draft messages') }}" data-test="topic-{{ $topic->slug }}-draft-count" data-count="{{ $topic->draft_count }}">{{ $topic->draft_count }}</flux:badge>
-                                    @endif
                                     @if ($topic->published_count > 0)
                                         <flux:badge color="green" size="sm" title="{{ __('Messages') }}" data-test="topic-{{ $topic->slug }}-published-count" data-count="{{ $topic->published_count }}">{{ $topic->published_count }}</flux:badge>
                                     @endif
