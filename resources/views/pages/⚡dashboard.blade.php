@@ -9,6 +9,7 @@ use App\Models\Topic;
 use Flux\Flux;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
@@ -647,6 +648,8 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         abort_unless($workspace, 403);
 
         $this->normalizeNewPostTopic();
+        $uploads = $this->newPostUploads;
+        $uploadMetadata = $this->postAttachmentMetadata($uploads);
 
         $validated = $this->validate([
             'newPostTitle' => ['required', 'string', 'max:255'],
@@ -654,14 +657,17 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             'newPostTopicId' => ['required', 'integer'],
             'newPostAgentIds' => ['array'],
             'newPostAgentIds.*' => ['integer'],
-            'newPostUploads.*' => ['file', 'max:51200'],
         ], [], [
             'newPostTitle' => __('title'),
             'newPostBody' => __('body'),
             'newPostTopicId' => __('topic'),
             'newPostAgentIds' => __('requested agents'),
-            'newPostUploads.*' => __('attachment'),
         ]);
+        Validator::make(['newPostUploads' => $uploads], [
+            'newPostUploads.*' => ['file', 'max:51200'],
+        ], [], [
+            'newPostUploads.*' => __('attachment'),
+        ])->validate();
 
         $topic = $workspace->topics()->findOrFail($validated['newPostTopicId']);
         $senderPrincipal = $workspace->principalForUser(Auth::user());
@@ -675,21 +681,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         ]);
         $post->assignAgents($validated['newPostAgentIds']);
 
-        foreach ($this->newPostUploads as $upload) {
-            $filename = $upload->getClientOriginalName();
-            $path = $upload->storeAs(
-                'attachments/'.Str::uuid(),
-                $filename,
-                'public'
-            );
-
-            $post->attachments()->create([
-                'filename' => $filename,
-                'path' => $path,
-                'mime_type' => $upload->getMimeType(),
-                'size' => $upload->getSize(),
-            ]);
-        }
+        $this->storePostAttachments($post, $uploads, $uploadMetadata);
 
         $this->selectedTopicSlug = $topic->slug;
         $this->selectedPostSlug = $post->slug;
@@ -798,6 +790,9 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
         abort_unless($workspace, 403);
 
+        $uploads = $this->postUploads;
+        $uploadMetadata = $this->postAttachmentMetadata($uploads);
+
         $validated = $this->validate([
             'postTitle' => ['required', 'string', 'max:255'],
             'postBody' => ['nullable', 'string'],
@@ -808,6 +803,11 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             'postBody' => __('body'),
             'postAgentIds' => __('requested agents'),
         ]);
+        Validator::make(['postUploads' => $uploads], [
+            'postUploads.*' => ['file', 'max:51200'],
+        ], [], [
+            'postUploads.*' => __('attachment'),
+        ])->validate();
 
         $post->update([
             'title' => $validated['postTitle'],
@@ -815,6 +815,8 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             'recipient_principal_id' => null,
         ]);
         $post->assignAgents($validated['postAgentIds']);
+        $this->storePostAttachments($post, $uploads, $uploadMetadata);
+        $this->reset('postUploads');
 
         $this->selectedPostSlug = $post->fresh()->slug;
 
@@ -839,35 +841,40 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         ]);
     }
 
-    public function uploadSelectedPostAttachments(): void
+    /**
+     * @param  array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile>  $uploads
+     * @return array<int, array{filename: string, mime_type: string|null, size: int|null}>
+     */
+    private function postAttachmentMetadata(array $uploads): array
     {
-        $post = $this->selectedPost();
+        return array_map(fn ($upload): array => [
+            'filename' => $upload->getClientOriginalName(),
+            'mime_type' => $upload->getMimeType(),
+            'size' => $upload->getSize(),
+        ], $uploads);
+    }
 
-        abort_unless($post && $post->status === PostStatus::Draft, 403);
-
-        $this->validate([
-            'postUploads.*' => ['file', 'max:51200'],
-        ]);
-
-        foreach ($this->postUploads as $upload) {
-            $filename = $upload->getClientOriginalName();
+    /**
+     * @param  array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile>  $uploads
+     * @param  array<int, array{filename: string, mime_type: string|null, size: int|null}>  $metadata
+     */
+    private function storePostAttachments(Post $post, array $uploads, array $metadata): void
+    {
+        foreach ($uploads as $index => $upload) {
+            $attachmentMetadata = $metadata[$index];
             $path = $upload->storeAs(
                 'attachments/'.Str::uuid(),
-                $filename,
+                $attachmentMetadata['filename'],
                 'public'
             );
 
             $post->attachments()->create([
-                'filename' => $filename,
+                'filename' => $attachmentMetadata['filename'],
                 'path' => $path,
-                'mime_type' => $upload->getMimeType(),
-                'size' => $upload->getSize(),
+                'mime_type' => $attachmentMetadata['mime_type'],
+                'size' => $attachmentMetadata['size'],
             ]);
         }
-
-        $this->reset('postUploads');
-
-        Flux::toast(variant: 'success', text: __('Attachments uploaded.'));
     }
 
     public function deleteSelectedPostAttachment(int $attachmentId): void
@@ -1070,51 +1077,28 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                             </flux:button>
                         </div>
 
-                        <div class="flex flex-1 flex-col gap-6 overflow-auto px-4 py-4 xl:min-h-0" data-test="dashboard-post-create-panel">
-                            <form id="dashboard-new-post-form" wire:submit="createDashboardPost" class="flex flex-col gap-6">
-                                <flux:input wire:model="newPostTitle" :label="__('Title')" required autofocus data-test="new-post-title" />
-
-                                @include('partials.post-routing-fields', [
-                                    'topicModel' => 'newPostTopicId',
-                                    'agentIdsModel' => 'newPostAgentIds',
-                                    'availableTopics' => $this->availableTopics,
-                                    'availableAgents' => $this->newPostAssignableAgents(),
-                                    'canChangeTopic' => true,
-                                    'testPrefix' => 'new-post',
-                                ])
-
-                                <flux:textarea wire:model="newPostBody" :label="__('Body')" :placeholder="__('Write something...')" rows="12" data-test="new-post-body" />
-                            </form>
-
-                            <div class="flex flex-col gap-3">
-                                <flux:heading size="sm">{{ __('Attachments') }}</flux:heading>
-
-                                <div x-data="{ uploading: false, progress: 0 }"
-                                     x-on:livewire-upload-start="uploading = true"
-                                     x-on:livewire-upload-finish="uploading = false"
-                                     x-on:livewire-upload-error="uploading = false"
-                                     x-on:livewire-upload-progress="progress = $event.detail.progress"
-                                     class="flex flex-col gap-2">
-                                    <flux:input type="file" wire:model="newPostUploads" multiple />
-
-                                    <div x-show="uploading" class="h-1 w-full overflow-hidden rounded-full bg-neutral-100 dark:bg-white/10">
-                                        <div class="h-full rounded-full bg-blue-500 transition-all" :style="`width: ${progress}%`"></div>
-                                    </div>
-
-                                    @error('newPostUploads.*')
-                                        <flux:error>{{ $message }}</flux:error>
-                                    @enderror
-                                </div>
-                            </div>
-
-                            <div class="flex justify-end gap-2">
-                                <flux:button :href="$this->postsPanelReturnRoute()" wire:navigate variant="filled">
-                                    {{ __('Cancel') }}
-                                </flux:button>
-                                <flux:button type="submit" form="dashboard-new-post-form" variant="filled" data-test="new-post-save-draft" wire:loading.attr="disabled" wire:target="newPostUploads">{{ __('Save draft') }}</flux:button>
-                                <flux:button wire:click="sendDashboardPost" type="button" variant="primary" data-test="new-post-send" wire:loading.attr="disabled" wire:target="newPostUploads">{{ __('Post') }}</flux:button>
-                            </div>
-                        </div>
+                        @include('partials.post-draft-form', [
+                            'formId' => 'dashboard-new-post-form',
+                            'submitAction' => 'createDashboardPost',
+                            'titleModel' => 'newPostTitle',
+                            'titleTest' => 'new-post-title',
+                            'bodyModel' => 'newPostBody',
+                            'bodyTest' => 'new-post-body',
+                            'topicModel' => 'newPostTopicId',
+                            'agentIdsModel' => 'newPostAgentIds',
+                            'availableTopics' => $this->availableTopics,
+                            'availableAgents' => $this->newPostAssignableAgents(),
+                            'canChangeTopic' => true,
+                            'testPrefix' => 'new-post',
+                            'uploadModel' => 'newPostUploads',
+                            'uploadError' => 'newPostUploads.*',
+                            'returnHref' => $this->postsPanelReturnRoute(),
+                            'saveTest' => 'new-post-save-draft',
+                            'publishAction' => 'sendDashboardPost',
+                            'publishTest' => 'new-post-send',
+                            'loadingTarget' => 'newPostUploads',
+                            'dataTest' => 'dashboard-post-create-panel',
+                        ])
                     @elseif ($selectedDashboardPost)
                         <div class="flex items-center justify-between gap-3 border-b border-neutral-300 bg-emerald-50 px-4 py-3 dark:border-white/10 dark:bg-emerald-500/10">
                             <flux:heading size="sm" class="min-w-0 flex-1 truncate">{{ $selectedDashboardPost->title }}</flux:heading>
@@ -1124,41 +1108,28 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                             </flux:button>
                         </div>
 
-                        <div class="flex flex-1 flex-col gap-6 overflow-auto px-4 py-4 xl:min-h-0" data-test="dashboard-post-panel">
-                            @if ($selectedDashboardPost->status === PostStatus::Draft)
-                                <form id="dashboard-selected-post-form" wire:submit="saveSelectedPost" class="flex flex-col gap-4">
-                                    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                                        <flux:input wire:model="postTitle" class="flex-1" required />
-
-                                        <div class="flex shrink-0 items-center gap-2">
-                                            <flux:button wire:click="archiveSelectedPost" type="button" size="sm" icon="archive-box" icon:variant="outline">{{ __('Archive') }}</flux:button>
-                                            <flux:button wire:click="publishSelectedPost" type="button" size="sm" variant="primary" icon="paper-airplane">{{ __('Post') }}</flux:button>
-                                        </div>
-                                    </div>
-
-                                    @include('partials.post-routing-fields', [
-                                        'topicName' => $selectedDashboardPost->topic->name,
-                                        'agentIdsModel' => 'postAgentIds',
-                                        'availableAgents' => $this->selectedPostAssignableAgents(),
-                                        'canChangeTopic' => false,
-                                        'testPrefix' => 'post',
-                                    ])
-
-                                    <flux:textarea wire:model="postBody" :placeholder="__('Write something...')" rows="12" />
-                                </form>
-
-                                @include('partials.post-attachments', [
-                                    'post' => $selectedDashboardPost,
-                                    'uploadAction' => 'uploadSelectedPostAttachments',
-                                    'uploadModel' => 'postUploads',
-                                    'uploadError' => 'postUploads.*',
-                                    'deleteAction' => 'deleteSelectedPostAttachment',
-                                ])
-
-                                <div class="flex justify-end">
-                                    <flux:button type="submit" form="dashboard-selected-post-form" size="sm" variant="filled">{{ __('Save draft') }}</flux:button>
-                                </div>
-                            @else
+                        @if ($selectedDashboardPost->status === PostStatus::Draft)
+                            @include('partials.post-draft-form', [
+                                'formId' => 'dashboard-selected-post-form',
+                                'submitAction' => 'saveSelectedPost',
+                                'titleModel' => 'postTitle',
+                                'bodyModel' => 'postBody',
+                                'topicName' => $selectedDashboardPost->topic->name,
+                                'agentIdsModel' => 'postAgentIds',
+                                'availableAgents' => $this->selectedPostAssignableAgents(),
+                                'canChangeTopic' => false,
+                                'testPrefix' => 'post',
+                                'post' => $selectedDashboardPost,
+                                'uploadModel' => 'postUploads',
+                                'uploadError' => 'postUploads.*',
+                                'deleteAction' => 'deleteSelectedPostAttachment',
+                                'archiveAction' => 'archiveSelectedPost',
+                                'publishAction' => 'publishSelectedPost',
+                                'loadingTarget' => 'postUploads',
+                                'dataTest' => 'dashboard-post-panel',
+                            ])
+                        @else
+                            <div class="flex flex-1 flex-col gap-6 overflow-auto px-4 py-4 xl:min-h-0" data-test="dashboard-post-panel">
                                 <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                                     <flux:heading size="xl" class="min-w-0 flex-1 truncate">{{ $selectedDashboardPost->title }}</flux:heading>
 
@@ -1196,15 +1167,14 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                                     @endif
                                 </div>
 
-                                @include('partials.post-attachments', [
-                                    'post' => $selectedDashboardPost,
-                                    'uploadAction' => 'uploadSelectedPostAttachments',
-                                    'uploadModel' => 'postUploads',
-                                    'uploadError' => 'postUploads.*',
-                                    'deleteAction' => 'deleteSelectedPostAttachment',
+                            @include('partials.post-attachments', [
+                                'post' => $selectedDashboardPost,
+                                'uploadModel' => 'postUploads',
+                                'uploadError' => 'postUploads.*',
+                                'deleteAction' => 'deleteSelectedPostAttachment',
                                 ])
-                            @endif
-                        </div>
+                            </div>
+                        @endif
                     @else
                         @include('partials.folder-view', [
                             'breadcrumbs' => [

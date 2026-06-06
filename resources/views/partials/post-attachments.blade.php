@@ -34,13 +34,12 @@
         @endif
 
         @if ($canManageAttachments)
-            <form wire:submit="{{ $uploadAction }}"
-                  x-data="{ uploading: false, progress: 0 }"
-                  x-on:livewire-upload-start="uploading = true"
-                  x-on:livewire-upload-finish="uploading = false"
-                  x-on:livewire-upload-error="uploading = false"
-                  x-on:livewire-upload-progress="progress = $event.detail.progress"
-                  class="flex flex-col gap-2">
+            <div x-data="{ uploading: false, progress: 0 }"
+                 x-on:livewire-upload-start="uploading = true"
+                 x-on:livewire-upload-finish="uploading = false"
+                 x-on:livewire-upload-error="uploading = false"
+                 x-on:livewire-upload-progress="progress = $event.detail.progress"
+                 class="flex flex-col gap-2">
                 <flux:input type="file" wire:model="{{ $uploadModel }}" multiple />
 
                 <div x-show="uploading" class="h-1 w-full overflow-hidden rounded-full bg-neutral-100 dark:bg-white/10">
@@ -50,11 +49,7 @@
                 @error($uploadError)
                     <flux:error>{{ $message }}</flux:error>
                 @enderror
-
-                <div class="flex justify-end">
-                    <flux:button type="submit" size="sm" icon="arrow-up-tray" wire:loading.attr="disabled" wire:target="{{ $uploadModel }}">{{ __('Upload') }}</flux:button>
-                </div>
-            </form>
+            </div>
         @endif
     </div>
 @endif

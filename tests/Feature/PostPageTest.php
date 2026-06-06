@@ -194,7 +194,7 @@ test('published post cannot be saved', function () {
         ->assertForbidden();
 });
 
-test('attachments can be uploaded', function () {
+test('attachments are saved with a draft post', function () {
     Storage::fake('public');
 
     $this->actingAs($this->user);
@@ -203,7 +203,7 @@ test('attachments can be uploaded', function () {
 
     Livewire::test('pages::post', ['post' => $this->post])
         ->set('uploads', [$file])
-        ->call('uploadAttachments')
+        ->call('save')
         ->assertHasNoErrors();
 
     expect($this->post->attachments()->count())->toBe(1);

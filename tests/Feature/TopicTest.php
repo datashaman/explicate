@@ -450,6 +450,9 @@ test('dashboard shows selected draft post in the main panel', function () {
         ->assertSee('Working brief')
         ->assertSee('Working body')
         ->assertDontSee('data-flux-breadcrumbs', escape: false)
+        ->assertSeeText('Title')
+        ->assertSeeText('Body')
+        ->assertSee('form="dashboard-selected-post-form"', escape: false)
         ->assertSee('Save draft')
         ->assertSee('Post');
 
@@ -547,10 +550,10 @@ test('dashboard post panel shows attachments', function () {
         ->assertSee('Attachments')
         ->assertSee('roadmap.pdf')
         ->assertSee('2 KB')
-        ->assertDontSee('wire:submit="uploadSelectedPostAttachments"', escape: false);
+        ->assertDontSee('type="file"', escape: false);
 });
 
-test('dashboard can upload attachments to selected draft post', function () {
+test('dashboard saves pending attachments with selected draft post', function () {
     Storage::fake('public');
 
     [$user, $workspace] = userWithWorkspace();
@@ -567,13 +570,15 @@ test('dashboard can upload attachments to selected draft post', function () {
     Livewire::test('pages::dashboard')
         ->set('selectedTopicSlug', $topic->slug)
         ->set('selectedPostSlug', $post->slug)
+        ->set('postTitle', 'Draft brief')
+        ->set('postBody', '')
         ->set('postUploads', [$file])
-        ->call('uploadSelectedPostAttachments')
+        ->call('saveSelectedPost')
         ->assertHasNoErrors()
         ->assertSet('postUploads', []);
 
     expect($post->attachments()->count())->toBe(1);
-    expect($post->attachments()->first()->filename)->toBe('brief.pdf');
+    expect($post->attachments()->first()->path)->toContain('attachments/');
 });
 
 test('dashboard can delete attachments from selected draft post', function () {
@@ -751,6 +756,8 @@ test('dashboard shows new post form in the main panel', function () {
         ->assertSee('id="dashboard-new-post-form"', escape: false)
         ->assertSee('form="dashboard-new-post-form"', escape: false)
         ->assertSee('New post')
+        ->assertSeeText('Title')
+        ->assertSeeText('Body')
         ->assertSee('Save draft')
         ->assertSee('Post')
         ->assertSee('Design');

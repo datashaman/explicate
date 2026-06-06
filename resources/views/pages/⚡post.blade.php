@@ -8,6 +8,7 @@ use App\Models\Topic;
 use Flux\Flux;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
@@ -74,6 +75,9 @@ new #[Layout('layouts::workspace'), Title('Post')] class extends Component {
 
         abort_unless($workspace, 403);
 
+        $uploads = $this->uploads;
+        $uploadMetadata = $this->attachmentMetadata($uploads);
+
         $validated = $this->validate([
             'title' => ['required', 'string', 'max:255'],
             'body' => ['nullable', 'string'],
@@ -82,6 +86,11 @@ new #[Layout('layouts::workspace'), Title('Post')] class extends Component {
         ], [], [
             'agentIds' => __('requested agents'),
         ]);
+        Validator::make(['uploads' => $uploads], [
+            'uploads.*' => ['file', 'max:51200'],
+        ], [], [
+            'uploads.*' => __('attachment'),
+        ])->validate();
 
         $this->post->update([
             'title' => $validated['title'],
@@ -89,6 +98,8 @@ new #[Layout('layouts::workspace'), Title('Post')] class extends Component {
             'recipient_principal_id' => null,
         ]);
         $this->post->assignAgents($validated['agentIds']);
+        $this->storeAttachments($uploads, $uploadMetadata);
+        $this->reset('uploads');
 
         Flux::toast(variant: 'success', text: __('Saved.'));
     }
@@ -101,6 +112,9 @@ new #[Layout('layouts::workspace'), Title('Post')] class extends Component {
 
         abort_unless($workspace, 403);
 
+        $uploads = $this->uploads;
+        $uploadMetadata = $this->attachmentMetadata($uploads);
+
         $validated = $this->validate([
             'title' => ['required', 'string', 'max:255'],
             'body' => ['nullable', 'string'],
@@ -109,6 +123,11 @@ new #[Layout('layouts::workspace'), Title('Post')] class extends Component {
         ], [], [
             'agentIds' => __('requested agents'),
         ]);
+        Validator::make(['uploads' => $uploads], [
+            'uploads.*' => ['file', 'max:51200'],
+        ], [], [
+            'uploads.*' => __('attachment'),
+        ])->validate();
 
         $this->post->update([
             'title' => $validated['title'],
@@ -118,6 +137,8 @@ new #[Layout('layouts::workspace'), Title('Post')] class extends Component {
             'status' => PostStatus::Published,
         ]);
         $this->post->assignAgents($validated['agentIds']);
+        $this->storeAttachments($uploads, $uploadMetadata);
+        $this->reset('uploads');
     }
 
     public function unpublish(): void
@@ -151,33 +172,40 @@ new #[Layout('layouts::workspace'), Title('Post')] class extends Component {
             ->all();
     }
 
-    public function uploadAttachments(): void
+    /**
+     * @param  array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile>  $uploads
+     * @return array<int, array{filename: string, mime_type: string|null, size: int|null}>
+     */
+    private function attachmentMetadata(array $uploads): array
     {
-        abort_unless($this->post->status === PostStatus::Draft, 403);
+        return array_map(fn ($upload): array => [
+            'filename' => $upload->getClientOriginalName(),
+            'mime_type' => $upload->getMimeType(),
+            'size' => $upload->getSize(),
+        ], $uploads);
+    }
 
-        $this->validate([
-            'uploads.*' => ['file', 'max:51200'],
-        ]);
-
-        foreach ($this->uploads as $upload) {
-            $filename = $upload->getClientOriginalName();
+    /**
+     * @param  array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile>  $uploads
+     * @param  array<int, array{filename: string, mime_type: string|null, size: int|null}>  $metadata
+     */
+    private function storeAttachments(array $uploads, array $metadata): void
+    {
+        foreach ($uploads as $index => $upload) {
+            $attachmentMetadata = $metadata[$index];
             $path = $upload->storeAs(
                 'attachments/'.Str::uuid(),
-                $filename,
+                $attachmentMetadata['filename'],
                 'public'
             );
 
             $this->post->attachments()->create([
-                'filename' => $filename,
+                'filename' => $attachmentMetadata['filename'],
                 'path' => $path,
-                'mime_type' => $upload->getMimeType(),
-                'size' => $upload->getSize(),
+                'mime_type' => $attachmentMetadata['mime_type'],
+                'size' => $attachmentMetadata['size'],
             ]);
         }
-
-        $this->reset('uploads');
-
-        Flux::toast(variant: 'success', text: __('Attachments uploaded.'));
     }
 
     public function deleteAttachment(int $attachmentId): void
@@ -201,34 +229,27 @@ new #[Layout('layouts::workspace'), Title('Post')] class extends Component {
             <flux:heading size="sm" class="min-w-0 flex-1 truncate">{{ $post->title }}</flux:heading>
         </div>
 
-        <div class="flex flex-1 flex-col gap-6 overflow-auto px-4 py-4 xl:min-h-0">
-            @if ($post->status === App\Enums\PostStatus::Draft)
-                {{-- Draft: editable --}}
-                <form wire:submit="save" class="flex flex-col gap-4">
-                    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <flux:input wire:model="title" class="flex-1" required />
-
-                        <div class="flex shrink-0 items-center gap-2">
-                            <flux:button wire:click="archive" type="button" size="sm" icon="archive-box" icon:variant="outline">{{ __('Archive') }}</flux:button>
-                            <flux:button wire:click="publish" type="button" size="sm" variant="primary" icon="paper-airplane">{{ __('Post') }}</flux:button>
-                        </div>
-                    </div>
-
-                    @include('partials.post-routing-fields', [
-                        'topicName' => $topic->name,
-                        'agentIdsModel' => 'agentIds',
-                        'availableAgents' => $this->availableAgents,
-                        'canChangeTopic' => false,
-                        'testPrefix' => 'post',
-                    ])
-
-                    <flux:textarea wire:model="body" :placeholder="__('Write something...')" rows="12" />
-
-                    <div class="flex justify-end">
-                        <flux:button type="submit" size="sm" variant="filled">{{ __('Save draft') }}</flux:button>
-                    </div>
-                </form>
-            @else
+        @if ($post->status === App\Enums\PostStatus::Draft)
+            @include('partials.post-draft-form', [
+                'formId' => 'post-form',
+                'submitAction' => 'save',
+                'titleModel' => 'title',
+                'bodyModel' => 'body',
+                'topicName' => $topic->name,
+                'agentIdsModel' => 'agentIds',
+                'availableAgents' => $this->availableAgents,
+                'canChangeTopic' => false,
+                'testPrefix' => 'post',
+                'post' => $post,
+                'uploadModel' => 'uploads',
+                'uploadError' => 'uploads.*',
+                'deleteAction' => 'deleteAttachment',
+                'archiveAction' => 'archive',
+                'publishAction' => 'publish',
+                'loadingTarget' => 'uploads',
+            ])
+        @else
+            <div class="flex flex-1 flex-col gap-6 overflow-auto px-4 py-4 xl:min-h-0">
                 {{-- Non-draft posts are read-only. --}}
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <flux:heading size="xl" class="min-w-0 flex-1 truncate">{{ $post->title }}</flux:heading>
@@ -266,15 +287,14 @@ new #[Layout('layouts::workspace'), Title('Post')] class extends Component {
                         <flux:text class="text-sm text-neutral-400 dark:text-neutral-600">{{ __('No content.') }}</flux:text>
                     @endif
                 </div>
-            @endif
 
-            @include('partials.post-attachments', [
-                'post' => $post,
-                'uploadAction' => 'uploadAttachments',
-                'uploadModel' => 'uploads',
-                'uploadError' => 'uploads.*',
-                'deleteAction' => 'deleteAttachment',
-            ])
-        </div>
+                @include('partials.post-attachments', [
+                    'post' => $post,
+                    'uploadModel' => 'uploads',
+                    'uploadError' => 'uploads.*',
+                    'deleteAction' => 'deleteAttachment',
+                ])
+            </div>
+        @endif
     </section>
 </div>
