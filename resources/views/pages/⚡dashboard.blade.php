@@ -270,12 +270,15 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             ->when(! $this->showArchived, fn ($query) => $query->where('status', '!=', MessageStatus::Archived))
             ->where('status', '!=', MessageStatus::Draft)
             ->whereNull('recipient_principal_id')
+            ->orderByDesc('updated_at')
+            ->orderByDesc('id')
             ->get()
             ->map(fn (Message $message) => [
                 'href' => route('dashboard', ['topic' => $topic->slug, 'message' => $message->slug, 'panel' => 'messages']),
                 'name' => $message->title,
                 'meta' => $message->listMeta(showSender: true, showRecipient: false),
                 'attachments_count' => $message->attachments_count,
+                'sort' => $message->listSortValues(dateKey: 'sent'),
                 'badge' => $message->status === MessageStatus::Published ? null : [
                     'label' => $message->status->label(),
                     'color' => $message->status->color(),
@@ -305,7 +308,8 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             ->when($folder['slug'] === 'sent', fn ($query) => $query->where('status', MessageStatus::Published)->where('sender_principal_id', $currentPrincipal?->id ?? 0))
             ->when($folder['slug'] === 'inbox', fn ($query) => $query->where('status', MessageStatus::Published)->where('recipient_principal_id', $currentPrincipal?->id ?? 0))
             ->when(! $this->showArchived, fn ($query) => $query->where('status', '!=', MessageStatus::Archived))
-            ->latest()
+            ->orderByDesc('updated_at')
+            ->orderByDesc('id')
             ->get()
             ->map(fn (Message $message) => [
                 'href' => route('dashboard', [
@@ -321,12 +325,42 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                     recipientFallback: $message->topic->name,
                 ),
                 'attachments_count' => $message->attachments_count,
+                'sort' => $message->listSortValues(
+                    recipientFallback: $message->topic->name,
+                    dateKey: $folder['slug'] === 'draft' ? 'saved' : 'sent',
+                ),
                 'badge' => $message->status === MessageStatus::Published ? null : [
                     'label' => $message->status->label(),
                     'color' => $message->status->color(),
                 ],
             ])
             ->all();
+    }
+
+    /**
+     * @return list<array{key: string, label: string, class: string}>
+     */
+    public function selectedMessageListColumns(): array
+    {
+        $folder = $this->selectedSystemFolder();
+        $dateLabel = $folder && $folder['slug'] === 'draft' ? __('Saved') : __('Sent');
+
+        $columns = [
+            ['key' => 'name', 'label' => __('Message'), 'class' => 'min-w-0 flex-1'],
+        ];
+
+        if (! $folder || $folder['slug'] !== 'sent') {
+            $columns[] = ['key' => 'from', 'label' => __('From'), 'class' => 'w-28 shrink-0'];
+        }
+
+        if (! $folder || $folder['slug'] !== 'inbox') {
+            $columns[] = ['key' => 'to', 'label' => __('To'), 'class' => 'w-28 shrink-0'];
+        }
+
+        $columns[] = ['key' => $folder && $folder['slug'] === 'draft' ? 'saved' : 'sent', 'label' => $dateLabel, 'class' => 'w-28 shrink-0'];
+        $columns[] = ['key' => 'attachments', 'label' => __('Attachments'), 'class' => 'w-24 shrink-0'];
+
+        return $columns;
     }
 
     /**
@@ -1162,6 +1196,9 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                             'createLabel' => __('New message'),
                             'createTest' => 'dashboard-new-message-button',
                             'showArchivedModel' => 'showArchived',
+                            'listColumns' => $this->selectedMessageListColumns(),
+                            'listDefaultSort' => $selectedDashboardFolder && $selectedDashboardFolder['slug'] === 'draft' ? 'saved' : 'sent',
+                            'listDefaultSortDirection' => 'desc',
                             'toolbarClass' => 'border-b border-neutral-300 bg-emerald-50 px-4 py-3 dark:border-white/10 dark:bg-emerald-500/10',
                             'rootClass' => 'flex flex-col xl:h-full',
                             'contentClass' => 'overflow-auto px-4 py-4 xl:flex-1 xl:min-h-0',

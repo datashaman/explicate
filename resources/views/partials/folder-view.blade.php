@@ -1,6 +1,38 @@
 <div x-data="{
     view: localStorage.getItem('folder-view-mode') || 'icons',
     setView(v) { this.view = v; localStorage.setItem('folder-view-mode', v); },
+    listSortKey: '{{ $listDefaultSort ?? 'name' }}',
+    listSortDirection: '{{ $listDefaultSortDirection ?? 'asc' }}',
+    sortList(key) {
+        if (this.listSortKey === key) {
+            this.listSortDirection = this.listSortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+            this.listSortKey = key;
+            this.listSortDirection = ['sent', 'saved'].includes(key) ? 'desc' : 'asc';
+        }
+
+        this.$nextTick(() => this.sortListRows());
+    },
+    sortListRows() {
+        const rows = Array.from(this.$refs.listRows?.children || []);
+
+        rows.sort((a, b) => {
+            const aValue = this.listSortValue(a, this.listSortKey);
+            const bValue = this.listSortValue(b, this.listSortKey);
+            const comparison = aValue.localeCompare(bValue, undefined, { numeric: true, sensitivity: 'base' });
+
+            if (comparison !== 0) {
+                return this.listSortDirection === 'asc' ? comparison : -comparison;
+            }
+
+            return Number(a.dataset.sortIndex) - Number(b.dataset.sortIndex);
+        });
+
+        rows.forEach(row => this.$refs.listRows.appendChild(row));
+    },
+    listSortValue(row, key) {
+        return row.dataset[`sort${key.charAt(0).toUpperCase()}${key.slice(1)}`] || '';
+    },
     controlsOpen: false,
     editing: false,
     startEdit() { this.editing = true; this.$nextTick(() => this.$refs.nameInput?.focus()); },
@@ -17,6 +49,7 @@
         $toolbarClass = $toolbarClass ?? null;
         $contentClass = $contentClass ?? 'mt-4 overflow-auto';
         $listIconClass = $listIconClass ?? str($iconClass)->replaceMatches('/\bsize-\S+/', 'size-5')->toString();
+        $listColumns = $listColumns ?? [];
     @endphp
 
     {{-- Toolbar --}}
@@ -257,11 +290,39 @@
             </template>
 
             <template x-if="view === 'list'">
-                <div class="divide-y divide-neutral-100 dark:divide-white/5">
+                <div>
+                    @if (!empty($listColumns))
+                        <div class="hidden min-h-9 items-center gap-3 border-b border-neutral-100 px-2 text-xs font-medium text-neutral-400 sm:flex dark:border-white/5 dark:text-neutral-500" data-test="folder-list-sort-header">
+                            <span class="size-10 shrink-0"></span>
+
+                            @foreach ($listColumns as $column)
+                                <button
+                                    type="button"
+                                    x-on:click="sortList('{{ $column['key'] }}')"
+                                    @class([
+                                        'flex items-center gap-1 text-left hover:text-neutral-700 dark:hover:text-neutral-300',
+                                        $column['class'] ?? null,
+                                    ])
+                                    data-test="folder-list-sort-{{ $column['key'] }}"
+                                >
+                                    <span>{{ $column['label'] }}</span>
+                                    <span class="w-3 text-center" x-text="listSortKey === '{{ $column['key'] }}' ? (listSortDirection === 'asc' ? '↑' : '↓') : ''"></span>
+                                </button>
+                            @endforeach
+
+                            <span class="size-6 shrink-0"></span>
+                        </div>
+                    @endif
+
+                    <div class="divide-y divide-neutral-100 dark:divide-white/5" x-ref="listRows">
                     @foreach ($items as $item)
                         @php $itemKey = md5($item['href']); @endphp
                         <a href="{{ $item['href'] }}" wire:navigate
                            wire:key="folder-list-{{ $itemKey }}"
+                           data-sort-index="{{ $loop->index }}"
+                           @foreach (($item['sort'] ?? []) as $sortKey => $sortValue)
+                               data-sort-{{ $sortKey }}="{{ $sortValue }}"
+                           @endforeach
                            class="flex min-h-12 items-center gap-3 rounded-lg px-2 py-2 hover:bg-neutral-100 dark:hover:bg-white/5">
                             <span class="flex size-10 shrink-0 items-center justify-center">
                                 <flux:icon :name="$icon" class="{{ $listIconClass }} shrink-0" />
@@ -306,6 +367,7 @@
                             @endif
                         </a>
                     @endforeach
+                    </div>
                 </div>
             </template>
         @else

@@ -138,6 +138,27 @@ class Message extends Model
         return $meta;
     }
 
+    /**
+     * @return array{name: string, from: string, to: string, sent?: string, saved?: string, attachments: string, status: string}
+     */
+    public function listSortValues(?string $recipientFallback = null, ?string $dateKey = null): array
+    {
+        $attachmentsCount = (int) ($this->attachments_count ?? $this->attachments()->count());
+        $dateKey ??= $this->status === MessageStatus::Draft ? 'saved' : 'sent';
+
+        $values = [
+            'name' => Str::lower($this->title),
+            'from' => Str::lower($this->sender?->label() ?? ''),
+            'to' => Str::lower($this->recipient?->label() ?? $recipientFallback ?? ''),
+            'attachments' => str_pad((string) $attachmentsCount, 10, '0', STR_PAD_LEFT),
+            'status' => Str::lower($this->status->label()),
+        ];
+
+        $values[$dateKey] = str_pad((string) $this->updated_at->timestamp, 20, '0', STR_PAD_LEFT);
+
+        return $values;
+    }
+
     public function getRouteKeyName(): string
     {
         return 'ulid';

@@ -136,6 +136,9 @@ test('dashboard system draft folder shows draft messages across topics', functio
         ])), escape: false)
         ->assertSeeText('Saved:')
         ->assertSeeText('7 minutes ago')
+        ->assertSee('data-test="folder-list-sort-saved"', escape: false)
+        ->assertSee('data-sort-saved=', escape: false)
+        ->assertDontSee('data-test="folder-list-sort-sent"', escape: false)
         ->assertDontSee('Engineering sent');
 });
 
@@ -842,6 +845,13 @@ test('topic page left aligns message icons in icon view', function () {
         ->assertSee('block truncate text-sm', escape: false)
         ->assertSee('data-test="folder-item-attachments"', escape: false)
         ->assertSee('title="1 attachment"', escape: false)
+        ->assertSee('data-test="folder-list-sort-header"', escape: false)
+        ->assertSee('data-test="folder-list-sort-name"', escape: false)
+        ->assertSee('data-test="folder-list-sort-from"', escape: false)
+        ->assertSee('data-test="folder-list-sort-sent"', escape: false)
+        ->assertSee('data-test="folder-list-sort-attachments"', escape: false)
+        ->assertSee('data-sort-sent=', escape: false)
+        ->assertSee('data-sort-attachments=', escape: false)
         ->assertSee('wire:key="folder-icon-', escape: false)
         ->assertSee('wire:key="folder-list-', escape: false)
         ->assertSeeText('From:')
@@ -851,6 +861,49 @@ test('topic page left aligns message icons in icon view', function () {
         ->assertSee('grid grid-cols-1 items-stretch gap-3 xl:flex-1 xl:auto-rows-fr xl:grid-cols-[minmax(0,1fr)_19rem]', escape: false)
         ->assertSee('xl:h-full', escape: false)
         ->assertDontSee('xl:sticky xl:top-6');
+});
+
+test('topic message list has a deterministic default order', function () {
+    [$user, $workspace] = userWithWorkspace();
+
+    $topic = Topic::factory()->for($workspace)->create();
+    $timestamp = now()->subMinutes(10);
+
+    Message::factory()->for($topic)->create([
+        'title' => 'Older message',
+        'status' => MessageStatus::Published,
+        'updated_at' => now()->subHour(),
+    ]);
+
+    $firstTie = Message::factory()->for($topic)->create([
+        'title' => 'First tied message',
+        'status' => MessageStatus::Published,
+        'updated_at' => $timestamp,
+    ]);
+
+    $secondTie = Message::factory()->for($topic)->create([
+        'title' => 'Second tied message',
+        'status' => MessageStatus::Published,
+        'updated_at' => $timestamp,
+    ]);
+
+    Message::factory()->for($topic)->create([
+        'title' => 'Newest message',
+        'status' => MessageStatus::Published,
+        'updated_at' => now(),
+    ]);
+
+    expect($secondTie->id)->toBeGreaterThan($firstTie->id);
+
+    $this->actingAs($user)
+        ->get(route('topics.show', ['topic' => $topic->slug]))
+        ->assertOk()
+        ->assertSeeInOrder([
+            'Newest message',
+            'Second tied message',
+            'First tied message',
+            'Older message',
+        ]);
 });
 
 test('topic page agent rail labels attach and detach actions clearly', function () {

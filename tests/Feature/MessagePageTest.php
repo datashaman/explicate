@@ -121,6 +121,28 @@ test('message list metadata uses sender recipient fallback and timestamp labels'
     ]);
 });
 
+test('message list sort values are normalized for deterministic column sorting', function () {
+    $senderPrincipal = $this->workspace->principalForUser($this->user);
+    Attachment::factory()->count(2)->for($this->message)->create();
+
+    $this->message->timestamps = false;
+    $this->message->forceFill([
+        'title' => 'Mixed Case Title',
+        'status' => MessageStatus::Draft,
+        'sender_principal_id' => $senderPrincipal->id,
+        'updated_at' => now()->setTimestamp(123),
+    ])->save();
+
+    expect($this->message->fresh()->loadCount('attachments')->load('sender.user')->listSortValues('Topic fallback'))->toMatchArray([
+        'name' => 'mixed case title',
+        'from' => str($this->user->name)->lower()->toString(),
+        'to' => 'topic fallback',
+        'saved' => '00000000000000000123',
+        'attachments' => '0000000002',
+        'status' => 'draft',
+    ]);
+});
+
 test('published message cannot be saved', function () {
     $this->message->update(['status' => MessageStatus::Published]);
 

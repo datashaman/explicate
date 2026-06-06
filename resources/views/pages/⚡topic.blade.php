@@ -66,12 +66,15 @@ new #[Layout('layouts::workspace'), Title('Topic')] class extends Component {
             ->when(! $this->showArchived, fn ($q) => $q->where('status', '!=', MessageStatus::Archived))
             ->where('status', '!=', MessageStatus::Draft)
             ->whereNull('recipient_principal_id')
+            ->orderByDesc('updated_at')
+            ->orderByDesc('id')
             ->get()
             ->map(fn (Message $message) => [
                 'href' => route('messages.show', ['message' => $message]),
                 'name' => $message->title,
                 'meta' => $message->listMeta(showSender: true, showRecipient: false),
                 'attachments_count' => $message->attachments_count,
+                'sort' => $message->listSortValues(dateKey: 'sent'),
                 'badge' => $message->status === MessageStatus::Published ? null : [
                     'label' => $message->status->label(),
                     'color' => $message->status->color(),
@@ -218,6 +221,14 @@ new #[Layout('layouts::workspace'), Title('Topic')] class extends Component {
                 'createLabel' => __('New message'),
                 'createTest' => 'topic-new-message-button',
                 'showArchivedModel' => 'showArchived',
+                'listColumns' => [
+                    ['key' => 'name', 'label' => __('Message'), 'class' => 'min-w-0 flex-1'],
+                    ['key' => 'from', 'label' => __('From'), 'class' => 'w-28 shrink-0'],
+                    ['key' => 'sent', 'label' => __('Sent'), 'class' => 'w-28 shrink-0'],
+                    ['key' => 'attachments', 'label' => __('Attachments'), 'class' => 'w-24 shrink-0'],
+                ],
+                'listDefaultSort' => 'sent',
+                'listDefaultSortDirection' => 'desc',
                 'toolbarClass' => 'border-b border-neutral-300 bg-emerald-50 px-4 py-3 dark:border-white/10 dark:bg-emerald-500/10',
                 'rootClass' => 'flex flex-col xl:h-full',
                 'contentClass' => 'overflow-auto px-4 py-4 xl:flex-1 xl:min-h-0',
