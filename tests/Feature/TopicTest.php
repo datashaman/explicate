@@ -129,11 +129,13 @@ test('dashboard system draft folder shows draft posts across topics', function (
     $design = Topic::factory()->for($workspace)->create(['name' => 'Design', 'slug' => 'design']);
     $engineering = Topic::factory()->for($workspace)->create(['slug' => 'engineering']);
     $userPrincipal = $workspace->principalForUser($user);
+    [$recipient, $recipientPrincipal] = teamMemberPrincipal($user, $workspace);
 
     $designDraft = Post::factory()->for($design)->create([
-        'title' => 'Design draft',
+        'title' => 'Working draft',
         'updated_at' => now()->subMinutes(7),
         'status' => PostStatus::Draft,
+        'recipient_principal_id' => $recipientPrincipal->id,
     ]);
 
     Post::factory()->for($engineering)->create([
@@ -146,7 +148,7 @@ test('dashboard system draft folder shows draft posts across topics', function (
         ->get(route('dashboard', ['folder' => 'drafts', 'panel' => 'posts']))
         ->assertOk()
         ->assertSee('Drafts')
-        ->assertSee('Design draft')
+        ->assertSee('Working draft')
         ->assertSee(e(route('dashboard', [
             'folder' => 'drafts',
             'topic' => $design->slug,
@@ -155,9 +157,14 @@ test('dashboard system draft folder shows draft posts across topics', function (
         ])), escape: false)
         ->assertDontSee('data-test="folder-list-sort-from"', escape: false)
         ->assertDontSeeText('Author')
-        ->assertSee('data-test="folder-list-sort-to"', escape: false)
+        ->assertSee('data-test="folder-list-sort-topic"', escape: false)
+        ->assertSee('data-sort-topic=', escape: false)
         ->assertSeeText('Topic:')
         ->assertSeeText('Design')
+        ->assertSee('data-test="folder-list-sort-recipient"', escape: false)
+        ->assertSee('data-sort-recipient=', escape: false)
+        ->assertSeeText('Recipient')
+        ->assertSeeText($recipient->name)
         ->assertSeeText('Saved:')
         ->assertSeeText('7 minutes ago')
         ->assertSee('data-test="folder-list-sort-saved"', escape: false)
