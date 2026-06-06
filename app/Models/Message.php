@@ -16,7 +16,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
-#[Fillable(['topic_id', 'sender_principal_id', 'recipient_principal_id', 'title', 'slug', 'ulid', 'body', 'status'])]
+#[Fillable(['topic_id', 'thread_id', 'sender_principal_id', 'recipient_principal_id', 'title', 'slug', 'ulid', 'body', 'status'])]
 class Message extends Model
 {
     /** @use HasFactory<MessageFactory> */
@@ -176,6 +176,14 @@ class Message extends Model
     }
 
     /**
+     * @return BelongsTo<Thread, $this>
+     */
+    public function thread(): BelongsTo
+    {
+        return $this->belongsTo(Thread::class);
+    }
+
+    /**
      * @return BelongsTo<Principal, $this>
      */
     public function recipient(): BelongsTo
@@ -194,7 +202,7 @@ class Message extends Model
     /**
      * @return list<array{label: string, value: string, title?: string}>
      */
-    public function listMeta(bool $showSender, bool $showRecipient, ?string $recipientFallback = null, ?string $timezone = null): array
+    public function listMeta(bool $showSender, bool $showRecipient, ?string $recipientFallback = null, ?string $timezone = null, ?string $recipientLabel = null): array
     {
         $meta = [];
 
@@ -206,7 +214,7 @@ class Message extends Model
             $recipient = $this->recipient?->label() ?? $recipientFallback;
 
             if ($recipient) {
-                $meta[] = ['label' => __('To'), 'value' => $recipient];
+                $meta[] = ['label' => $recipientLabel ?? __('To'), 'value' => $recipient];
             }
         }
 

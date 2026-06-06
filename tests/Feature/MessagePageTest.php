@@ -63,33 +63,29 @@ test('draft message can be saved', function () {
     expect($this->message->fresh()->body)->toBe('Hello world');
 });
 
-test('draft message recipient cannot be changed to an agent principal', function () {
+test('draft message save clears legacy direct recipient', function () {
     $agent = Agent::factory()->for($this->workspace)->create(['name' => 'Researcher']);
     $agentPrincipal = $this->workspace->principalForAgent($agent);
+    $this->message->update(['recipient_principal_id' => $agentPrincipal->id]);
 
     $this->actingAs($this->user);
 
     Livewire::test('pages::message', ['message' => $this->message])
-        ->set('title', 'Agent draft')
-        ->set('target', 'principal')
-        ->set('recipientPrincipalId', $agentPrincipal->id)
+        ->set('title', 'Topic draft')
         ->call('save')
-        ->assertHasErrors(['recipientPrincipalId']);
+        ->assertHasNoErrors();
 
     expect($this->message->fresh())
-        ->title->not->toBe('Agent draft')
+        ->title->toBe('Topic draft')
         ->recipient_principal_id->toBeNull();
 });
 
-test('published message page shows sender and recipient principals', function () {
-    $agent = Agent::factory()->for($this->workspace)->create(['name' => 'Researcher']);
+test('published message page shows sender and topic', function () {
     $senderPrincipal = $this->workspace->principalForUser($this->user);
-    $agentPrincipal = $this->workspace->principalForAgent($agent);
 
     $this->message->update([
         'status' => MessageStatus::Published,
         'sender_principal_id' => $senderPrincipal->id,
-        'recipient_principal_id' => $agentPrincipal->id,
     ]);
 
     $this->actingAs($this->user)
@@ -97,8 +93,8 @@ test('published message page shows sender and recipient principals', function ()
         ->assertOk()
         ->assertSee('From')
         ->assertSee($this->user->name)
-        ->assertSee('To')
-        ->assertSee('Researcher');
+        ->assertSee('Topic')
+        ->assertSee($this->topic->name);
 });
 
 test('message list metadata uses sender recipient fallback and timestamp labels', function () {
@@ -200,22 +196,20 @@ test('attachments can be uploaded', function () {
     expect($this->message->attachments()->first()->filename)->toBe('report.pdf');
 });
 
-test('draft message defaults a principal recipient when none reached the server', function () {
+test('draft message publishes as a topic update', function () {
     $this->actingAs($this->user);
 
     $senderPrincipal = $this->workspace->principalForUser($this->user);
 
     Livewire::test('pages::message', ['message' => $this->message])
-        ->set('title', 'Default draft recipient')
-        ->set('target', 'principal')
-        ->set('recipientPrincipalId', null)
+        ->set('title', 'Topic update')
         ->call('publish')
         ->assertHasNoErrors();
 
     expect($this->message->fresh())
-        ->title->toBe('Default draft recipient')
+        ->title->toBe('Topic update')
         ->sender_principal_id->toBe($senderPrincipal->id)
-        ->recipient_principal_id->toBe($senderPrincipal->id)
+        ->recipient_principal_id->toBeNull()
         ->status->toBe(MessageStatus::Published);
 });
 

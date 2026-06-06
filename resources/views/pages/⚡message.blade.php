@@ -4,20 +4,18 @@ use App\Enums\MessageStatus;
 use App\Models\Attachment;
 use App\Models\Agent;
 use App\Models\Message;
-use App\Models\Principal;
 use App\Models\Topic;
 use Flux\Flux;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
-use Illuminate\Validation\Rule;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 
-new #[Layout('layouts::workspace'), Title('Message')] class extends Component {
+new #[Layout('layouts::workspace'), Title('Update')] class extends Component {
     use WithFileUploads;
 
     public Topic $topic;
@@ -27,10 +25,6 @@ new #[Layout('layouts::workspace'), Title('Message')] class extends Component {
     public string $title = '';
 
     public string $body = '';
-
-    public string $target = 'topic';
-
-    public ?int $recipientPrincipalId = null;
 
     /** @var list<int> */
     public array $agentIds = [];
@@ -50,40 +44,11 @@ new #[Layout('layouts::workspace'), Title('Message')] class extends Component {
         $this->topic = $topic;
         $this->title = $message->title;
         $this->body = $message->body ?? '';
-        $this->target = $message->recipient_principal_id ? 'principal' : 'topic';
-        $this->recipientPrincipalId = $message->recipient_principal_id;
         $this->agentIds = $message->agentTasks()
             ->where('event_type', \App\Models\AgentTask::EventMessageAssigned)
             ->pluck('agent_id')
             ->map(fn ($id): int => (int) $id)
             ->all();
-    }
-
-    /**
-     * @return \Illuminate\Support\Collection<int, Principal>
-     */
-    #[Computed]
-    public function availablePrincipals(): \Illuminate\Support\Collection
-    {
-        $workspace = Auth::user()->currentWorkspace;
-        $team = Auth::user()->currentTeam;
-
-        if (! $workspace || ! $team) {
-            return collect();
-        }
-
-        return $workspace->availablePrincipalsForTeam($team);
-    }
-
-    /**
-     * @return \Illuminate\Support\Collection<int, Principal>
-     */
-    #[Computed]
-    public function availableRecipients(): \Illuminate\Support\Collection
-    {
-        return $this->availablePrincipals
-            ->where('type', Principal::TypeUser)
-            ->values();
     }
 
     /**
@@ -109,34 +74,23 @@ new #[Layout('layouts::workspace'), Title('Message')] class extends Component {
 
         abort_unless($workspace, 403);
 
-        $this->normalizeRecipient();
-
         $validated = $this->validate([
             'title' => ['required', 'string', 'max:255'],
             'body' => ['nullable', 'string'],
-            'target' => ['required', 'string', 'in:topic,principal'],
-            'recipientPrincipalId' => ['nullable', 'required_if:target,principal', 'integer', $this->userRecipientRule($workspace->id)],
             'agentIds' => ['array'],
             'agentIds.*' => ['integer'],
         ], [], [
-            'target' => __('delivery target'),
-            'recipientPrincipalId' => __('recipient'),
             'agentIds' => __('requested agents'),
         ]);
 
         $this->message->update([
             'title' => $validated['title'],
             'body' => $validated['body'],
-            'recipient_principal_id' => $this->resolvedRecipientPrincipalId($validated),
+            'recipient_principal_id' => null,
         ]);
         $this->message->assignAgents($validated['agentIds']);
 
         Flux::toast(variant: 'success', text: __('Saved.'));
-    }
-
-    public function updatedTarget(): void
-    {
-        $this->normalizeRecipient();
     }
 
     public function publish(): void
@@ -147,25 +101,19 @@ new #[Layout('layouts::workspace'), Title('Message')] class extends Component {
 
         abort_unless($workspace, 403);
 
-        $this->normalizeRecipient();
-
         $validated = $this->validate([
             'title' => ['required', 'string', 'max:255'],
             'body' => ['nullable', 'string'],
-            'target' => ['required', 'string', 'in:topic,principal'],
-            'recipientPrincipalId' => ['nullable', 'required_if:target,principal', 'integer', $this->userRecipientRule($workspace->id)],
             'agentIds' => ['array'],
             'agentIds.*' => ['integer'],
         ], [], [
-            'target' => __('delivery target'),
-            'recipientPrincipalId' => __('recipient'),
             'agentIds' => __('requested agents'),
         ]);
 
         $this->message->update([
             'title' => $validated['title'],
             'body' => $validated['body'],
-            'recipient_principal_id' => $this->resolvedRecipientPrincipalId($validated),
+            'recipient_principal_id' => null,
             'sender_principal_id' => $this->message->sender_principal_id ?: $workspace->principalForUser(Auth::user())->id,
             'status' => MessageStatus::Published,
         ]);
@@ -178,8 +126,6 @@ new #[Layout('layouts::workspace'), Title('Message')] class extends Component {
 
         $this->title = $this->message->title;
         $this->body = $this->message->body ?? '';
-        $this->target = $this->message->recipient_principal_id ? 'principal' : 'topic';
-        $this->recipientPrincipalId = $this->message->recipient_principal_id;
         $this->agentIds = $this->message->agentTasks()
             ->where('event_type', \App\Models\AgentTask::EventMessageAssigned)
             ->pluck('agent_id')
@@ -198,8 +144,6 @@ new #[Layout('layouts::workspace'), Title('Message')] class extends Component {
 
         $this->title = $this->message->title;
         $this->body = $this->message->body ?? '';
-        $this->target = $this->message->recipient_principal_id ? 'principal' : 'topic';
-        $this->recipientPrincipalId = $this->message->recipient_principal_id;
         $this->agentIds = $this->message->agentTasks()
             ->where('event_type', \App\Models\AgentTask::EventMessageAssigned)
             ->pluck('agent_id')
@@ -249,43 +193,6 @@ new #[Layout('layouts::workspace'), Title('Message')] class extends Component {
         Flux::toast(variant: 'success', text: __('Attachment deleted.'));
     }
 
-    /**
-     * @param  array{target: string, recipientPrincipalId: int|null}  $validated
-     */
-    private function resolvedRecipientPrincipalId(array $validated): ?int
-    {
-        if ($validated['target'] !== 'principal') {
-            return null;
-        }
-
-        $workspace = Auth::user()->currentWorkspace;
-
-        abort_unless($workspace, 403);
-
-        return $workspace->principals()
-            ->where('type', Principal::TypeUser)
-            ->whereKey($validated['recipientPrincipalId'])
-            ->firstOrFail()
-            ->id;
-    }
-
-    private function normalizeRecipient(): void
-    {
-        if ($this->target !== 'principal') {
-            $this->recipientPrincipalId = null;
-
-            return;
-        }
-
-        $this->recipientPrincipalId = $this->recipientPrincipalId ?: $this->availableRecipients->first()?->id;
-    }
-
-    private function userRecipientRule(int $workspaceId): \Illuminate\Validation\Rules\Exists
-    {
-        return Rule::exists('principals', 'id')
-            ->where('workspace_id', $workspaceId)
-            ->where('type', Principal::TypeUser);
-    }
 }; ?>
 
 <div class="flex h-full w-full flex-1 flex-col gap-3 xl:flex-1">
@@ -304,17 +211,13 @@ new #[Layout('layouts::workspace'), Title('Message')] class extends Component {
                         <div class="flex shrink-0 items-center gap-2">
                             <flux:badge :color="$message->status->color()" size="sm">{{ $message->status->label() }}</flux:badge>
                             <flux:button wire:click="archive" type="button" size="sm" icon="archive-box">{{ __('Archive') }}</flux:button>
-                            <flux:button wire:click="publish" type="button" size="sm" variant="primary" icon="paper-airplane">{{ __('Send') }}</flux:button>
+                            <flux:button wire:click="publish" type="button" size="sm" variant="primary" icon="paper-airplane">{{ __('Post') }}</flux:button>
                         </div>
                     </div>
 
                     @include('partials.message-routing-fields', [
-                        'targetModel' => 'target',
-                        'targetValue' => $target,
                         'topicName' => $topic->name,
-                        'recipientModel' => 'recipientPrincipalId',
                         'agentIdsModel' => 'agentIds',
-                        'availableRecipients' => $this->availableRecipients,
                         'availableAgents' => $this->availableAgents,
                         'canChangeTopic' => false,
                         'testPrefix' => 'message',
@@ -348,12 +251,12 @@ new #[Layout('layouts::workspace'), Title('Message')] class extends Component {
                     @endif
 
                     <flux:badge color="zinc" size="sm">
-                        {{ __('To') }}:
-                        {{ $message->recipient ? $message->recipient->label() : $topic->name }}
+                        {{ __('Topic') }}:
+                        {{ $topic->name }}
                     </flux:badge>
 
                     @foreach ($message->assignedAgents as $agent)
-                        <flux:badge color="amber" size="sm">{{ __('Assigned') }}: {{ $agent->name }}</flux:badge>
+                        <flux:badge color="amber" size="sm">{{ __('Agent work') }}: {{ $agent->name }}</flux:badge>
                     @endforeach
                 </div>
 

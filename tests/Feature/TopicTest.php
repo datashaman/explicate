@@ -8,6 +8,7 @@ use App\Models\AgentTask;
 use App\Models\AgentVersion;
 use App\Models\Attachment;
 use App\Models\Message;
+use App\Models\Thread;
 use App\Models\Topic;
 use App\Models\User;
 use App\Models\Workspace;
@@ -33,6 +34,23 @@ test('a topic belongs to a workspace', function () {
     $topic = Topic::factory()->create();
 
     expect($topic->workspace)->toBeInstanceOf(Workspace::class);
+});
+
+test('a topic has many threads', function () {
+    $topic = Topic::factory()->create();
+    Thread::factory()->count(2)->for($topic)->create();
+
+    expect($topic->threads()->count())->toBe(2);
+});
+
+test('a thread belongs to a topic and holds messages', function () {
+    $topic = Topic::factory()->create();
+    $thread = Thread::factory()->for($topic)->create(['title' => 'Review artifact']);
+    $message = Message::factory()->for($topic)->for($thread)->create(['title' => 'Review note']);
+
+    expect($thread->topic)->toBeInstanceOf(Topic::class)
+        ->and($thread->messages()->pluck('messages.id')->all())->toBe([$message->id])
+        ->and($message->thread->is($thread))->toBeTrue();
 });
 
 test('topics are ordered by name', function () {
@@ -70,20 +88,19 @@ test('dashboard shows topics as folders for current workspace', function () {
         ->get(route('dashboard'))
         ->assertOk()
         ->assertSee('Topics')
-        ->assertSee('Messages')
-        ->assertSee('Inbox')
-        ->assertSee('Draft')
-        ->assertSee('Sent')
+        ->assertSee('Updates')
+        ->assertSee('Drafts')
+        ->assertSee('Archived')
         ->assertSee($topic->name)
         ->assertDontSee($message->title)
         ->assertSee('Select a topic')
-        ->assertSee('Choose a topic to view its messages.');
+        ->assertSee('Choose a topic to view its updates.');
 });
 
 test('dashboard shows system folders with workspace message counts', function () {
     [$user, $workspace] = userWithWorkspace();
 
-    $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
+    $topic = Topic::factory()->for($workspace)->create(['name' => 'Design', 'slug' => 'design']);
     $userPrincipal = $workspace->principalForUser($user);
     Message::factory()->for($topic)->create(['status' => MessageStatus::Draft]);
     Message::factory()->for($topic)->create([
@@ -99,12 +116,11 @@ test('dashboard shows system folders with workspace message counts', function ()
     $this->actingAs($user)
         ->get(route('dashboard'))
         ->assertOk()
-        ->assertSee(e(route('dashboard', ['folder' => 'inbox', 'panel' => 'messages'])), escape: false)
-        ->assertSee(e(route('dashboard', ['folder' => 'draft', 'panel' => 'messages'])), escape: false)
-        ->assertSee(e(route('dashboard', ['folder' => 'sent', 'panel' => 'messages'])), escape: false)
-        ->assertSee('data-test="system-folder-inbox-count"', escape: false)
-        ->assertSee('data-test="system-folder-draft-count"', escape: false)
-        ->assertSee('data-test="system-folder-sent-count"', escape: false);
+        ->assertSee(e(route('dashboard', ['folder' => 'updates', 'panel' => 'messages'])), escape: false)
+        ->assertSee(e(route('dashboard', ['folder' => 'drafts', 'panel' => 'messages'])), escape: false)
+        ->assertSee(e(route('dashboard', ['folder' => 'archived', 'panel' => 'messages'])), escape: false)
+        ->assertSee('data-test="system-folder-updates-count"', escape: false)
+        ->assertSee('data-test="system-folder-drafts-count"', escape: false);
 });
 
 test('dashboard system draft folder shows draft messages across topics', function () {
@@ -127,12 +143,12 @@ test('dashboard system draft folder shows draft messages across topics', functio
     ]);
 
     $this->actingAs($user)
-        ->get(route('dashboard', ['folder' => 'draft', 'panel' => 'messages']))
+        ->get(route('dashboard', ['folder' => 'drafts', 'panel' => 'messages']))
         ->assertOk()
-        ->assertSee('Draft')
+        ->assertSee('Drafts')
         ->assertSee('Design draft')
         ->assertSee(e(route('dashboard', [
-            'folder' => 'draft',
+            'folder' => 'drafts',
             'topic' => $design->slug,
             'message' => $designDraft->slug,
             'panel' => 'messages',
@@ -145,10 +161,10 @@ test('dashboard system draft folder shows draft messages across topics', functio
         ->assertDontSee('Engineering sent');
 });
 
-test('dashboard inbox does not show draft messages', function () {
+test('dashboard updates folder does not show draft messages', function () {
     [$user, $workspace] = userWithWorkspace();
 
-    $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
+    $topic = Topic::factory()->for($workspace)->create(['name' => 'Design', 'slug' => 'design']);
     $userPrincipal = $workspace->principalForUser($user);
 
     Message::factory()->for($topic)->create([
@@ -164,17 +180,17 @@ test('dashboard inbox does not show draft messages', function () {
     ]);
 
     $this->actingAs($user)
-        ->get(route('dashboard', ['folder' => 'inbox', 'panel' => 'messages']))
+        ->get(route('dashboard', ['folder' => 'updates', 'panel' => 'messages']))
         ->assertOk()
         ->assertSee('Visible message')
         ->assertDontSee('Hidden draft');
 });
 
-test('dashboard inbox only shows messages addressed to the current user', function () {
+test('dashboard updates folder shows all published topic updates', function () {
     [$user, $workspace] = userWithWorkspace();
     [$recipient, $recipientPrincipal] = teamMemberPrincipal($user, $workspace);
 
-    $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
+    $topic = Topic::factory()->for($workspace)->create(['name' => 'Design', 'slug' => 'design']);
     $userPrincipal = $workspace->principalForUser($user);
 
     Message::factory()->for($topic)->create([
@@ -199,42 +215,40 @@ test('dashboard inbox only shows messages addressed to the current user', functi
     ]);
 
     $this->actingAs($user)
-        ->get(route('dashboard', ['folder' => 'inbox', 'panel' => 'messages']))
+        ->get(route('dashboard', ['folder' => 'updates', 'panel' => 'messages']))
         ->assertOk()
         ->assertSee('For me')
+        ->assertSee('For someone else')
+        ->assertSee('For the topic')
         ->assertSeeText('From:')
         ->assertSeeText($recipient->name)
         ->assertSeeText('Sent:')
         ->assertSeeText('9 minutes ago')
-        ->assertDontSeeText('To:')
-        ->assertDontSee('For someone else')
-        ->assertDontSee('For the topic');
+        ->assertSeeText('Topic:')
+        ->assertSeeText('Design');
 });
 
-test('dashboard sent folder shows recipients and sent time', function () {
+test('dashboard archived folder shows archived updates', function () {
     [$user, $workspace] = userWithWorkspace();
-    [, $recipientPrincipal] = teamMemberPrincipal($user, $workspace, ['name' => 'Message Recipient']);
 
-    $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
+    $topic = Topic::factory()->for($workspace)->create(['name' => 'Design', 'slug' => 'design']);
     $userPrincipal = $workspace->principalForUser($user);
 
     Message::factory()->for($topic)->create([
-        'title' => 'Sent direct message',
+        'title' => 'Archived update',
         'updated_at' => now()->subMinutes(11),
-        'status' => MessageStatus::Published,
+        'status' => MessageStatus::Archived,
         'sender_principal_id' => $userPrincipal->id,
-        'recipient_principal_id' => $recipientPrincipal->id,
     ]);
 
     $this->actingAs($user)
-        ->get(route('dashboard', ['folder' => 'sent', 'panel' => 'messages']))
+        ->get(route('dashboard', ['folder' => 'archived', 'panel' => 'messages']))
         ->assertOk()
-        ->assertSee('Sent direct message')
-        ->assertSeeText('To:')
-        ->assertSeeText('Message Recipient')
+        ->assertSee('Archived update')
+        ->assertSeeText('Topic:')
+        ->assertSeeText('Design')
         ->assertSeeText('Sent:')
-        ->assertSeeText('11 minutes ago')
-        ->assertDontSeeText('From:');
+        ->assertSeeText('11 minutes ago');
 });
 
 test('dashboard archived toggle only filters the selected messages list', function () {
@@ -276,7 +290,7 @@ test('dashboard archived toggle only filters the selected messages list', functi
         ->assertDontSee('data-test="topic-design-draft-count"', escape: false)
         ->assertDontSee('title="Draft messages"', escape: false)
         ->assertSee('data-test="topic-design-published-count"', escape: false)
-        ->assertSee('title="Messages"', escape: false)
+        ->assertSee('title="Updates"', escape: false)
         ->assertDontSee('Design archived')
         ->assertDontSee('data-test="topic-design-archived-count"', escape: false)
         ->assertDontSee('data-test="topic-engineering-archived-count"', escape: false);
@@ -350,7 +364,7 @@ test('dashboard shows selected topic in the main panel', function () {
         ->assertSee($selectedMessage->title)
         ->assertSee(e(route('dashboard', ['topic' => $selectedTopic->slug, 'message' => $selectedMessage->slug, 'panel' => 'messages'])), escape: false)
         ->assertDontSee(route('messages.show', ['message' => $selectedMessage]), escape: false)
-        ->assertDontSee('Direct message')
+        ->assertSee('Direct message')
         ->assertDontSee('Other message');
 });
 
@@ -372,13 +386,13 @@ test('dashboard shows selected draft message in the main panel', function () {
         ->assertSee('Draft body')
         ->assertDontSee('data-flux-breadcrumbs', escape: false)
         ->assertSee('Save draft')
-        ->assertSee('Send');
+        ->assertSee('Post');
 });
 
 test('dashboard can save selected draft message', function () {
     [$user, $workspace] = userWithWorkspace();
 
-    $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
+    $topic = Topic::factory()->for($workspace)->create(['name' => 'Design', 'slug' => 'design']);
     $message = Message::factory()->for($topic)->create([
         'title' => 'Draft brief',
         'body' => 'Draft body',
@@ -400,15 +414,16 @@ test('dashboard can save selected draft message', function () {
         ->body->toBe('Updated body');
 });
 
-test('dashboard cannot change a draft message recipient to an agent principal', function () {
+test('dashboard save clears legacy direct recipient', function () {
     [$user, $workspace] = userWithWorkspace();
 
-    $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
+    $topic = Topic::factory()->for($workspace)->create(['name' => 'Design', 'slug' => 'design']);
     $agent = Agent::factory()->for($workspace)->create(['name' => 'Researcher']);
     $agentPrincipal = $workspace->principalForAgent($agent);
     $message = Message::factory()->for($topic)->create([
         'title' => 'Draft note',
         'status' => MessageStatus::Draft,
+        'recipient_principal_id' => $agentPrincipal->id,
     ]);
 
     $this->actingAs($user);
@@ -416,27 +431,23 @@ test('dashboard cannot change a draft message recipient to an agent principal', 
     Livewire::test('pages::dashboard')
         ->set('selectedTopicSlug', $topic->slug)
         ->set('selectedMessageSlug', $message->slug)
-        ->set('messageTitle', 'Agent draft')
-        ->set('messageTarget', 'principal')
-        ->set('messageRecipientPrincipalId', $agentPrincipal->id)
+        ->set('messageTitle', 'Topic draft')
         ->call('saveSelectedMessage')
-        ->assertHasErrors(['messageRecipientPrincipalId']);
+        ->assertHasNoErrors();
 
     expect($message->fresh())
-        ->title->toBe('Draft note')
+        ->title->toBe('Topic draft')
         ->recipient_principal_id->toBeNull();
 });
 
-test('dashboard published message panel shows sender and recipient principals', function () {
+test('dashboard published message panel shows sender and topic', function () {
     [$user, $workspace] = userWithWorkspace();
 
-    $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
-    $agent = Agent::factory()->for($workspace)->create(['name' => 'Researcher']);
+    $topic = Topic::factory()->for($workspace)->create(['name' => 'Design', 'slug' => 'design']);
     $message = Message::factory()->for($topic)->create([
         'title' => 'Published note',
         'status' => MessageStatus::Published,
         'sender_principal_id' => $workspace->principalForUser($user)->id,
-        'recipient_principal_id' => $workspace->principalForAgent($agent)->id,
     ]);
 
     $this->actingAs($user)
@@ -444,8 +455,8 @@ test('dashboard published message panel shows sender and recipient principals', 
         ->assertOk()
         ->assertSee('From')
         ->assertSee($user->name)
-        ->assertSee('To')
-        ->assertSee('Researcher');
+        ->assertSee('Topic')
+        ->assertSee('Design');
 });
 
 test('dashboard message panel shows attachments', function () {
@@ -670,9 +681,9 @@ test('dashboard shows new message form in the main panel', function () {
         ->assertSee('data-test="dashboard-message-create-panel"', escape: false)
         ->assertSee('id="dashboard-new-message-form"', escape: false)
         ->assertSee('form="dashboard-new-message-form"', escape: false)
-        ->assertSee('New message')
+        ->assertSee('New update')
         ->assertSee('Save draft')
-        ->assertSee('Send')
+        ->assertSee('Post')
         ->assertSee('Design');
 });
 
@@ -687,9 +698,9 @@ test('dashboard shows new message form in the message panel without a selected t
         ->assertSee('data-test="dashboard-message-create-panel"', escape: false)
         ->assertSee('id="dashboard-new-message-form"', escape: false)
         ->assertSee('form="dashboard-new-message-form"', escape: false)
-        ->assertSee('New message')
+        ->assertSee('New update')
         ->assertSee('Save draft')
-        ->assertSee('Send')
+        ->assertSee('Post')
         ->assertSee($topic->name);
 });
 
@@ -791,9 +802,8 @@ test('dashboard can assign agents when sending a new message', function () {
         ->and($message->agentTasks->pluck('available_at')->filter())->toHaveCount(2);
 });
 
-test('dashboard can send a new message to a user', function () {
+test('dashboard posts a new update to a topic', function () {
     [$user, $workspace] = userWithWorkspace();
-    [, $recipientPrincipal] = teamMemberPrincipal($user, $workspace);
 
     $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
 
@@ -802,47 +812,44 @@ test('dashboard can send a new message to a user', function () {
     Livewire::test('pages::dashboard')
         ->set('selectedTopicSlug', $topic->slug)
         ->set('panelAction', 'new-message')
-        ->set('newMessageTitle', 'User note')
-        ->set('newMessageBody', 'For a person')
-        ->set('newMessageTarget', 'principal')
+        ->set('newMessageTitle', 'Topic note')
+        ->set('newMessageBody', 'For the topic')
         ->set('newMessageTopicId', $topic->id)
-        ->set('newMessageRecipientPrincipalId', $recipientPrincipal->id)
         ->call('sendDashboardMessage')
         ->assertHasNoErrors();
 
-    $message = $topic->messages()->where('title', 'User note')->first();
+    $message = $topic->messages()->where('title', 'Topic note')->first();
     $senderPrincipal = $workspace->principalForUser($user);
 
     expect($message)->not->toBeNull()
         ->and($message->sender_principal_id)->toBe($senderPrincipal->id)
-        ->and($message->recipient_principal_id)->toBe($recipientPrincipal->id)
+        ->and($message->recipient_principal_id)->toBeNull()
         ->and($message->status)->toBe(MessageStatus::Published);
 });
 
-test('dashboard cannot send a new message to an agent principal', function () {
+test('dashboard ignores removed direct recipient input when posting a new update', function () {
     [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
     $agent = Agent::factory()->for($workspace)->create(['name' => 'Researcher']);
-    $agentPrincipal = $workspace->principalForAgent($agent);
+    $workspace->principalForAgent($agent);
 
     $this->actingAs($user);
 
     Livewire::test('pages::dashboard')
         ->set('selectedTopicSlug', $topic->slug)
         ->set('panelAction', 'new-message')
-        ->set('newMessageTitle', 'Agent note')
-        ->set('newMessageBody', 'For an agent')
-        ->set('newMessageTarget', 'principal')
+        ->set('newMessageTitle', 'Topic-only note')
+        ->set('newMessageBody', 'For everyone in the topic')
         ->set('newMessageTopicId', $topic->id)
-        ->set('newMessageRecipientPrincipalId', $agentPrincipal->id)
         ->call('sendDashboardMessage')
-        ->assertHasErrors(['newMessageRecipientPrincipalId']);
+        ->assertHasNoErrors();
 
-    expect($topic->messages()->where('title', 'Agent note')->exists())->toBeFalse();
+    expect($topic->messages()->where('title', 'Topic-only note')->sole())
+        ->recipient_principal_id->toBeNull();
 });
 
-test('dashboard defaults a principal recipient when none reached the server', function () {
+test('dashboard does not default a direct recipient when posting a new update', function () {
     [$user, $workspace] = userWithWorkspace();
     $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
     $senderPrincipal = $workspace->principalForUser($user);
@@ -852,19 +859,17 @@ test('dashboard defaults a principal recipient when none reached the server', fu
     Livewire::test('pages::dashboard')
         ->set('selectedTopicSlug', $topic->slug)
         ->set('panelAction', 'new-message')
-        ->set('newMessageTitle', 'Default dashboard recipient')
-        ->set('newMessageBody', 'Direct body')
-        ->set('newMessageTarget', 'principal')
+        ->set('newMessageTitle', 'Topic dashboard update')
+        ->set('newMessageBody', 'Topic body')
         ->set('newMessageTopicId', $topic->id)
-        ->set('newMessageRecipientPrincipalId', null)
         ->call('sendDashboardMessage')
         ->assertHasNoErrors();
 
-    $message = $topic->messages()->where('title', 'Default dashboard recipient')->first();
+    $message = $topic->messages()->where('title', 'Topic dashboard update')->first();
 
     expect($message)->not->toBeNull()
         ->and($message->sender_principal_id)->toBe($senderPrincipal->id)
-        ->and($message->recipient_principal_id)->toBe($senderPrincipal->id)
+        ->and($message->recipient_principal_id)->toBeNull()
         ->and($message->status)->toBe(MessageStatus::Published);
 });
 
@@ -909,7 +914,7 @@ test('dashboard without a selected topic shows a top-level new message action', 
         ->assertOk()
         ->assertSee('Select a topic')
         ->assertSee('data-mobile-panel="topics"', escape: false)
-        ->assertSee('New message')
+        ->assertSee('New update')
         ->assertSee(e(route('messages.create')), escape: false)
         ->assertSee('data-mobile-nav="messages"', escape: false)
         ->assertSee('disabled', escape: false);
@@ -947,7 +952,7 @@ test('topic page left aligns message icons in icon view', function () {
     $this->actingAs($user)
         ->get(route('topics.show', ['topic' => $topic->slug]))
         ->assertOk()
-        ->assertSee('Messages')
+        ->assertSee('Updates')
         ->assertSee('Agents')
         ->assertSee('flex w-full min-w-0 items-center justify-between gap-3', escape: false)
         ->assertSee('hidden shrink-0 items-center gap-3 md:flex', escape: false)
