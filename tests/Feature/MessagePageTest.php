@@ -1,21 +1,17 @@
 <?php
 
 use App\Enums\MessageStatus;
-use App\Enums\TeamRole;
 use App\Models\Agent;
 use App\Models\Attachment;
 use App\Models\Message;
 use App\Models\Topic;
-use App\Models\User;
 use App\Models\Workspace;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 
 beforeEach(function () {
-    $this->user = User::factory()->create();
-    $this->workspace = Workspace::factory()->for($this->user->currentTeam)->create();
-    $this->user->switchWorkspace($this->workspace);
+    [$this->user, $this->workspace] = userWithWorkspace();
     $this->topic = Topic::factory()->for($this->workspace)->create();
     $this->message = Message::factory()->for($this->topic)->create();
 });
@@ -174,9 +170,7 @@ test('message can be made actionable from dedicated create page', function () {
 });
 
 test('message can be sent to a user from dedicated create page', function () {
-    $recipient = User::factory()->create();
-    $this->user->currentTeam->memberships()->create(['user_id' => $recipient->id, 'role' => TeamRole::Member]);
-    $recipientPrincipal = $this->workspace->principalForUser($recipient);
+    [$recipient, $recipientPrincipal] = teamMemberPrincipal($this->user, $this->workspace);
 
     $this->actingAs($this->user);
 

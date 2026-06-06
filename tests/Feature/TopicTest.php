@@ -3,7 +3,6 @@
 use App\Enums\MessageStatus;
 use App\Enums\Provider;
 use App\Enums\ReasoningEffort;
-use App\Enums\TeamRole;
 use App\Models\Agent;
 use App\Models\AgentVersion;
 use App\Models\Attachment;
@@ -59,9 +58,7 @@ test('slug is unique per workspace', function () {
 });
 
 test('dashboard shows topics as folders for current workspace', function () {
-    $user = User::factory()->create();
-    $workspace = Workspace::factory()->for($user->currentTeam)->create();
-    $user->switchWorkspace($workspace);
+    [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create();
     $message = Message::factory()->for($topic)->create(['title' => 'Dashboard draft']);
@@ -81,9 +78,7 @@ test('dashboard shows topics as folders for current workspace', function () {
 });
 
 test('dashboard shows system folders with workspace message counts', function () {
-    $user = User::factory()->create();
-    $workspace = Workspace::factory()->for($user->currentTeam)->create();
-    $user->switchWorkspace($workspace);
+    [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
     $userPrincipal = $workspace->principalForUser($user);
@@ -110,9 +105,7 @@ test('dashboard shows system folders with workspace message counts', function ()
 });
 
 test('dashboard system draft folder shows draft messages across topics', function () {
-    $user = User::factory()->create();
-    $workspace = Workspace::factory()->for($user->currentTeam)->create();
-    $user->switchWorkspace($workspace);
+    [$user, $workspace] = userWithWorkspace();
 
     $design = Topic::factory()->for($workspace)->create(['slug' => 'design']);
     $engineering = Topic::factory()->for($workspace)->create(['slug' => 'engineering']);
@@ -147,9 +140,7 @@ test('dashboard system draft folder shows draft messages across topics', functio
 });
 
 test('dashboard inbox does not show draft messages', function () {
-    $user = User::factory()->create();
-    $workspace = Workspace::factory()->for($user->currentTeam)->create();
-    $user->switchWorkspace($workspace);
+    [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
     $userPrincipal = $workspace->principalForUser($user);
@@ -174,15 +165,11 @@ test('dashboard inbox does not show draft messages', function () {
 });
 
 test('dashboard inbox only shows messages addressed to the current user', function () {
-    $user = User::factory()->create();
-    $recipient = User::factory()->create();
-    $workspace = Workspace::factory()->for($user->currentTeam)->create();
-    $user->switchWorkspace($workspace);
-    $user->currentTeam->memberships()->create(['user_id' => $recipient->id, 'role' => TeamRole::Member]);
+    [$user, $workspace] = userWithWorkspace();
+    [$recipient, $recipientPrincipal] = teamMemberPrincipal($user, $workspace);
 
     $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
     $userPrincipal = $workspace->principalForUser($user);
-    $recipientPrincipal = $workspace->principalForUser($recipient);
 
     Message::factory()->for($topic)->create([
         'title' => 'For me',
@@ -219,15 +206,11 @@ test('dashboard inbox only shows messages addressed to the current user', functi
 });
 
 test('dashboard sent folder shows recipients and sent time', function () {
-    $user = User::factory()->create();
-    $recipient = User::factory()->create(['name' => 'Message Recipient']);
-    $workspace = Workspace::factory()->for($user->currentTeam)->create();
-    $user->switchWorkspace($workspace);
-    $user->currentTeam->memberships()->create(['user_id' => $recipient->id, 'role' => TeamRole::Member]);
+    [$user, $workspace] = userWithWorkspace();
+    [, $recipientPrincipal] = teamMemberPrincipal($user, $workspace, ['name' => 'Message Recipient']);
 
     $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
     $userPrincipal = $workspace->principalForUser($user);
-    $recipientPrincipal = $workspace->principalForUser($recipient);
 
     Message::factory()->for($topic)->create([
         'title' => 'Sent direct message',
@@ -249,9 +232,7 @@ test('dashboard sent folder shows recipients and sent time', function () {
 });
 
 test('dashboard archived toggle only filters the selected messages list', function () {
-    $user = User::factory()->create();
-    $workspace = Workspace::factory()->for($user->currentTeam)->create();
-    $user->switchWorkspace($workspace);
+    [$user, $workspace] = userWithWorkspace();
 
     $design = Topic::factory()->for($workspace)->create([
         'name' => 'Design',
@@ -306,9 +287,7 @@ test('dashboard archived toggle only filters the selected messages list', functi
 });
 
 test('dashboard routes do not include team or workspace slugs', function () {
-    $user = User::factory()->create();
-    $workspace = Workspace::factory()->for($user->currentTeam)->create();
-    $user->switchWorkspace($workspace);
+    [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['slug' => 'current-topic']);
 
@@ -342,9 +321,7 @@ test('topic routes resolve slugs inside the current workspace', function () {
 });
 
 test('dashboard shows selected topic in the main panel', function () {
-    $user = User::factory()->create();
-    $workspace = Workspace::factory()->for($user->currentTeam)->create();
-    $user->switchWorkspace($workspace);
+    [$user, $workspace] = userWithWorkspace();
 
     $selectedTopic = Topic::factory()->for($workspace)->create(['name' => 'Selected Topic', 'slug' => 'selected-topic']);
     $otherTopic = Topic::factory()->for($workspace)->create(['name' => 'Other Topic', 'slug' => 'other-topic']);
@@ -372,9 +349,7 @@ test('dashboard shows selected topic in the main panel', function () {
 });
 
 test('dashboard shows selected draft message in the main panel', function () {
-    $user = User::factory()->create();
-    $workspace = Workspace::factory()->for($user->currentTeam)->create();
-    $user->switchWorkspace($workspace);
+    [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['name' => 'Design', 'slug' => 'design']);
     $message = Message::factory()->for($topic)->create([
@@ -395,9 +370,7 @@ test('dashboard shows selected draft message in the main panel', function () {
 });
 
 test('dashboard can save selected draft message', function () {
-    $user = User::factory()->create();
-    $workspace = Workspace::factory()->for($user->currentTeam)->create();
-    $user->switchWorkspace($workspace);
+    [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
     $message = Message::factory()->for($topic)->create([
@@ -422,9 +395,7 @@ test('dashboard can save selected draft message', function () {
 });
 
 test('dashboard can change a draft message recipient to an agent principal', function () {
-    $user = User::factory()->create();
-    $workspace = Workspace::factory()->for($user->currentTeam)->create();
-    $user->switchWorkspace($workspace);
+    [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
     $agent = Agent::factory()->for($workspace)->create(['name' => 'Researcher']);
@@ -451,9 +422,7 @@ test('dashboard can change a draft message recipient to an agent principal', fun
 });
 
 test('dashboard published message panel shows sender and recipient principals', function () {
-    $user = User::factory()->create();
-    $workspace = Workspace::factory()->for($user->currentTeam)->create();
-    $user->switchWorkspace($workspace);
+    [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
     $agent = Agent::factory()->for($workspace)->create(['name' => 'Researcher']);
@@ -474,9 +443,7 @@ test('dashboard published message panel shows sender and recipient principals', 
 });
 
 test('dashboard shows workspace agents in the right rail', function () {
-    $user = User::factory()->create();
-    $workspace = Workspace::factory()->for($user->currentTeam)->create();
-    $user->switchWorkspace($workspace);
+    [$user, $workspace] = userWithWorkspace();
 
     $agent = Agent::factory()->for($workspace)->create(['name' => 'Rail Agent']);
 
@@ -491,9 +458,7 @@ test('dashboard shows workspace agents in the right rail', function () {
 });
 
 test('dashboard gives assigned agents prominence in the right rail', function () {
-    $user = User::factory()->create();
-    $workspace = Workspace::factory()->for($user->currentTeam)->create();
-    $user->switchWorkspace($workspace);
+    [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
     $available = Agent::factory()->for($workspace)->create(['name' => 'Available Agent']);
@@ -512,9 +477,7 @@ test('dashboard gives assigned agents prominence in the right rail', function ()
 });
 
 test('dashboard shows selected agent details in the right panel', function () {
-    $user = User::factory()->create();
-    $workspace = Workspace::factory()->for($user->currentTeam)->create();
-    $user->switchWorkspace($workspace);
+    [$user, $workspace] = userWithWorkspace();
 
     $agent = Agent::factory()->for($workspace)->create([
         'name' => 'Research Agent',
@@ -541,9 +504,7 @@ test('dashboard shows selected agent details in the right panel', function () {
 });
 
 test('dashboard can save selected agent details', function () {
-    $user = User::factory()->create();
-    $workspace = Workspace::factory()->for($user->currentTeam)->create();
-    $user->switchWorkspace($workspace);
+    [$user, $workspace] = userWithWorkspace();
 
     $agent = Agent::factory()->for($workspace)->create(['slug' => 'research-agent']);
 
@@ -559,9 +520,7 @@ test('dashboard can save selected agent details', function () {
 });
 
 test('dashboard can save selected agent version', function () {
-    $user = User::factory()->create();
-    $workspace = Workspace::factory()->for($user->currentTeam)->create();
-    $user->switchWorkspace($workspace);
+    [$user, $workspace] = userWithWorkspace();
 
     $agent = Agent::factory()->for($workspace)->create(['slug' => 'research-agent']);
 
@@ -586,9 +545,7 @@ test('dashboard can save selected agent version', function () {
 });
 
 test('dashboard can create an agent from the right rail', function () {
-    $user = User::factory()->create();
-    $workspace = Workspace::factory()->for($user->currentTeam)->create();
-    $user->switchWorkspace($workspace);
+    [$user, $workspace] = userWithWorkspace();
 
     $this->actingAs($user);
 
@@ -609,9 +566,7 @@ test('dashboard can create an agent from the right rail', function () {
 });
 
 test('dashboard shows new message action', function () {
-    $user = User::factory()->create();
-    $workspace = Workspace::factory()->for($user->currentTeam)->create();
-    $user->switchWorkspace($workspace);
+    [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
 
@@ -623,9 +578,7 @@ test('dashboard shows new message action', function () {
 });
 
 test('dashboard shows new message form in the main panel', function () {
-    $user = User::factory()->create();
-    $workspace = Workspace::factory()->for($user->currentTeam)->create();
-    $user->switchWorkspace($workspace);
+    [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['name' => 'Design', 'slug' => 'design']);
 
@@ -640,9 +593,7 @@ test('dashboard shows new message form in the main panel', function () {
 });
 
 test('dashboard shows new message form in the message panel without a selected topic', function () {
-    $user = User::factory()->create();
-    $workspace = Workspace::factory()->for($user->currentTeam)->create();
-    $user->switchWorkspace($workspace);
+    [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['name' => 'Design', 'slug' => 'design']);
 
@@ -657,9 +608,7 @@ test('dashboard shows new message form in the message panel without a selected t
 });
 
 test('dashboard can create a draft message in the main panel', function () {
-    $user = User::factory()->create();
-    $workspace = Workspace::factory()->for($user->currentTeam)->create();
-    $user->switchWorkspace($workspace);
+    [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
 
@@ -685,9 +634,7 @@ test('dashboard can create a draft message in the main panel', function () {
 });
 
 test('dashboard can make a new message actionable in the main panel', function () {
-    $user = User::factory()->create();
-    $workspace = Workspace::factory()->for($user->currentTeam)->create();
-    $user->switchWorkspace($workspace);
+    [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
 
@@ -715,12 +662,8 @@ test('dashboard can make a new message actionable in the main panel', function (
 });
 
 test('dashboard can send a new message to a user', function () {
-    $user = User::factory()->create();
-    $recipient = User::factory()->create();
-    $workspace = Workspace::factory()->for($user->currentTeam)->create();
-    $user->switchWorkspace($workspace);
-    $user->currentTeam->memberships()->create(['user_id' => $recipient->id, 'role' => TeamRole::Member]);
-    $recipientPrincipal = $workspace->principalForUser($recipient);
+    [$user, $workspace] = userWithWorkspace();
+    [, $recipientPrincipal] = teamMemberPrincipal($user, $workspace);
 
     $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
 
@@ -747,9 +690,7 @@ test('dashboard can send a new message to a user', function () {
 });
 
 test('dashboard can send a new message to an agent principal', function () {
-    $user = User::factory()->create();
-    $workspace = Workspace::factory()->for($user->currentTeam)->create();
-    $user->switchWorkspace($workspace);
+    [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
     $agent = Agent::factory()->for($workspace)->create(['name' => 'Researcher']);
@@ -778,9 +719,7 @@ test('dashboard can send a new message to an agent principal', function () {
 });
 
 test('dashboard defaults a principal recipient when none reached the server', function () {
-    $user = User::factory()->create();
-    $workspace = Workspace::factory()->for($user->currentTeam)->create();
-    $user->switchWorkspace($workspace);
+    [$user, $workspace] = userWithWorkspace();
     $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
     $senderPrincipal = $workspace->principalForUser($user);
 
@@ -806,9 +745,7 @@ test('dashboard defaults a principal recipient when none reached the server', fu
 });
 
 test('dashboard shows mobile bottom navigation with topics active by default', function () {
-    $user = User::factory()->create();
-    $workspace = Workspace::factory()->for($user->currentTeam)->create();
-    $user->switchWorkspace($workspace);
+    [$user, $workspace] = userWithWorkspace();
 
     Topic::factory()->for($workspace)->create();
 
@@ -828,9 +765,7 @@ test('dashboard shows mobile bottom navigation with topics active by default', f
 });
 
 test('dashboard can render the topics mobile panel as active', function () {
-    $user = User::factory()->create();
-    $workspace = Workspace::factory()->for($user->currentTeam)->create();
-    $user->switchWorkspace($workspace);
+    [$user, $workspace] = userWithWorkspace();
 
     Topic::factory()->for($workspace)->create();
 
@@ -843,9 +778,7 @@ test('dashboard can render the topics mobile panel as active', function () {
 });
 
 test('dashboard without a selected topic shows a top-level new message action', function () {
-    $user = User::factory()->create();
-    $workspace = Workspace::factory()->for($user->currentTeam)->create();
-    $user->switchWorkspace($workspace);
+    [$user, $workspace] = userWithWorkspace();
 
     Topic::factory()->for($workspace)->create();
 
@@ -861,9 +794,7 @@ test('dashboard without a selected topic shows a top-level new message action', 
 });
 
 test('dashboard selected topic shows attach and detach actions in the agents rail', function () {
-    $user = User::factory()->create();
-    $workspace = Workspace::factory()->for($user->currentTeam)->create();
-    $user->switchWorkspace($workspace);
+    [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['slug' => 'selected-topic']);
     $attachedAgent = Agent::factory()->for($workspace)->create(['name' => 'Attached Agent']);
@@ -881,9 +812,7 @@ test('dashboard selected topic shows attach and detach actions in the agents rai
 });
 
 test('topic page left aligns message icons in icon view', function () {
-    $user = User::factory()->create();
-    $workspace = Workspace::factory()->for($user->currentTeam)->create();
-    $user->switchWorkspace($workspace);
+    [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create();
     $message = Message::factory()->for($topic)->create([
@@ -925,9 +854,7 @@ test('topic page left aligns message icons in icon view', function () {
 });
 
 test('topic page agent rail labels attach and detach actions clearly', function () {
-    $user = User::factory()->create();
-    $workspace = Workspace::factory()->for($user->currentTeam)->create();
-    $user->switchWorkspace($workspace);
+    [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create();
     $attachedAgent = Agent::factory()->for($workspace)->create(['name' => 'Attached Agent']);
@@ -946,9 +873,7 @@ test('topic page agent rail labels attach and detach actions clearly', function 
 });
 
 test('topic page with only available agents does not render detach confirmation copy', function () {
-    $user = User::factory()->create();
-    $workspace = Workspace::factory()->for($user->currentTeam)->create();
-    $user->switchWorkspace($workspace);
+    [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create();
     Agent::factory()->for($workspace)->create(['name' => 'Available Agent']);

@@ -1,5 +1,9 @@
 <?php
 
+use App\Enums\TeamRole;
+use App\Models\Principal;
+use App\Models\User;
+use App\Models\Workspace;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Pest\Browser\Browsable;
 use Tests\TestCase;
@@ -49,7 +53,33 @@ expect()->extend('toBeOne', function () {
 |
 */
 
-function something()
+/**
+ * @param  array<string, mixed>  $userAttributes
+ * @param  array<string, mixed>  $workspaceAttributes
+ * @return array{0: User, 1: Workspace}
+ */
+function userWithWorkspace(array $userAttributes = [], array $workspaceAttributes = []): array
 {
-    // ..
+    $user = User::factory()->create($userAttributes);
+    $workspace = Workspace::factory()->for($user->currentTeam)->create($workspaceAttributes);
+
+    $user->switchWorkspace($workspace);
+
+    return [$user, $workspace];
+}
+
+/**
+ * @param  array<string, mixed>  $userAttributes
+ * @return array{0: User, 1: Principal}
+ */
+function teamMemberPrincipal(User $owner, Workspace $workspace, array $userAttributes = []): array
+{
+    $member = User::factory()->create($userAttributes);
+
+    $owner->currentTeam->memberships()->create([
+        'user_id' => $member->id,
+        'role' => TeamRole::Member,
+    ]);
+
+    return [$member, $workspace->principalForUser($member)];
 }

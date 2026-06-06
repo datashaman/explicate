@@ -929,9 +929,7 @@ test('topic forge server lists topic, message, and agent resource templates', fu
 });
 
 test('workspace access is denied outside the current team scope', function () {
-    $user = User::factory()->create();
-    $workspace = Workspace::factory()->for($user->currentTeam)->create();
-    $user->switchWorkspace($workspace);
+    [$user, $workspace] = userWithWorkspace();
 
     $foreignWorkspace = Workspace::factory()->create([
         'slug' => 'foreign-workspace',
