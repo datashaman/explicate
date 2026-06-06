@@ -477,7 +477,9 @@ test('dashboard published post panel shows sender and topic', function () {
         ->assertSee('From')
         ->assertSee($user->name)
         ->assertSee('Topic')
-        ->assertSee('Design');
+        ->assertSee('Design')
+        ->assertSee('Move to drafts')
+        ->assertDontSee('Return to draft');
 });
 
 test('dashboard post panel shows attachments', function () {

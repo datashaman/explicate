@@ -94,7 +94,9 @@ test('published post page shows sender and topic', function () {
         ->assertSee('From')
         ->assertSee($this->user->name)
         ->assertSee('Topic')
-        ->assertSee($this->topic->name);
+        ->assertSee($this->topic->name)
+        ->assertSee('Move to drafts')
+        ->assertDontSee('Return to draft');
 });
 
 test('post list metadata uses sender recipient fallback and timestamp labels', function () {
