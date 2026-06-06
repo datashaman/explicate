@@ -22,6 +22,9 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
     #[Url(as: 'topic')]
     public ?string $selectedTopicSlug = null;
 
+    #[Url(as: 'folder')]
+    public ?string $selectedSystemFolderSlug = null;
+
     #[Url(as: 'message')]
     public ?string $selectedMessageSlug = null;
 
@@ -95,6 +98,16 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         return $workspace->topics()->where('slug', $this->selectedTopicSlug)->first();
     }
 
+    /** @return array{slug: string, name: string, icon: string}|null */
+    public function selectedSystemFolder(): ?array
+    {
+        if (! $this->selectedSystemFolderSlug) {
+            return null;
+        }
+
+        return collect($this->systemFolders())->firstWhere('slug', $this->selectedSystemFolderSlug);
+    }
+
     public function selectedMessage(): ?Message
     {
         $topic = $this->selectedTopic();
@@ -123,6 +136,43 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
     public function isCreatingMessage(): bool
     {
         return $this->panelAction === 'new-message';
+    }
+
+    /** @return list<array{slug: string, name: string, icon: string, count: int}> */
+    public function systemFolders(): array
+    {
+        $workspace = $this->workspace();
+
+        if (! $workspace) {
+            return [];
+        }
+
+        $counts = Message::query()
+            ->whereHas('topic', fn ($query) => $query->where('workspace_id', $workspace->id))
+            ->selectRaw('status, count(*) as total')
+            ->groupBy('status')
+            ->pluck('total', 'status');
+
+        return [
+            [
+                'slug' => 'inbox',
+                'name' => __('Inbox'),
+                'icon' => 'inbox',
+                'count' => (int) (($counts[MessageStatus::Published->value] ?? 0) + ($counts[MessageStatus::Draft->value] ?? 0)),
+            ],
+            [
+                'slug' => 'draft',
+                'name' => __('Draft'),
+                'icon' => 'document',
+                'count' => (int) ($counts[MessageStatus::Draft->value] ?? 0),
+            ],
+            [
+                'slug' => 'sent',
+                'name' => __('Sent'),
+                'icon' => 'paper-airplane',
+                'count' => (int) ($counts[MessageStatus::Published->value] ?? 0),
+            ],
+        ];
     }
 
     /**
@@ -189,6 +239,43 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             ->get()
             ->map(fn (Message $message) => [
                 'href' => route('dashboard', ['topic' => $topic->slug, 'message' => $message->slug, 'panel' => 'messages']),
+                'name' => $message->title,
+                'badge' => $message->status === MessageStatus::Published ? null : [
+                    'label' => $message->status->label(),
+                    'color' => $message->status->color(),
+                ],
+            ])
+            ->all();
+    }
+
+    /**
+     * @return list<array{href: string, name: string, badge: array{label: string, color: string}|null}>
+     */
+    public function selectedSystemFolderItems(): array
+    {
+        $workspace = $this->workspace();
+        $folder = $this->selectedSystemFolder();
+
+        if (! $workspace || ! $folder) {
+            return [];
+        }
+
+        return Message::query()
+            ->with('topic')
+            ->whereHas('topic', fn ($query) => $query->where('workspace_id', $workspace->id))
+            ->when($folder['slug'] === 'draft', fn ($query) => $query->where('status', MessageStatus::Draft))
+            ->when($folder['slug'] === 'sent', fn ($query) => $query->where('status', MessageStatus::Published))
+            ->when($folder['slug'] === 'inbox', fn ($query) => $query->whereIn('status', [MessageStatus::Draft, MessageStatus::Published]))
+            ->when(! $this->showArchived, fn ($query) => $query->where('status', '!=', MessageStatus::Archived))
+            ->latest()
+            ->get()
+            ->map(fn (Message $message) => [
+                'href' => route('dashboard', [
+                    'folder' => $folder['slug'],
+                    'topic' => $message->topic->slug,
+                    'message' => $message->slug,
+                    'panel' => 'messages',
+                ]),
                 'name' => $message->title,
                 'badge' => $message->status === MessageStatus::Published ? null : [
                     'label' => $message->status->label(),
@@ -282,10 +369,26 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
     public function updatedSelectedTopicSlug(): void
     {
+        if ($this->selectedTopicSlug) {
+            $this->selectedSystemFolderSlug = null;
+        }
+
         $this->selectedMessageSlug = null;
         $this->messageTitle = '';
         $this->messageBody = '';
         $this->syncNewMessageTopic();
+        $this->normalizeMobilePanel();
+    }
+
+    public function updatedSelectedSystemFolderSlug(): void
+    {
+        if ($this->selectedSystemFolderSlug) {
+            $this->selectedTopicSlug = null;
+            $this->selectedMessageSlug = null;
+            $this->panelAction = null;
+            $this->mobilePanel = 'messages';
+        }
+
         $this->normalizeMobilePanel();
     }
 
@@ -327,7 +430,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             $this->mobilePanel = 'topics';
         }
 
-        if (! $this->selectedTopic() && $this->mobilePanel === 'messages') {
+        if (! $this->selectedTopic() && ! $this->selectedSystemFolder() && $this->mobilePanel === 'messages') {
             $this->mobilePanel = 'topics';
         }
     }
@@ -624,7 +727,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 <div class="flex h-full w-full flex-col gap-3 xl:flex-1">
     @if ($this->workspace())
         @php
-            $hasSelectedTopic = (bool) $this->selectedTopic();
+            $hasSelectedMessagesPanel = (bool) ($this->selectedTopic() || $this->selectedSystemFolder());
         @endphp
 
         <div @class([
@@ -647,12 +750,30 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                     </flux:modal.trigger>
                 </div>
 
-                @if ($this->topics()->isEmpty())
+                @if ($this->topics()->isEmpty() && empty($this->systemFolders()))
                     <div class="bg-white px-4 py-6 xl:flex xl:flex-1 xl:items-start dark:bg-zinc-900/20">
                         <flux:text class="text-sm text-neutral-400 dark:text-neutral-600">{{ __('No topics') }}</flux:text>
                     </div>
                 @else
                     <div class="divide-y divide-neutral-200 bg-white xl:flex-1 xl:overflow-auto dark:divide-white/5 dark:bg-zinc-900/20">
+                        @foreach ($this->systemFolders() as $folder)
+                            <a href="{{ route('dashboard', ['folder' => $folder['slug'], 'panel' => 'messages']) }}" wire:navigate
+                               @class([
+                                   'flex items-center gap-3 px-4 py-3 hover:bg-neutral-100 dark:hover:bg-white/5',
+                                   'bg-blue-100/80 dark:bg-blue-500/15' => $selectedSystemFolderSlug === $folder['slug'],
+                               ])>
+                                <div class="flex size-8 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-500 dark:bg-blue-500/10 dark:text-blue-300">
+                                    <flux:icon :name="$folder['icon']" class="size-4" />
+                                </div>
+                                <div class="min-w-0 flex-1">
+                                    <div class="truncate text-sm font-medium text-neutral-700 dark:text-neutral-300">{{ $folder['name'] }}</div>
+                                </div>
+                                @if ($folder['count'] > 0)
+                                    <flux:badge color="zinc" size="sm" data-test="system-folder-{{ $folder['slug'] }}-count">{{ $folder['count'] }}</flux:badge>
+                                @endif
+                            </a>
+                        @endforeach
+
                         @foreach ($this->topics() as $topic)
                             <a href="{{ route('dashboard', ['topic' => $topic->slug, 'panel' => 'messages']) }}" wire:navigate
                                @class([
@@ -682,8 +803,11 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                 @endif
             </section>
 
-            @if ($this->selectedTopic())
-                @php $selectedDashboardMessage = $this->selectedMessage(); @endphp
+            @if ($this->selectedTopic() || $this->selectedSystemFolder())
+                @php
+                    $selectedDashboardMessage = $this->selectedMessage();
+                    $selectedDashboardFolder = $this->selectedSystemFolder();
+                @endphp
 
                 <section
                     id="messages-panel"
@@ -693,7 +817,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                         'hidden xl:flex' => $this->mobilePanel !== 'messages',
                     ])
                 >
-                    @if ($this->isCreatingMessage())
+                    @if ($this->isCreatingMessage() && $this->selectedTopic())
                         <div class="flex items-center justify-between gap-3 border-b border-neutral-300 bg-emerald-50 px-4 py-3 dark:border-white/10 dark:bg-emerald-500/10">
                             <flux:heading size="sm" class="min-w-0 flex-1 truncate">{{ __('New message') }}</flux:heading>
 
@@ -802,14 +926,14 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                         @include('partials.folder-view', [
                             'breadcrumbs' => [
                                 ['label' => $this->workspace()->name, 'href' => route('dashboard')],
-                                ['label' => $this->selectedTopic()->name],
+                                ['label' => $selectedDashboardFolder['name'] ?? $this->selectedTopic()->name],
                             ],
                             'titleLabel' => __('Messages'),
-                            'items' => collect($this->selectedTopicItems()),
+                            'items' => collect($selectedDashboardFolder ? $this->selectedSystemFolderItems() : $this->selectedTopicItems()),
                             'icon' => 'document-text',
                             'iconClass' => 'size-12 text-neutral-400 group-hover:text-neutral-300',
                             'emptyText' => __('No messages'),
-                            'createHref' => route('dashboard', ['topic' => $this->selectedTopic()->slug, 'action' => 'new-message', 'panel' => 'messages']),
+                            'createHref' => $this->selectedTopic() ? route('dashboard', ['topic' => $this->selectedTopic()->slug, 'action' => 'new-message', 'panel' => 'messages']) : route('messages.create'),
                             'createLabel' => __('New message'),
                             'showArchivedModel' => 'showArchived',
                             'toolbarClass' => 'border-b border-neutral-300 bg-emerald-50 px-4 py-3 dark:border-white/10 dark:bg-emerald-500/10',
@@ -994,15 +1118,15 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                 </button>
                 <button
                     type="button"
-                    @if ($hasSelectedTopic) wire:click="showMobilePanel('messages')" @endif
+                    @if ($hasSelectedMessagesPanel) wire:click="showMobilePanel('messages')" @endif
                     data-mobile-nav="messages"
                     aria-pressed="{{ $this->mobilePanel === 'messages' ? 'true' : 'false' }}"
-                    @disabled(! $hasSelectedTopic)
+                    @disabled(! $hasSelectedMessagesPanel)
                     @class([
                         'flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition',
-                        'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-500/15 dark:text-emerald-200' => $hasSelectedTopic && $this->mobilePanel === 'messages',
-                        'border-neutral-200 bg-neutral-50 text-neutral-700 dark:border-white/10 dark:bg-white/5 dark:text-neutral-200' => $hasSelectedTopic && $this->mobilePanel !== 'messages',
-                        'cursor-not-allowed border-neutral-200 bg-neutral-50 text-neutral-300 opacity-60 dark:border-white/10 dark:bg-white/5 dark:text-neutral-600' => ! $hasSelectedTopic,
+                        'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-500/15 dark:text-emerald-200' => $hasSelectedMessagesPanel && $this->mobilePanel === 'messages',
+                        'border-neutral-200 bg-neutral-50 text-neutral-700 dark:border-white/10 dark:bg-white/5 dark:text-neutral-200' => $hasSelectedMessagesPanel && $this->mobilePanel !== 'messages',
+                        'cursor-not-allowed border-neutral-200 bg-neutral-50 text-neutral-300 opacity-60 dark:border-white/10 dark:bg-white/5 dark:text-neutral-600' => ! $hasSelectedMessagesPanel,
                     ])
                 >
                     <flux:icon name="document-text" class="size-4" />

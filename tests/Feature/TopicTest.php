@@ -69,10 +69,65 @@ test('dashboard shows topics as folders for current workspace', function () {
         ->assertOk()
         ->assertSee('Topics')
         ->assertSee('Messages')
+        ->assertSee('Inbox')
+        ->assertSee('Draft')
+        ->assertSee('Sent')
         ->assertSee($topic->name)
         ->assertDontSee($message->title)
         ->assertSee('Select a topic')
         ->assertSee('Choose a topic to view its messages.');
+});
+
+test('dashboard shows system folders with workspace message counts', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->for($user->currentTeam)->create();
+    $user->switchWorkspace($workspace);
+
+    $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
+    Message::factory()->for($topic)->create(['status' => MessageStatus::Draft]);
+    Message::factory()->for($topic)->create(['status' => MessageStatus::Published]);
+
+    $this->actingAs($user)
+        ->get(route('dashboard'))
+        ->assertOk()
+        ->assertSee(e(route('dashboard', ['folder' => 'inbox', 'panel' => 'messages'])), escape: false)
+        ->assertSee(e(route('dashboard', ['folder' => 'draft', 'panel' => 'messages'])), escape: false)
+        ->assertSee(e(route('dashboard', ['folder' => 'sent', 'panel' => 'messages'])), escape: false)
+        ->assertSee('data-test="system-folder-inbox-count"', escape: false)
+        ->assertSee('data-test="system-folder-draft-count"', escape: false)
+        ->assertSee('data-test="system-folder-sent-count"', escape: false);
+});
+
+test('dashboard system draft folder shows draft messages across topics', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->for($user->currentTeam)->create();
+    $user->switchWorkspace($workspace);
+
+    $design = Topic::factory()->for($workspace)->create(['slug' => 'design']);
+    $engineering = Topic::factory()->for($workspace)->create(['slug' => 'engineering']);
+
+    $designDraft = Message::factory()->for($design)->create([
+        'title' => 'Design draft',
+        'status' => MessageStatus::Draft,
+    ]);
+
+    Message::factory()->for($engineering)->create([
+        'title' => 'Engineering sent',
+        'status' => MessageStatus::Published,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('dashboard', ['folder' => 'draft', 'panel' => 'messages']))
+        ->assertOk()
+        ->assertSee('Draft')
+        ->assertSee('Design draft')
+        ->assertSee(e(route('dashboard', [
+            'folder' => 'draft',
+            'topic' => $design->slug,
+            'message' => $designDraft->slug,
+            'panel' => 'messages',
+        ])), escape: false)
+        ->assertDontSee('Engineering sent');
 });
 
 test('dashboard archived toggle only filters the selected messages list', function () {
