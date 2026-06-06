@@ -363,10 +363,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                     recipientFallback: $post->topic->name,
                     dateKey: $folder['slug'] === 'drafts' ? 'saved' : 'sent',
                 ),
-                'badge' => $post->status === PostStatus::Published ? null : [
-                    'label' => $post->status->label(),
-                    'color' => $post->status->color(),
-                ],
+                'badge' => null,
             ])
             ->all();
     }
@@ -387,7 +384,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         $columns[] = ['key' => 'to', 'label' => __('Topic'), 'class' => 'w-28 shrink-0'];
 
         $columns[] = ['key' => $folder && $folder['slug'] === 'drafts' ? 'saved' : 'sent', 'label' => $dateLabel, 'class' => 'w-28 shrink-0'];
-        $columns[] = ['key' => 'attachments', 'label' => __('Files'), 'class' => 'w-24 shrink-0'];
+        $columns[] = ['key' => 'attachments', 'label' => __('Files'), 'class' => 'w-12 shrink-0 justify-center'];
 
         return $columns;
     }
@@ -1092,7 +1089,6 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                                         <flux:input wire:model="postTitle" class="flex-1" required />
 
                                         <div class="flex shrink-0 items-center gap-2">
-                                            <flux:badge :color="$selectedDashboardPost->status->color()" size="sm">{{ $selectedDashboardPost->status->label() }}</flux:badge>
                                             <flux:button wire:click="archiveSelectedPost" type="button" size="sm" icon="archive-box" icon:variant="outline">{{ __('Archive') }}</flux:button>
                                             <flux:button wire:click="publishSelectedPost" type="button" size="sm" variant="primary" icon="paper-airplane">{{ __('Post') }}</flux:button>
                                         </div>

@@ -27,6 +27,18 @@ test('post page loads', function () {
         ->assertDontSee('data-flux-breadcrumbs', escape: false);
 });
 
+test('draft post page does not show redundant draft status', function () {
+    $this->post->update(['title' => 'Working note']);
+
+    $response = $this->actingAs($this->user)
+        ->get(route('posts.show', ['post' => $this->post]))
+        ->assertOk()
+        ->assertSee('Working note')
+        ->assertSee('Save draft');
+
+    expect($response->getContent())->not->toContain('>Draft<');
+});
+
 test('post create route redirects to the dashboard post panel', function () {
     $this->actingAs($this->user)
         ->get(route('posts.create'))

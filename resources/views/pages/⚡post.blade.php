@@ -209,7 +209,6 @@ new #[Layout('layouts::workspace'), Title('Post')] class extends Component {
                         <flux:input wire:model="title" class="flex-1" required />
 
                         <div class="flex shrink-0 items-center gap-2">
-                            <flux:badge :color="$post->status->color()" size="sm">{{ $post->status->label() }}</flux:badge>
                             <flux:button wire:click="archive" type="button" size="sm" icon="archive-box" icon:variant="outline">{{ __('Archive') }}</flux:button>
                             <flux:button wire:click="publish" type="button" size="sm" variant="primary" icon="paper-airplane">{{ __('Post') }}</flux:button>
                         </div>

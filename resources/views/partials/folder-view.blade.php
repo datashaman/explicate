@@ -256,6 +256,10 @@
     {{-- Content --}}
     <div @class([$contentClass])>
         @if ($items->isNotEmpty())
+            @php
+                $hasListBadges = $items->contains(fn ($item) => !empty($item['badge']));
+            @endphp
+
             <template x-if="view === 'icons'">
                 <div class="flex flex-wrap content-start justify-start gap-3">
                     @foreach ($items as $item)
@@ -308,7 +312,9 @@
                                 </button>
                             @endforeach
 
-                            <span class="size-6 shrink-0"></span>
+                            @if ($hasListBadges)
+                                <span class="size-6 shrink-0"></span>
+                            @endif
                         </div>
                     @endif
 
@@ -350,7 +356,7 @@
                                             @endif
                                         </span>
                                     @elseif ($column['key'] === 'attachments')
-                                        <span @class(['hidden text-xs text-neutral-500 sm:flex sm:items-center dark:text-neutral-400', $column['class'] ?? 'w-24 shrink-0'])>
+                                        <span @class(['hidden text-xs text-neutral-500 sm:flex sm:items-center dark:text-neutral-400', $column['class'] ?? 'w-12 shrink-0 justify-center'])>
                                             @if (!empty($item['attachments_count']))
                                                 <span class="flex size-6 items-center justify-center text-neutral-400 dark:text-neutral-500" title="{{ trans_choice(':count attachment|:count attachments', $item['attachments_count'], ['count' => $item['attachments_count']]) }}" data-test="folder-item-attachments">
                                                     <flux:icon name="paper-clip" variant="mini" class="size-4" />
@@ -374,11 +380,13 @@
                                     @endif
                                 @endforeach
 
-                                <span class="flex size-6 shrink-0 items-center justify-center">
-                                    @if (!empty($item['badge']))
-                                        <flux:badge :color="$item['badge']['color']" size="sm">{{ $item['badge']['label'] }}</flux:badge>
-                                    @endif
-                                </span>
+                                @if ($hasListBadges)
+                                    <span class="flex size-6 shrink-0 items-center justify-center">
+                                        @if (!empty($item['badge']))
+                                        <flux:badge :color="$item['badge']['color']" size="sm" data-test="folder-item-badge">{{ $item['badge']['label'] }}</flux:badge>
+                                        @endif
+                                    </span>
+                                @endif
                             @else
                                 <span class="min-w-0 flex-1">
                                     <span class="block truncate text-sm text-neutral-700 dark:text-neutral-300">{{ $item['name'] }}</span>
@@ -416,7 +424,7 @@
                                     </div>
                                 @endif
                                 @if (!empty($item['badge']))
-                                    <flux:badge :color="$item['badge']['color']" size="sm">{{ $item['badge']['label'] }}</flux:badge>
+                                    <flux:badge :color="$item['badge']['color']" size="sm" data-test="folder-item-badge">{{ $item['badge']['label'] }}</flux:badge>
                                 @endif
                             @endif
                         </a>

@@ -142,7 +142,7 @@ test('dashboard system draft folder shows draft posts across topics', function (
         'sender_principal_id' => $userPrincipal->id,
     ]);
 
-    $this->actingAs($user)
+    $response = $this->actingAs($user)
         ->get(route('dashboard', ['folder' => 'drafts', 'panel' => 'posts']))
         ->assertOk()
         ->assertSee('Drafts')
@@ -159,6 +159,8 @@ test('dashboard system draft folder shows draft posts across topics', function (
         ->assertSee('data-sort-saved=', escape: false)
         ->assertDontSee('data-test="folder-list-sort-sent"', escape: false)
         ->assertDontSee('Engineering sent');
+
+    $response->assertDontSee('data-test="folder-item-badge"', escape: false);
 });
 
 test('dashboard inbox folder does not show draft posts', function () {
@@ -262,7 +264,7 @@ test('dashboard archived folder shows archived inbox', function () {
         'sender_principal_id' => $userPrincipal->id,
     ]);
 
-    $this->actingAs($user)
+    $response = $this->actingAs($user)
         ->get(route('dashboard', ['folder' => 'archived', 'panel' => 'posts']))
         ->assertOk()
         ->assertSee('Archived post')
@@ -270,6 +272,8 @@ test('dashboard archived folder shows archived inbox', function () {
         ->assertSeeText('Design')
         ->assertSeeText('Sent:')
         ->assertSeeText('11 minutes ago');
+
+    $response->assertDontSee('data-test="folder-item-badge"', escape: false);
 });
 
 test('dashboard archived toggle only filters the selected posts list', function () {
@@ -394,20 +398,22 @@ test('dashboard shows selected draft post in the main panel', function () {
 
     $topic = Topic::factory()->for($workspace)->create(['name' => 'Design', 'slug' => 'design']);
     $post = Post::factory()->for($topic)->create([
-        'title' => 'Draft brief',
-        'body' => 'Draft body',
+        'title' => 'Working brief',
+        'body' => 'Working body',
         'status' => PostStatus::Draft,
     ]);
 
-    $this->actingAs($user)
+    $response = $this->actingAs($user)
         ->get(route('dashboard', ['topic' => $topic->slug, 'post' => $post->slug, 'panel' => 'posts']))
         ->assertOk()
         ->assertSee('data-test="dashboard-post-panel"', escape: false)
-        ->assertSee('Draft brief')
-        ->assertSee('Draft body')
+        ->assertSee('Working brief')
+        ->assertSee('Working body')
         ->assertDontSee('data-flux-breadcrumbs', escape: false)
         ->assertSee('Save draft')
         ->assertSee('Post');
+
+    expect($response->getContent())->not->toContain('>Draft<');
 });
 
 test('dashboard can save selected draft post', function () {
