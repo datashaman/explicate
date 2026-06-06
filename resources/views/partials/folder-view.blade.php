@@ -293,8 +293,6 @@
                 <div>
                     @if (!empty($listColumns))
                         <div class="hidden min-h-9 items-center gap-3 border-b border-neutral-100 px-2 text-xs font-medium text-neutral-400 sm:flex dark:border-white/5 dark:text-neutral-500" data-test="folder-list-sort-header">
-                            <span class="size-10 shrink-0"></span>
-
                             @foreach ($listColumns as $column)
                                 <button
                                     type="button"
@@ -335,9 +333,6 @@
                                data-sort-{{ $sortKey }}="{{ $sortValue }}"
                            @endforeach
                            class="flex min-h-12 items-center gap-3 rounded-lg px-2 py-2 hover:bg-neutral-100 dark:hover:bg-white/5">
-                            <span class="flex size-10 shrink-0 items-center justify-center">
-                                <flux:icon :name="$icon" class="{{ $listIconClass }} shrink-0" />
-                            </span>
                             @if (!empty($listColumns))
                                 @foreach ($listColumns as $column)
                                     @if ($column['key'] === 'name')
