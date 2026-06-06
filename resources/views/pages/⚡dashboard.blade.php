@@ -254,7 +254,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
     }
 
     /**
-     * @return list<array{href: string, name: string, meta: list<array{label: string, value: string}>, badge: array{label: string, color: string}|null}>
+     * @return list<array{href: string, name: string, meta: list<array{label: string, value: string}>, attachments_count: int, badge: array{label: string, color: string}|null}>
      */
     public function selectedTopicItems(): array
     {
@@ -266,6 +266,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
         return $topic->messages()
             ->with(['sender.user', 'sender.agent'])
+            ->withCount('attachments')
             ->when(! $this->showArchived, fn ($query) => $query->where('status', '!=', MessageStatus::Archived))
             ->where('status', '!=', MessageStatus::Draft)
             ->whereNull('recipient_principal_id')
@@ -274,6 +275,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                 'href' => route('dashboard', ['topic' => $topic->slug, 'message' => $message->slug, 'panel' => 'messages']),
                 'name' => $message->title,
                 'meta' => $this->messageItemMeta($message, showSender: true, showRecipient: false),
+                'attachments_count' => $message->attachments_count,
                 'badge' => $message->status === MessageStatus::Published ? null : [
                     'label' => $message->status->label(),
                     'color' => $message->status->color(),
@@ -283,7 +285,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
     }
 
     /**
-     * @return list<array{href: string, name: string, meta: list<array{label: string, value: string}>, badge: array{label: string, color: string}|null}>
+     * @return list<array{href: string, name: string, meta: list<array{label: string, value: string}>, attachments_count: int, badge: array{label: string, color: string}|null}>
      */
     public function selectedSystemFolderItems(): array
     {
@@ -297,6 +299,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
         return Message::query()
             ->with(['topic', 'sender.user', 'sender.agent', 'recipient.user', 'recipient.agent'])
+            ->withCount('attachments')
             ->whereHas('topic', fn ($query) => $query->where('workspace_id', $workspace->id))
             ->when($folder['slug'] === 'draft', fn ($query) => $query->where('status', MessageStatus::Draft))
             ->when($folder['slug'] === 'sent', fn ($query) => $query->where('status', MessageStatus::Published)->where('sender_principal_id', $currentPrincipal?->id ?? 0))
@@ -317,6 +320,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                     showSender: $folder['slug'] !== 'sent',
                     showRecipient: $folder['slug'] !== 'inbox',
                 ),
+                'attachments_count' => $message->attachments_count,
                 'badge' => $message->status === MessageStatus::Published ? null : [
                     'label' => $message->status->label(),
                     'color' => $message->status->color(),

@@ -6,6 +6,7 @@ use App\Enums\ReasoningEffort;
 use App\Enums\TeamRole;
 use App\Models\Agent;
 use App\Models\AgentVersion;
+use App\Models\Attachment;
 use App\Models\Message;
 use App\Models\Topic;
 use App\Models\User;
@@ -885,11 +886,12 @@ test('topic page left aligns message icons in icon view', function () {
     $user->switchWorkspace($workspace);
 
     $topic = Topic::factory()->for($workspace)->create();
-    Message::factory()->for($topic)->create([
+    $message = Message::factory()->for($topic)->create([
         'updated_at' => now()->subMinutes(13),
         'status' => MessageStatus::Published,
         'sender_principal_id' => $workspace->principalForUser($user)->id,
     ]);
+    Attachment::factory()->for($message)->create();
 
     $this->actingAs($user)
         ->get(route('topics.show', ['topic' => $topic->slug]))
@@ -904,11 +906,13 @@ test('topic page left aligns message icons in icon view', function () {
         ->assertSee('flex w-full flex-wrap items-center justify-between gap-2 md:hidden', escape: false)
         ->assertSee('x-if="view === \'icons\'"', escape: false)
         ->assertSee('x-if="view === \'list\'"', escape: false)
-        ->assertSee('flex h-32 w-28 flex-col items-center gap-1', escape: false)
+        ->assertSee('flex h-36 w-28 flex-col items-center gap-1', escape: false)
         ->assertSee('line-clamp-2 min-h-8 w-full text-xs leading-4', escape: false)
         ->assertSee('flex min-h-12 items-center gap-3', escape: false)
         ->assertSee('min-w-0 flex-1', escape: false)
         ->assertSee('block truncate text-sm', escape: false)
+        ->assertSee('data-test="folder-item-attachments"', escape: false)
+        ->assertSee('title="1 attachment"', escape: false)
         ->assertSee('wire:key="folder-icon-', escape: false)
         ->assertSee('wire:key="folder-list-', escape: false)
         ->assertSeeText('From:')

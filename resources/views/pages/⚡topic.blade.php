@@ -56,12 +56,13 @@ new #[Layout('layouts::workspace'), Title('Topic')] class extends Component {
     }
 
     /**
-     * @return list<array{href: string, name: string, meta: list<array{label: string, value: string}>, badge: array{label: string, color: string}|null}>
+     * @return list<array{href: string, name: string, meta: list<array{label: string, value: string}>, attachments_count: int, badge: array{label: string, color: string}|null}>
      */
     public function items(): array
     {
         return $this->topic->messages()
             ->with(['sender.user', 'sender.agent'])
+            ->withCount('attachments')
             ->when(! $this->showArchived, fn ($q) => $q->where('status', '!=', MessageStatus::Archived))
             ->where('status', '!=', MessageStatus::Draft)
             ->whereNull('recipient_principal_id')
@@ -70,6 +71,7 @@ new #[Layout('layouts::workspace'), Title('Topic')] class extends Component {
                 'href' => route('messages.show', ['message' => $message]),
                 'name' => $message->title,
                 'meta' => $this->messageItemMeta($message, showSender: true, showRecipient: false),
+                'attachments_count' => $message->attachments_count,
                 'badge' => $message->status === MessageStatus::Published ? null : [
                     'label' => $message->status->label(),
                     'color' => $message->status->color(),

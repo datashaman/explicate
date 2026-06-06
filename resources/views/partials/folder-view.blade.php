@@ -229,11 +229,16 @@
                         @php $itemKey = md5($item['href']); @endphp
                         <a href="{{ $item['href'] }}" wire:navigate
                            wire:key="folder-icon-{{ $itemKey }}"
-                           class="group flex h-32 w-28 flex-col items-center gap-1 rounded-lg p-2 text-center hover:bg-neutral-100 dark:hover:bg-white/5">
+                           class="group flex h-36 w-28 flex-col items-center gap-1 rounded-lg p-2 text-center hover:bg-neutral-100 dark:hover:bg-white/5">
                             <span class="flex h-14 items-center justify-center">
                                 <flux:icon :name="$icon" class="{{ $iconClass }} drop-shadow-sm" />
                             </span>
                             <span class="line-clamp-2 min-h-8 w-full text-xs leading-4 text-neutral-700 dark:text-neutral-300">{{ $item['name'] }}</span>
+                            @if (!empty($item['attachments_count']))
+                                <span class="flex h-5 items-center justify-center text-neutral-400 dark:text-neutral-500" title="{{ trans_choice(':count attachment|:count attachments', $item['attachments_count'], ['count' => $item['attachments_count']]) }}" data-test="folder-item-attachments">
+                                    <flux:icon name="paper-clip" variant="mini" class="size-3.5" />
+                                </span>
+                            @endif
                             @if (!empty($item['counts']))
                                 <div class="flex h-5 flex-wrap items-center justify-center gap-1 overflow-hidden">
                                     @foreach ($item['counts'] as $count)
@@ -283,6 +288,11 @@
                                         </span>
                                     @endforeach
                                 </div>
+                            @endif
+                            @if (!empty($item['attachments_count']))
+                                <span class="flex size-6 shrink-0 items-center justify-center text-neutral-400 dark:text-neutral-500" title="{{ trans_choice(':count attachment|:count attachments', $item['attachments_count'], ['count' => $item['attachments_count']]) }}" data-test="folder-item-attachments">
+                                    <flux:icon name="paper-clip" variant="mini" class="size-4" />
+                                </span>
                             @endif
                             @if (!empty($item['counts']))
                                 <div class="flex shrink-0 items-center gap-1">
