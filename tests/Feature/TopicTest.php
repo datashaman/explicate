@@ -73,6 +73,41 @@ test('dashboard shows topics as folders for current workspace', function () {
         ->assertSee('Choose a topic to view its messages.');
 });
 
+test('dashboard routes do not include team or workspace slugs', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->for($user->currentTeam)->create();
+    $user->switchWorkspace($workspace);
+
+    $topic = Topic::factory()->for($workspace)->create(['slug' => 'current-topic']);
+
+    expect(route('dashboard', absolute: false))->toBe('/dashboard')
+        ->and(route('topics.show', ['topic' => $topic->slug], false))->toBe('/dashboard/current-topic')
+        ->and(route('messages.create', ['topic' => $topic->slug], false))->toBe('/dashboard/new-message?topic=current-topic');
+});
+
+test('topic routes resolve slugs inside the current workspace', function () {
+    $user = User::factory()->create();
+    $currentWorkspace = Workspace::factory()->for($user->currentTeam)->create();
+    $otherWorkspace = Workspace::factory()->for($user->currentTeam)->create();
+    $user->switchWorkspace($currentWorkspace);
+
+    Topic::factory()->for($otherWorkspace)->create([
+        'name' => 'Other Topic',
+        'slug' => 'shared-topic',
+    ]);
+
+    $currentTopic = Topic::factory()->for($currentWorkspace)->create([
+        'name' => 'Current Topic',
+        'slug' => 'shared-topic',
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('topics.show', ['topic' => $currentTopic->slug]))
+        ->assertOk()
+        ->assertSee('Current Topic')
+        ->assertDontSee('Other Topic');
+});
+
 test('dashboard shows selected topic in the main panel', function () {
     $user = User::factory()->create();
     $workspace = Workspace::factory()->for($user->currentTeam)->create();
@@ -230,7 +265,10 @@ test('topic page left aligns message icons in icon view', function () {
         ->assertSee('data-test="folder-controls-toggle"', escape: false)
         ->assertSee('data-test="folder-controls-drawer"', escape: false)
         ->assertSee('x-if="view === \'icons\'"', escape: false)
-        ->assertSee('x-if="view === \'list\'"', escape: false);
+        ->assertSee('x-if="view === \'list\'"', escape: false)
+        ->assertSee('grid grid-cols-1 items-stretch gap-3 xl:flex-1 xl:auto-rows-fr xl:grid-cols-[minmax(0,1fr)_19rem]', escape: false)
+        ->assertSee('xl:h-full', escape: false)
+        ->assertDontSee('xl:sticky xl:top-6');
 });
 
 test('topic page agent rail labels attach and detach actions clearly', function () {

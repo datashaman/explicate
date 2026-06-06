@@ -18,7 +18,6 @@ class SetTeamUrlDefaults
     {
         if ($currentTeam = $request->user()?->currentTeam) {
             URL::defaults([
-                'current_team' => $currentTeam->slug,
                 'team' => $currentTeam->slug,
             ]);
         }

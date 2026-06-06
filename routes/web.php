@@ -1,12 +1,44 @@
 <?php
 
 use App\Http\Middleware\EnsureTeamMembership;
+use App\Models\Agent;
+use App\Models\Message;
+use App\Models\Topic;
 use Illuminate\Support\Facades\Route;
 
 Route::view('/', 'welcome')->name('home');
 
-Route::prefix('{current_team}')
-    ->middleware(['auth', 'verified', EnsureTeamMembership::class])
+Route::bind('topic', function (string $value): Topic {
+    $workspace = request()->user()?->currentWorkspace;
+
+    abort_unless($workspace, 404);
+
+    return $workspace->topics()
+        ->where('slug', $value)
+        ->firstOrFail();
+});
+
+Route::bind('message', function (string $value): Message {
+    $topic = request()->route('topic');
+
+    abort_unless($topic instanceof Topic, 404);
+
+    return $topic->messages()
+        ->where('slug', $value)
+        ->firstOrFail();
+});
+
+Route::bind('agent', function (string $value): Agent {
+    $workspace = request()->user()?->currentWorkspace;
+
+    abort_unless($workspace, 404);
+
+    return $workspace->agents()
+        ->where('slug', $value)
+        ->firstOrFail();
+});
+
+Route::middleware(['auth', 'verified', EnsureTeamMembership::class])
     ->group(function () {
         Route::livewire('dashboard', 'pages::dashboard')->name('dashboard');
         Route::livewire('dashboard/new-message', 'pages::message-create')->name('messages.create');

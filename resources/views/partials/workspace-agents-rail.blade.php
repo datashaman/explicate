@@ -7,9 +7,10 @@
     'panelId' => null,
     'asideClass' => null,
     'containerClass' => null,
+    'sticky' => true,
 ])
 
-<aside @if ($panelId) id="{{ $panelId }}" @endif @class(['xl:sticky xl:top-6', $asideClass])>
+<aside @if ($panelId) id="{{ $panelId }}" @endif @class([$sticky ? 'xl:sticky xl:top-6' : null, $asideClass])>
     <div @class([
         'flex flex-col overflow-hidden rounded-xl border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] xl:h-full xl:min-h-[24rem] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none',
         $containerClass,

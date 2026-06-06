@@ -39,14 +39,14 @@ test('message create page preselects topic from query string', function () {
         ->assertSee($this->topic->name);
 });
 
-test('message page is forbidden for wrong workspace', function () {
+test('message page does not resolve topics outside the current workspace', function () {
     $other = Workspace::factory()->for($this->user->currentTeam)->create();
     $otherTopic = Topic::factory()->for($other)->create();
     $otherMessage = Message::factory()->for($otherTopic)->create();
 
     $this->actingAs($this->user)
         ->get(route('messages.show', ['topic' => $otherTopic->slug, 'message' => $otherMessage->slug]))
-        ->assertForbidden();
+        ->assertNotFound();
 });
 
 test('draft message can be saved', function () {

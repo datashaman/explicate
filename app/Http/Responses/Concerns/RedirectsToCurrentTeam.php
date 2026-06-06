@@ -2,17 +2,13 @@
 
 namespace App\Http\Responses\Concerns;
 
-use Illuminate\Support\Facades\URL;
-
 trait RedirectsToCurrentTeam
 {
     protected function redirectPathForCurrentTeam($request, string $redirect): string
     {
-        $team = $this->currentTeam($request);
+        $this->currentTeam($request);
 
-        URL::defaults(['current_team' => $team->slug]);
-
-        return "/{$team->slug}{$redirect}";
+        return $redirect;
     }
 
     protected function currentTeam($request)

@@ -57,7 +57,7 @@ class EnsureTeamMembership
      */
     protected function team(Request $request): ?Team
     {
-        $team = $request->route('current_team') ?? $request->route('team');
+        $team = $request->route('current_team') ?? $request->route('team') ?? $request->user()?->currentTeam;
 
         if (is_string($team)) {
             $team = Team::where('slug', $team)->first();

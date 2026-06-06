@@ -13,7 +13,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\URL;
 
 trait HasTeams
 {
@@ -88,8 +87,6 @@ trait HasTeams
         $this->update(['current_team_id' => $team->id, 'current_workspace_id' => null]);
         $this->setRelation('currentTeam', $team);
         $this->setRelation('currentWorkspace', null);
-
-        URL::defaults(['current_team' => $team->slug]);
 
         return true;
     }

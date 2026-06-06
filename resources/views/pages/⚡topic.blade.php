@@ -195,9 +195,9 @@ new #[Layout('layouts::workspace'), Title('Topic')] class extends Component {
 
 }; ?>
 
-<div class="flex h-full w-full flex-1 flex-col gap-4">
-    <div class="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_19rem]">
-        <div>
+<div class="flex h-full w-full flex-1 flex-col gap-3 xl:flex-1">
+    <div class="grid grid-cols-1 items-stretch gap-3 xl:flex-1 xl:auto-rows-fr xl:grid-cols-[minmax(0,1fr)_19rem]">
+        <section class="flex min-h-[calc(100dvh-4rem)] flex-col overflow-hidden rounded-xl border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] xl:h-full xl:min-h-[24rem] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none">
             @include('partials.folder-view', [
                 'breadcrumbs' => [
                     ['label' => Auth::user()->currentWorkspace?->name, 'href' => route('dashboard')],
@@ -212,9 +212,10 @@ new #[Layout('layouts::workspace'), Title('Topic')] class extends Component {
                 'createLabel' => __('New message'),
                 'showArchivedModel' => 'showArchived',
                 'toolbarClass' => 'border-b border-neutral-300 bg-emerald-50 px-4 py-3 dark:border-white/10 dark:bg-emerald-500/10',
-                'contentClass' => 'overflow-auto px-4 py-4',
+                'rootClass' => 'flex flex-col xl:h-full',
+                'contentClass' => 'overflow-auto px-4 py-4 xl:flex-1 xl:min-h-0',
             ])
-        </div>
+        </section>
 
         @include('partials.workspace-agents-rail', [
             'agents' => $this->workspaceAgents(),
@@ -222,6 +223,9 @@ new #[Layout('layouts::workspace'), Title('Topic')] class extends Component {
             'assignedAgentIds' => $this->assignedAgentIds(),
             'assignAction' => 'assignAgent',
             'unassignAction' => 'unassignAgent',
+            'asideClass' => 'xl:h-full',
+            'containerClass' => 'min-h-[calc(100dvh-4rem)]',
+            'sticky' => false,
         ])
     </div>
 
