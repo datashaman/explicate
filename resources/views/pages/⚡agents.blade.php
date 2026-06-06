@@ -128,7 +128,7 @@ new #[Title('Agents')] class extends Component {
                 @foreach ($this->agents() as $agent)
                     <div class="flex items-center gap-3 px-4 py-3">
                         <flux:icon name="cpu-chip" class="size-5 shrink-0 text-neutral-400" />
-                        <a href="{{ route('agents.show', ['agent' => $agent->slug]) }}" wire:navigate class="flex-1 text-sm text-neutral-700 hover:underline dark:text-neutral-300">
+                        <a href="{{ route('agents.show', ['agent' => $agent->slug]) }}" wire:navigate class="flex-1 cursor-pointer text-sm text-neutral-700 hover:underline dark:text-neutral-300">
                             {{ $agent->name }}
                         </a>
                         <flux:button

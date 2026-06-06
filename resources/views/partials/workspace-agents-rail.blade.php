@@ -68,9 +68,9 @@
                                 ])
                             >
                                 @if ($selectAction)
-                                    <button type="button" wire:click="{{ $selectAction }}('{{ $agent->slug }}')" class="flex min-w-0 flex-1 items-center gap-3 text-left">
+                                    <button type="button" wire:click="{{ $selectAction }}('{{ $agent->slug }}')" class="flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-left">
                                 @else
-                                    <a href="{{ route('agents.show', ['agent' => $agent->slug]) }}" wire:navigate class="flex min-w-0 flex-1 items-center gap-3">
+                                    <a href="{{ route('agents.show', ['agent' => $agent->slug]) }}" wire:navigate class="flex min-w-0 flex-1 cursor-pointer items-center gap-3">
                                 @endif
                                     <div @class([
                                         'workspace-agent-icon mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full',
@@ -103,7 +103,7 @@
                                             size="xs"
                                             icon="minus"
                                             tooltip="{{ __('Detach from topic') }}"
-                                            class="aspect-square px-0"
+                                            class="aspect-square cursor-pointer px-0"
                                         />
                                     @else
                                         <flux:button
@@ -113,7 +113,7 @@
                                             size="xs"
                                             icon="plus"
                                             tooltip="{{ __('Attach to topic') }}"
-                                            class="aspect-square px-0"
+                                            class="aspect-square cursor-pointer px-0"
                                         />
                                     @endif
                                     </div>
