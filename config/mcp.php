@@ -58,13 +58,7 @@ return [
     | layer. When set, this value identifies which application user should be
     | impersonated for local MCP requests.
     |
-    | If no field is configured, numeric values are treated as user IDs and
-    | non-numeric values are treated as email addresses.
-    |
     */
 
     'local_auth_user' => env('MCP_LOCAL_AUTH_USER'),
-
-    'local_auth_field' => env('MCP_LOCAL_AUTH_FIELD'),
-
 ];

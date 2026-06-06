@@ -9,11 +9,13 @@ use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\ResponseFactory;
 use Laravel\Mcp\Server\Attributes\Description;
+use Laravel\Mcp\Server\Attributes\Name;
 use Laravel\Mcp\Server\Tool;
 use Laravel\Mcp\Server\Tools\Annotations\IsIdempotent;
 use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 
-#[Description('List agents for an accessible workspace, defaulting to the authenticated user\'s current workspace.')]
+#[Name('list-agents')]
+#[Description('List agents for the authenticated user\'s current workspace.')]
 #[IsReadOnly]
 #[IsIdempotent]
 class ListAgentsTool extends Tool
@@ -25,13 +27,9 @@ class ListAgentsTool extends Tool
      */
     public function handle(Request $request): Response|ResponseFactory
     {
-        $validated = $request->validate([
-            'workspace_slug' => ['nullable', 'string'],
-        ]);
-
         /** @var User $user */
         $user = $this->context->requireUser($request->user());
-        $workspace = $this->context->workspaceFor($user, $validated['workspace_slug'] ?? null);
+        $workspace = $this->context->workspaceFor($user);
 
         $agents = $workspace->agents()
             ->with(['latestVersion', 'topics'])
@@ -43,6 +41,7 @@ class ListAgentsTool extends Tool
                 'topics_count' => $agent->topics->count(),
                 'latest_version' => $agent->latestVersion?->version,
                 'latest_model' => $agent->latestVersion?->model,
+                'resource_uri' => "topic-forge://workspaces/{$workspace->slug}/agents/{$agent->slug}",
             ])
             ->values()
             ->all();
@@ -60,10 +59,6 @@ class ListAgentsTool extends Tool
      */
     public function schema(JsonSchema $schema): array
     {
-        return [
-            'workspace_slug' => $schema->string()
-                ->description('Optional workspace slug. Defaults to the authenticated user\'s current workspace.')
-                ->nullable(),
-        ];
+        return [];
     }
 }

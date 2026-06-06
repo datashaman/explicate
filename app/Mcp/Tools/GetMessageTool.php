@@ -9,11 +9,13 @@ use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\ResponseFactory;
 use Laravel\Mcp\Server\Attributes\Description;
+use Laravel\Mcp\Server\Attributes\Name;
 use Laravel\Mcp\Server\Tool;
 use Laravel\Mcp\Server\Tools\Annotations\IsIdempotent;
 use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 
-#[Description('Get a message and its attachments for a topic inside an accessible workspace.')]
+#[Name('get-message')]
+#[Description('Get a message and its attachments for a topic inside the current workspace.')]
 #[IsReadOnly]
 #[IsIdempotent]
 class GetMessageTool extends Tool
@@ -28,7 +30,6 @@ class GetMessageTool extends Tool
         $validated = $request->validate([
             'topic_slug' => ['required', 'string'],
             'message_slug' => ['required', 'string'],
-            'workspace_slug' => ['nullable', 'string'],
         ]);
 
         /** @var User $user */
@@ -37,19 +38,22 @@ class GetMessageTool extends Tool
             $user,
             $validated['topic_slug'],
             $validated['message_slug'],
-            $validated['workspace_slug'] ?? null,
         );
         $message->load(['topic.workspace', 'attachments']);
 
         return Response::structured([
             'workspace' => $message->topic->workspace->only(['id', 'name', 'slug']),
-            'topic' => $message->topic->only(['id', 'name', 'slug']),
+            'topic' => [
+                ...$message->topic->only(['id', 'name', 'slug']),
+                'resource_uri' => "topic-forge://workspaces/{$message->topic->workspace->slug}/topics/{$message->topic->slug}",
+            ],
             'message' => [
                 'id' => $message->id,
                 'title' => $message->title,
                 'slug' => $message->slug,
                 'status' => $message->status->value,
                 'body' => $message->body,
+                'resource_uri' => "topic-forge://workspaces/{$message->topic->workspace->slug}/topics/{$message->topic->slug}/messages/{$message->slug}",
             ],
             'attachments' => $message->attachments
                 ->map(fn ($attachment) => [
@@ -77,9 +81,6 @@ class GetMessageTool extends Tool
             'message_slug' => $schema->string()
                 ->description('The message slug to fetch.')
                 ->required(),
-            'workspace_slug' => $schema->string()
-                ->description('Optional workspace slug. Defaults to the authenticated user\'s current workspace.')
-                ->nullable(),
         ];
     }
 }

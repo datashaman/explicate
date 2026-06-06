@@ -9,11 +9,13 @@ use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\ResponseFactory;
 use Laravel\Mcp\Server\Attributes\Description;
+use Laravel\Mcp\Server\Attributes\Name;
 use Laravel\Mcp\Server\Tool;
 use Laravel\Mcp\Server\Tools\Annotations\IsIdempotent;
 use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 
-#[Description('Get a topic and its attached agents inside an accessible workspace.')]
+#[Name('get-topic')]
+#[Description('Get a topic and its attached agents inside the current workspace.')]
 #[IsReadOnly]
 #[IsIdempotent]
 class GetTopicTool extends Tool
@@ -27,12 +29,11 @@ class GetTopicTool extends Tool
     {
         $validated = $request->validate([
             'topic_slug' => ['required', 'string'],
-            'workspace_slug' => ['nullable', 'string'],
         ]);
 
         /** @var User $user */
         $user = $this->context->requireUser($request->user());
-        $topic = $this->context->topicFor($user, $validated['topic_slug'], $validated['workspace_slug'] ?? null);
+        $topic = $this->context->topicFor($user, $validated['topic_slug']);
         $topic->load(['agents.latestVersion', 'workspace']);
 
         return Response::structured([
@@ -68,9 +69,6 @@ class GetTopicTool extends Tool
             'topic_slug' => $schema->string()
                 ->description('The topic slug to fetch.')
                 ->required(),
-            'workspace_slug' => $schema->string()
-                ->description('Optional workspace slug. Defaults to the authenticated user\'s current workspace.')
-                ->nullable(),
         ];
     }
 }

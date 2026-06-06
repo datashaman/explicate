@@ -9,11 +9,13 @@ use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\ResponseFactory;
 use Laravel\Mcp\Server\Attributes\Description;
+use Laravel\Mcp\Server\Attributes\Name;
 use Laravel\Mcp\Server\Tool;
 use Laravel\Mcp\Server\Tools\Annotations\IsIdempotent;
 use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 
-#[Description('List topics for an accessible workspace, defaulting to the authenticated user\'s current workspace.')]
+#[Name('list-topics')]
+#[Description('List topics for the authenticated user\'s current workspace.')]
 #[IsReadOnly]
 #[IsIdempotent]
 class ListTopicsTool extends Tool
@@ -25,13 +27,9 @@ class ListTopicsTool extends Tool
      */
     public function handle(Request $request): Response|ResponseFactory
     {
-        $validated = $request->validate([
-            'workspace_slug' => ['nullable', 'string'],
-        ]);
-
         /** @var User $user */
         $user = $this->context->requireUser($request->user());
-        $workspace = $this->context->workspaceFor($user, $validated['workspace_slug'] ?? null);
+        $workspace = $this->context->workspaceFor($user);
 
         $topics = $workspace->topics()
             ->withCount('messages')
@@ -59,10 +57,6 @@ class ListTopicsTool extends Tool
      */
     public function schema(JsonSchema $schema): array
     {
-        return [
-            'workspace_slug' => $schema->string()
-                ->description('Optional workspace slug. Defaults to the authenticated user\'s current workspace.')
-                ->nullable(),
-        ];
+        return [];
     }
 }

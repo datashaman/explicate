@@ -11,9 +11,11 @@ use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\ResponseFactory;
 use Laravel\Mcp\Server\Attributes\Description;
+use Laravel\Mcp\Server\Attributes\Name;
 use Laravel\Mcp\Server\Tool;
 
-#[Description('Create a message inside a topic in an accessible workspace.')]
+#[Name('create-message')]
+#[Description('Create a message inside a topic in the current workspace.')]
 class CreateMessageTool extends Tool
 {
     public function __construct(protected TopicForgeContext $context) {}
@@ -25,7 +27,6 @@ class CreateMessageTool extends Tool
     {
         $validated = $request->validate([
             'topic_slug' => ['required', 'string'],
-            'workspace_slug' => ['nullable', 'string'],
             'title' => ['required', 'string', 'max:255'],
             'body' => ['nullable', 'string'],
             'status' => ['nullable', 'string', 'in:'.implode(',', array_column(MessageStatus::cases(), 'value'))],
@@ -33,7 +34,7 @@ class CreateMessageTool extends Tool
 
         /** @var User $user */
         $user = $this->context->requireUser($request->user());
-        $topic = $this->context->topicFor($user, $validated['topic_slug'], $validated['workspace_slug'] ?? null);
+        $topic = $this->context->topicFor($user, $validated['topic_slug']);
 
         $message = new Message([
             'title' => $validated['title'],
@@ -45,12 +46,16 @@ class CreateMessageTool extends Tool
 
         return Response::structured([
             'workspace' => $topic->workspace->only(['id', 'name', 'slug']),
-            'topic' => $topic->only(['id', 'name', 'slug']),
+            'topic' => [
+                ...$topic->only(['id', 'name', 'slug']),
+                'resource_uri' => "topic-forge://workspaces/{$topic->workspace->slug}/topics/{$topic->slug}",
+            ],
             'message' => [
                 'id' => $message->id,
                 'title' => $message->title,
                 'slug' => $message->slug,
                 'status' => $message->status->value,
+                'resource_uri' => "topic-forge://workspaces/{$topic->workspace->slug}/topics/{$topic->slug}/messages/{$message->slug}",
             ],
         ]);
     }
@@ -66,9 +71,6 @@ class CreateMessageTool extends Tool
             'topic_slug' => $schema->string()
                 ->description('The topic slug the message should be created in.')
                 ->required(),
-            'workspace_slug' => $schema->string()
-                ->description('Optional workspace slug. Defaults to the authenticated user\'s current workspace.')
-                ->nullable(),
             'title' => $schema->string()
                 ->description('The message title.')
                 ->required(),

@@ -9,11 +9,13 @@ use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\ResponseFactory;
 use Laravel\Mcp\Server\Attributes\Description;
+use Laravel\Mcp\Server\Attributes\Name;
 use Laravel\Mcp\Server\Tool;
 use Laravel\Mcp\Server\Tools\Annotations\IsIdempotent;
 use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 
-#[Description('List messages for a topic inside an accessible workspace.')]
+#[Name('list-messages')]
+#[Description('List messages for a topic inside the current workspace.')]
 #[IsReadOnly]
 #[IsIdempotent]
 class ListMessagesTool extends Tool
@@ -27,12 +29,11 @@ class ListMessagesTool extends Tool
     {
         $validated = $request->validate([
             'topic_slug' => ['required', 'string'],
-            'workspace_slug' => ['nullable', 'string'],
         ]);
 
         /** @var User $user */
         $user = $this->context->requireUser($request->user());
-        $topic = $this->context->topicFor($user, $validated['topic_slug'], $validated['workspace_slug'] ?? null);
+        $topic = $this->context->topicFor($user, $validated['topic_slug']);
 
         $messages = $topic->messages()
             ->orderBy('title')
@@ -43,13 +44,17 @@ class ListMessagesTool extends Tool
                 'slug' => $message->slug,
                 'status' => $message->status->value,
                 'has_body' => filled($message->body),
+                'resource_uri' => "topic-forge://workspaces/{$topic->workspace->slug}/topics/{$topic->slug}/messages/{$message->slug}",
             ])
             ->values()
             ->all();
 
         return Response::structured([
             'workspace' => $topic->workspace->only(['id', 'name', 'slug']),
-            'topic' => $topic->only(['id', 'name', 'slug']),
+            'topic' => [
+                ...$topic->only(['id', 'name', 'slug']),
+                'resource_uri' => "topic-forge://workspaces/{$topic->workspace->slug}/topics/{$topic->slug}",
+            ],
             'messages' => $messages,
         ]);
     }
@@ -65,9 +70,6 @@ class ListMessagesTool extends Tool
             'topic_slug' => $schema->string()
                 ->description('The topic slug whose messages should be listed.')
                 ->required(),
-            'workspace_slug' => $schema->string()
-                ->description('Optional workspace slug. Defaults to the authenticated user\'s current workspace.')
-                ->nullable(),
         ];
     }
 }

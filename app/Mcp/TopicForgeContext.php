@@ -9,16 +9,33 @@ use App\Models\User;
 use App\Models\Workspace;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
+use Throwable;
 
 class TopicForgeContext
 {
     public function requireUser(?User $user): User
     {
-        if (! $user instanceof User) {
-            throw new AuthenticationException('You must be authenticated to use the Topic Forge MCP server.');
+        if ($user instanceof User) {
+            return $user;
         }
 
-        return $user;
+        if (app()->runningInConsole()) {
+            try {
+                app(LocalMcpUserAuthenticator::class)->authenticate();
+            } catch (Throwable $exception) {
+                report($exception);
+
+                throw new AuthenticationException('The configured MCP local auth user could not be resolved.');
+            }
+
+            $user = auth()->user();
+
+            if ($user instanceof User) {
+                return $user;
+            }
+        }
+
+        throw new AuthenticationException('You must be authenticated to use the Topic Forge MCP server.');
     }
 
     public function workspaceFor(User $user, ?string $workspaceSlug = null): Workspace
