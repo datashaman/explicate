@@ -236,7 +236,7 @@ new #[Layout('layouts::workspace'), Title('Post')] class extends Component {
 
                     <div class="flex shrink-0 items-center gap-2">
                         @if ($post->status === App\Enums\PostStatus::Published)
-                            <flux:button wire:click="unpublish" size="sm" icon="document">{{ __('Move to drafts') }}</flux:button>
+                            <flux:button wire:click="unpublish" size="sm" icon="pencil-square">{{ __('Move to drafts') }}</flux:button>
                             <flux:button wire:click="archive" size="sm" icon="archive-box">{{ __('Archive') }}</flux:button>
                         @elseif ($post->status === App\Enums\PostStatus::Archived)
                             <flux:badge :color="$post->status->color()" size="sm">{{ $post->status->label() }}</flux:badge>
