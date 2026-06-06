@@ -9,6 +9,7 @@ use App\Models\Principal;
 use App\Models\Topic;
 use Flux\Flux;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
@@ -84,6 +85,9 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
     /** @var array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile> */
     public array $newMessageUploads = [];
+
+    /** @var array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile> */
+    public array $messageUploads = [];
 
     public function mount(): void
     {
@@ -833,6 +837,52 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         ]);
     }
 
+    public function uploadSelectedMessageAttachments(): void
+    {
+        $message = $this->selectedMessage();
+
+        abort_unless($message && $message->status === MessageStatus::Draft, 403);
+
+        $this->validate([
+            'messageUploads.*' => ['file', 'max:51200'],
+        ]);
+
+        foreach ($this->messageUploads as $upload) {
+            $filename = $upload->getClientOriginalName();
+            $path = $upload->storeAs(
+                'attachments/'.Str::uuid(),
+                $filename,
+                'public'
+            );
+
+            $message->attachments()->create([
+                'filename' => $filename,
+                'path' => $path,
+                'mime_type' => $upload->getMimeType(),
+                'size' => $upload->getSize(),
+            ]);
+        }
+
+        $this->reset('messageUploads');
+
+        Flux::toast(variant: 'success', text: __('Attachments uploaded.'));
+    }
+
+    public function deleteSelectedMessageAttachment(int $attachmentId): void
+    {
+        $message = $this->selectedMessage();
+
+        abort_unless($message && $message->status === MessageStatus::Draft, 403);
+
+        $attachment = $message->attachments()->findOrFail($attachmentId);
+
+        Storage::disk('public')->delete($attachment->path);
+
+        $attachment->delete();
+
+        Flux::toast(variant: 'success', text: __('Attachment deleted.'));
+    }
+
     public function archiveSelectedMessage(): void
     {
         $message = $this->selectedMessage();
@@ -1114,7 +1164,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
                         <div class="flex flex-1 flex-col gap-6 overflow-auto px-4 py-4 xl:min-h-0" data-test="dashboard-message-panel">
                             @if ($selectedDashboardMessage->status === MessageStatus::Draft)
-                                <form wire:submit="saveSelectedMessage" class="flex flex-col gap-4">
+                                <form id="dashboard-selected-message-form" wire:submit="saveSelectedMessage" class="flex flex-col gap-4">
                                     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                         <flux:input wire:model="messageTitle" class="flex-1" required />
 
@@ -1145,11 +1195,19 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                                     </div>
 
                                     <flux:textarea wire:model="messageBody" :placeholder="__('Write something...')" rows="12" />
-
-                                    <div class="flex justify-end">
-                                        <flux:button type="submit" size="sm" variant="filled">{{ __('Save draft') }}</flux:button>
-                                    </div>
                                 </form>
+
+                                @include('partials.message-attachments', [
+                                    'message' => $selectedDashboardMessage,
+                                    'uploadAction' => 'uploadSelectedMessageAttachments',
+                                    'uploadModel' => 'messageUploads',
+                                    'uploadError' => 'messageUploads.*',
+                                    'deleteAction' => 'deleteSelectedMessageAttachment',
+                                ])
+
+                                <div class="flex justify-end">
+                                    <flux:button type="submit" form="dashboard-selected-message-form" size="sm" variant="filled">{{ __('Save draft') }}</flux:button>
+                                </div>
                             @else
                                 <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                                     <flux:heading size="xl" class="min-w-0 flex-1 truncate">{{ $selectedDashboardMessage->title }}</flux:heading>
@@ -1183,6 +1241,14 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                                         <flux:text class="text-sm text-neutral-400 dark:text-neutral-600">{{ __('No content.') }}</flux:text>
                                     @endif
                                 </div>
+
+                                @include('partials.message-attachments', [
+                                    'message' => $selectedDashboardMessage,
+                                    'uploadAction' => 'uploadSelectedMessageAttachments',
+                                    'uploadModel' => 'messageUploads',
+                                    'uploadError' => 'messageUploads.*',
+                                    'deleteAction' => 'deleteSelectedMessageAttachment',
+                                ])
                             @endif
                         </div>
                     @else

@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Models\Workspace;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 
 test('a workspace can have many topics', function () {
@@ -444,6 +445,82 @@ test('dashboard published message panel shows sender and recipient principals', 
         ->assertSee($user->name)
         ->assertSee('To')
         ->assertSee('Researcher');
+});
+
+test('dashboard message panel shows attachments', function () {
+    [$user, $workspace] = userWithWorkspace();
+
+    $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
+    $message = Message::factory()->for($topic)->create([
+        'title' => 'Published note',
+        'status' => MessageStatus::Published,
+    ]);
+    Attachment::factory()->for($message)->create([
+        'filename' => 'roadmap.pdf',
+        'size' => 2048,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('dashboard', ['topic' => $topic->slug, 'message' => $message->slug, 'panel' => 'messages']))
+        ->assertOk()
+        ->assertSee('Attachments')
+        ->assertSee('roadmap.pdf')
+        ->assertSee('2 KB')
+        ->assertDontSee('wire:submit="uploadSelectedMessageAttachments"', escape: false);
+});
+
+test('dashboard can upload attachments to selected draft message', function () {
+    Storage::fake('public');
+
+    [$user, $workspace] = userWithWorkspace();
+
+    $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
+    $message = Message::factory()->for($topic)->create([
+        'title' => 'Draft brief',
+        'status' => MessageStatus::Draft,
+    ]);
+    $file = UploadedFile::fake()->create('brief.pdf', 128, 'application/pdf');
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::dashboard')
+        ->set('selectedTopicSlug', $topic->slug)
+        ->set('selectedMessageSlug', $message->slug)
+        ->set('messageUploads', [$file])
+        ->call('uploadSelectedMessageAttachments')
+        ->assertHasNoErrors()
+        ->assertSet('messageUploads', []);
+
+    expect($message->attachments()->count())->toBe(1);
+    expect($message->attachments()->first()->filename)->toBe('brief.pdf');
+});
+
+test('dashboard can delete attachments from selected draft message', function () {
+    Storage::fake('public');
+
+    [$user, $workspace] = userWithWorkspace();
+
+    $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
+    $message = Message::factory()->for($topic)->create([
+        'title' => 'Draft brief',
+        'status' => MessageStatus::Draft,
+    ]);
+    $attachment = Attachment::factory()->for($message)->create([
+        'path' => 'attachments/report.pdf',
+    ]);
+
+    Storage::disk('public')->put($attachment->path, 'report');
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::dashboard')
+        ->set('selectedTopicSlug', $topic->slug)
+        ->set('selectedMessageSlug', $message->slug)
+        ->call('deleteSelectedMessageAttachment', $attachment->id)
+        ->assertHasNoErrors();
+
+    expect($attachment->fresh()->deleted_at)->not->toBeNull();
+    Storage::disk('public')->assertMissing($attachment->path);
 });
 
 test('dashboard shows workspace agents in the right rail', function () {
