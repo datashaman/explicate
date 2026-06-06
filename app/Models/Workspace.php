@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Collection;
 use LogicException;
 
 #[Fillable(['team_id', 'name', 'slug'])]
@@ -80,6 +81,24 @@ class Workspace extends Model
             'type' => Principal::TypeAgent,
             'agent_id' => $agent->id,
         ]);
+    }
+
+    /**
+     * @return Collection<int, Principal>
+     */
+    public function availablePrincipalsForTeam(Team $team): Collection
+    {
+        $users = $team->members()
+            ->orderBy('name')
+            ->get()
+            ->map(fn (User $user) => $this->principalForUser($user)->load('user'));
+
+        $agents = $this->agents()
+            ->orderBy('name')
+            ->get()
+            ->map(fn (Agent $agent) => $this->principalForAgent($agent)->load('agent'));
+
+        return $users->merge($agents)->values();
     }
 
     /**

@@ -274,7 +274,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             ->map(fn (Message $message) => [
                 'href' => route('dashboard', ['topic' => $topic->slug, 'message' => $message->slug, 'panel' => 'messages']),
                 'name' => $message->title,
-                'meta' => $this->messageItemMeta($message, showSender: true, showRecipient: false),
+                'meta' => $message->listMeta(showSender: true, showRecipient: false),
                 'attachments_count' => $message->attachments_count,
                 'badge' => $message->status === MessageStatus::Published ? null : [
                     'label' => $message->status->label(),
@@ -315,10 +315,10 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                     'panel' => 'messages',
                 ]),
                 'name' => $message->title,
-                'meta' => $this->messageItemMeta(
-                    $message,
+                'meta' => $message->listMeta(
                     showSender: $folder['slug'] !== 'sent',
                     showRecipient: $folder['slug'] !== 'inbox',
+                    recipientFallback: $message->topic->name,
                 ),
                 'attachments_count' => $message->attachments_count,
                 'badge' => $message->status === MessageStatus::Published ? null : [
@@ -357,17 +357,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             return collect();
         }
 
-        $users = $team->members()
-            ->orderBy('name')
-            ->get()
-            ->map(fn ($user) => $workspace->principalForUser($user)->load('user'));
-
-        $agents = $workspace->agents()
-            ->orderBy('name')
-            ->get()
-            ->map(fn (Agent $agent) => $workspace->principalForAgent($agent)->load('agent'));
-
-        return $users->merge($agents)->values();
+        return $workspace->availablePrincipalsForTeam($team);
     }
 
     /**
@@ -898,29 +888,6 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         }
 
         return $currentPrincipalId ?: $this->availablePrincipals->first()?->id;
-    }
-
-    /**
-     * @return list<array{label: string, value: string}>
-     */
-    private function messageItemMeta(Message $message, bool $showSender, bool $showRecipient): array
-    {
-        $meta = [];
-
-        if ($showSender && $message->sender) {
-            $meta[] = ['label' => __('From'), 'value' => $message->sender->label()];
-        }
-
-        if ($showRecipient) {
-            $meta[] = ['label' => __('To'), 'value' => $message->recipient?->label() ?? $message->topic->name];
-        }
-
-        $meta[] = [
-            'label' => $message->status === MessageStatus::Draft ? __('Saved') : __('Sent'),
-            'value' => $message->updated_at->diffForHumans(),
-        ];
-
-        return $meta;
     }
 
     private function syncSelectedAgentFields(): void

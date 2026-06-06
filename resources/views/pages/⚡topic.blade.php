@@ -70,7 +70,7 @@ new #[Layout('layouts::workspace'), Title('Topic')] class extends Component {
             ->map(fn (Message $message) => [
                 'href' => route('messages.show', ['message' => $message]),
                 'name' => $message->title,
-                'meta' => $this->messageItemMeta($message, showSender: true, showRecipient: false),
+                'meta' => $message->listMeta(showSender: true, showRecipient: false),
                 'attachments_count' => $message->attachments_count,
                 'badge' => $message->status === MessageStatus::Published ? null : [
                     'label' => $message->status->label(),
@@ -197,29 +197,6 @@ new #[Layout('layouts::workspace'), Title('Topic')] class extends Component {
         $this->topic->agents()->detach($agentId);
 
         Flux::toast(variant: 'success', text: __('Agent removed.'));
-    }
-
-    /**
-     * @return list<array{label: string, value: string}>
-     */
-    private function messageItemMeta(Message $message, bool $showSender, bool $showRecipient): array
-    {
-        $meta = [];
-
-        if ($showSender && $message->sender) {
-            $meta[] = ['label' => __('From'), 'value' => $message->sender->label()];
-        }
-
-        if ($showRecipient && $message->recipient) {
-            $meta[] = ['label' => __('To'), 'value' => $message->recipient->label()];
-        }
-
-        $meta[] = [
-            'label' => $message->status === MessageStatus::Draft ? __('Saved') : __('Sent'),
-            'value' => $message->updated_at->diffForHumans(),
-        ];
-
-        return $meta;
     }
 
 }; ?>

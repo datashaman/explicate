@@ -1,7 +1,6 @@
 <?php
 
 use App\Enums\MessageStatus;
-use App\Models\Agent;
 use App\Models\Principal;
 use App\Models\Topic;
 use Flux\Flux;
@@ -73,17 +72,7 @@ new #[Title('New Message')] class extends Component {
             return collect();
         }
 
-        $users = $team->members()
-            ->orderBy('name')
-            ->get()
-            ->map(fn ($user) => $workspace->principalForUser($user)->load('user'));
-
-        $agents = $workspace->agents()
-            ->orderBy('name')
-            ->get()
-            ->map(fn (Agent $agent) => $workspace->principalForAgent($agent)->load('agent'));
-
-        return $users->merge($agents)->values();
+        return $workspace->availablePrincipalsForTeam($team);
     }
 
     /**

@@ -100,6 +100,27 @@ test('published message page shows sender and recipient principals', function ()
         ->assertSee('Researcher');
 });
 
+test('message list metadata uses sender recipient fallback and timestamp labels', function () {
+    $senderPrincipal = $this->workspace->principalForUser($this->user);
+
+    $this->message->timestamps = false;
+    $this->message->forceFill([
+        'status' => MessageStatus::Published,
+        'sender_principal_id' => $senderPrincipal->id,
+        'updated_at' => now()->subMinutes(5),
+    ])->save();
+
+    expect($this->message->fresh()->load('sender.user')->listMeta(
+        showSender: true,
+        showRecipient: true,
+        recipientFallback: $this->topic->name,
+    ))->toBe([
+        ['label' => 'From', 'value' => $this->user->name],
+        ['label' => 'To', 'value' => $this->topic->name],
+        ['label' => 'Sent', 'value' => '5 minutes ago'],
+    ]);
+});
+
 test('published message cannot be saved', function () {
     $this->message->update(['status' => MessageStatus::Published]);
 

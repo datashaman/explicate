@@ -1,6 +1,9 @@
 <?php
 
+use App\Enums\TeamRole;
+use App\Models\Agent;
 use App\Models\Team;
+use App\Models\User;
 use App\Models\Workspace;
 use Illuminate\Database\QueryException;
 
@@ -39,4 +42,22 @@ test('slug is unique per team', function () {
 
     expect(fn () => Workspace::factory()->for($team)->create(['name' => 'My Workspace', 'slug' => 'my-workspace']))
         ->toThrow(QueryException::class);
+});
+
+test('workspace lists team member and agent principals by label', function () {
+    [$user, $workspace] = userWithWorkspace(['name' => 'Current User']);
+    $member = User::factory()->create(['name' => 'Member User']);
+    $user->currentTeam->memberships()->create([
+        'user_id' => $member->id,
+        'role' => TeamRole::Member,
+    ]);
+    Agent::factory()->for($workspace)->create(['name' => 'Research Agent']);
+
+    $principals = $workspace->availablePrincipalsForTeam($user->currentTeam);
+
+    expect($principals->map->label()->all())->toBe([
+        'Current User',
+        'Member User',
+        'Research Agent',
+    ]);
 });

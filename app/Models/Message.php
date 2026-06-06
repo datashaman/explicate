@@ -111,6 +111,33 @@ class Message extends Model
         return $this->belongsTo(Principal::class, 'sender_principal_id');
     }
 
+    /**
+     * @return list<array{label: string, value: string}>
+     */
+    public function listMeta(bool $showSender, bool $showRecipient, ?string $recipientFallback = null): array
+    {
+        $meta = [];
+
+        if ($showSender && $this->sender) {
+            $meta[] = ['label' => __('From'), 'value' => $this->sender->label()];
+        }
+
+        if ($showRecipient) {
+            $recipient = $this->recipient?->label() ?? $recipientFallback;
+
+            if ($recipient) {
+                $meta[] = ['label' => __('To'), 'value' => $recipient];
+            }
+        }
+
+        $meta[] = [
+            'label' => $this->status === MessageStatus::Draft ? __('Saved') : __('Sent'),
+            'value' => $this->updated_at->diffForHumans(),
+        ];
+
+        return $meta;
+    }
+
     public function getRouteKeyName(): string
     {
         return 'ulid';
