@@ -253,6 +253,27 @@ test('dashboard shows workspace agents in the right rail', function () {
         ->assertSee($agent->name);
 });
 
+test('dashboard gives assigned agents prominence in the right rail', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->for($user->currentTeam)->create();
+    $user->switchWorkspace($workspace);
+
+    $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
+    $available = Agent::factory()->for($workspace)->create(['name' => 'Available Agent']);
+    $assigned = Agent::factory()->for($workspace)->create(['name' => 'Assigned Agent']);
+    $topic->agents()->attach($assigned);
+
+    $this->actingAs($user)
+        ->get(route('dashboard', ['topic' => $topic->slug, 'panel' => 'agents']))
+        ->assertOk()
+        ->assertSee('Assigned')
+        ->assertSee('Available')
+        ->assertSeeInOrder(['Assigned', 'Assigned Agent', 'Available', 'Available Agent'])
+        ->assertSee('border-l-2 border-amber-400', escape: false)
+        ->assertSee('data-test="workspace-agent-row-'.$assigned->slug.'"', escape: false)
+        ->assertSee('data-test="workspace-agent-row-'.$available->slug.'"', escape: false);
+});
+
 test('dashboard can create an agent from the right rail', function () {
     $user = User::factory()->create();
     $workspace = Workspace::factory()->for($user->currentTeam)->create();
