@@ -1,10 +1,10 @@
 <?php
 
-use App\Enums\MessageStatus;
+use App\Enums\PostStatus;
 use App\Enums\Provider;
 use App\Enums\ReasoningEffort;
 use App\Models\Agent;
-use App\Models\Message;
+use App\Models\Post;
 use App\Models\Topic;
 use Flux\Flux;
 use Illuminate\Support\Facades\Auth;
@@ -26,8 +26,8 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
     #[Url(as: 'folder')]
     public ?string $selectedSystemFolderSlug = null;
 
-    #[Url(as: 'message')]
-    public ?string $selectedMessageSlug = null;
+    #[Url(as: 'post')]
+    public ?string $selectedPostSlug = null;
 
     #[Url(as: 'action')]
     public ?string $panelAction = null;
@@ -38,7 +38,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
     #[Url(as: 'panel')]
     public string $mobilePanel = 'topics';
 
-    public bool $creatingMessageFromRoute = false;
+    public bool $creatingPostFromRoute = false;
 
     public string $topicName = '';
 
@@ -64,38 +64,38 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
     public bool $showArchived = false;
 
-    public string $messageTitle = '';
+    public string $postTitle = '';
 
-    public string $messageBody = '';
-
-    /** @var list<int> */
-    public array $messageAgentIds = [];
-
-    public string $newMessageTitle = '';
-
-    public string $newMessageBody = '';
-
-    public ?int $newMessageTopicId = null;
+    public string $postBody = '';
 
     /** @var list<int> */
-    public array $newMessageAgentIds = [];
+    public array $postAgentIds = [];
+
+    public string $newPostTitle = '';
+
+    public string $newPostBody = '';
+
+    public ?int $newPostTopicId = null;
+
+    /** @var list<int> */
+    public array $newPostAgentIds = [];
 
     /** @var array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile> */
-    public array $newMessageUploads = [];
+    public array $newPostUploads = [];
 
     /** @var array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile> */
-    public array $messageUploads = [];
+    public array $postUploads = [];
 
     public function mount(): void
     {
         if ($this->isCreateRoute()) {
-            $this->creatingMessageFromRoute = true;
-            $this->mobilePanel = 'messages';
+            $this->creatingPostFromRoute = true;
+            $this->mobilePanel = 'posts';
         }
 
         $this->normalizeMobilePanel();
-        $this->syncSelectedMessageFields();
-        $this->syncNewMessageTopic();
+        $this->syncSelectedPostFields();
+        $this->syncNewPostTopic();
         $this->syncSelectedAgentFields();
     }
 
@@ -125,15 +125,28 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         return collect($this->systemFolders())->firstWhere('slug', $this->selectedSystemFolderSlug);
     }
 
-    public function selectedMessage(): ?Message
+    public function selectedPost(): ?Post
     {
         $topic = $this->selectedTopic();
 
-        if (! $topic || ! $this->selectedMessageSlug) {
+        if (! $topic || ! $this->selectedPostSlug) {
             return null;
         }
 
-        return $topic->messages()->where('slug', $this->selectedMessageSlug)->first();
+        return $topic->posts()->where('slug', $this->selectedPostSlug)->first();
+    }
+
+    public function postsPanelReturnRoute(): string
+    {
+        if ($folder = $this->selectedSystemFolder()) {
+            return route('dashboard', ['folder' => $folder['slug'], 'panel' => 'posts']);
+        }
+
+        if ($topic = $this->selectedTopic()) {
+            return route('dashboard', ['topic' => $topic->slug, 'panel' => 'posts']);
+        }
+
+        return route('dashboard');
     }
 
     public function selectedAgent(): ?Agent
@@ -150,9 +163,9 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             ->first();
     }
 
-    public function isCreatingMessage(): bool
+    public function isCreatingPost(): bool
     {
-        return $this->creatingMessageFromRoute || $this->panelAction === 'new-message';
+        return $this->creatingPostFromRoute || $this->panelAction === 'new-post';
     }
 
     /** @return list<array{slug: string, name: string, icon: string, count: int}> */
@@ -164,7 +177,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             return [];
         }
 
-        $counts = Message::query()
+        $counts = Post::query()
             ->whereHas('topic', fn ($query) => $query->where('workspace_id', $workspace->id))
             ->selectRaw('status, count(*) as total')
             ->groupBy('status')
@@ -172,22 +185,22 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
         return [
             [
-                'slug' => 'updates',
-                'name' => __('Updates'),
+                'slug' => 'inbox',
+                'name' => __('Inbox'),
                 'icon' => 'inbox',
-                'count' => (int) ($counts[MessageStatus::Published->value] ?? 0),
+                'count' => (int) ($counts[PostStatus::Published->value] ?? 0),
             ],
             [
                 'slug' => 'drafts',
                 'name' => __('Drafts'),
                 'icon' => 'document',
-                'count' => (int) ($counts[MessageStatus::Draft->value] ?? 0),
+                'count' => (int) ($counts[PostStatus::Draft->value] ?? 0),
             ],
             [
                 'slug' => 'archived',
                 'name' => __('Archived'),
                 'icon' => 'archive-box',
-                'count' => (int) ($counts[MessageStatus::Archived->value] ?? 0),
+                'count' => (int) ($counts[PostStatus::Archived->value] ?? 0),
             ],
         ];
     }
@@ -223,15 +236,15 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
     /**
      * @return \Illuminate\Database\Eloquent\Collection<int, Agent>
      */
-    public function newMessageAssignableAgents(): \Illuminate\Database\Eloquent\Collection
+    public function newPostAssignableAgents(): \Illuminate\Database\Eloquent\Collection
     {
         $workspace = $this->workspace();
 
-        if (! $workspace || ! $this->newMessageTopicId) {
+        if (! $workspace || ! $this->newPostTopicId) {
             return Agent::query()->whereNull('id')->get();
         }
 
-        $topic = $workspace->topics()->find($this->newMessageTopicId);
+        $topic = $workspace->topics()->find($this->newPostTopicId);
 
         if (! $topic) {
             return Agent::query()->whereNull('id')->get();
@@ -243,15 +256,15 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
     /**
      * @return \Illuminate\Database\Eloquent\Collection<int, Agent>
      */
-    public function selectedMessageAssignableAgents(): \Illuminate\Database\Eloquent\Collection
+    public function selectedPostAssignableAgents(): \Illuminate\Database\Eloquent\Collection
     {
-        $message = $this->selectedMessage();
+        $post = $this->selectedPost();
 
-        if (! $message) {
+        if (! $post) {
             return Agent::query()->whereNull('id')->get();
         }
 
-        return $message->topic->agents()->with('latestVersion')->get();
+        return $post->topic->agents()->with('latestVersion')->get();
     }
 
     /**
@@ -267,9 +280,9 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
         return $workspace->topics()
             ->withCount([
-                'messages as draft_count' => fn ($q) => $q->where('status', MessageStatus::Draft),
-                'messages as published_count' => fn ($q) => $q->where('status', MessageStatus::Published),
-                'messages as archived_count' => fn ($q) => $q->where('status', MessageStatus::Archived),
+                'posts as draft_count' => fn ($q) => $q->where('status', PostStatus::Draft),
+                'posts as published_count' => fn ($q) => $q->where('status', PostStatus::Published),
+                'posts as archived_count' => fn ($q) => $q->where('status', PostStatus::Archived),
             ])
             ->get();
     }
@@ -285,23 +298,23 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             return [];
         }
 
-        return $topic->messages()
+        return $topic->posts()
             ->with(['sender.user', 'sender.agent'])
             ->withCount('attachments')
-            ->when(! $this->showArchived, fn ($query) => $query->where('status', '!=', MessageStatus::Archived))
-            ->where('status', '!=', MessageStatus::Draft)
+            ->when(! $this->showArchived, fn ($query) => $query->where('status', '!=', PostStatus::Archived))
+            ->where('status', '!=', PostStatus::Draft)
             ->orderByDesc('updated_at')
             ->orderByDesc('id')
             ->get()
-            ->map(fn (Message $message) => [
-                'href' => route('dashboard', ['topic' => $topic->slug, 'message' => $message->slug, 'panel' => 'messages']),
-                'name' => $message->title,
-                'meta' => $message->listMeta(showSender: true, showRecipient: false, timezone: Auth::user()->displayTimezone()),
-                'attachments_count' => $message->attachments_count,
-                'sort' => $message->listSortValues(dateKey: 'sent'),
-                'badge' => $message->status === MessageStatus::Published ? null : [
-                    'label' => $message->status->label(),
-                    'color' => $message->status->color(),
+            ->map(fn (Post $post) => [
+                'href' => route('dashboard', ['topic' => $topic->slug, 'post' => $post->slug, 'panel' => 'posts']),
+                'name' => $post->title,
+                'meta' => $post->listMeta(showSender: true, showRecipient: false, timezone: Auth::user()->displayTimezone()),
+                'attachments_count' => $post->attachments_count,
+                'sort' => $post->listSortValues(dateKey: 'sent'),
+                'badge' => $post->status === PostStatus::Published ? null : [
+                    'label' => $post->status->label(),
+                    'color' => $post->status->color(),
                 ],
             ])
             ->all();
@@ -319,41 +332,38 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             return [];
         }
 
-        return Message::query()
+        return Post::query()
             ->with(['topic', 'sender.user', 'sender.agent', 'recipient.user', 'recipient.agent'])
             ->withCount('attachments')
             ->whereHas('topic', fn ($query) => $query->where('workspace_id', $workspace->id))
-            ->when($folder['slug'] === 'drafts', fn ($query) => $query->where('status', MessageStatus::Draft))
-            ->when($folder['slug'] === 'updates', fn ($query) => $query->where('status', MessageStatus::Published))
-            ->when($folder['slug'] === 'archived', fn ($query) => $query->where('status', MessageStatus::Archived))
-            ->when($folder['slug'] !== 'archived' && ! $this->showArchived, fn ($query) => $query->where('status', '!=', MessageStatus::Archived))
+            ->when($folder['slug'] === 'drafts', fn ($query) => $query->where('status', PostStatus::Draft))
+            ->when($folder['slug'] === 'inbox', fn ($query) => $query->where('status', PostStatus::Published))
+            ->when($folder['slug'] === 'archived', fn ($query) => $query->where('status', PostStatus::Archived))
+            ->when($folder['slug'] !== 'archived' && ! $this->showArchived, fn ($query) => $query->where('status', '!=', PostStatus::Archived))
             ->orderByDesc('updated_at')
             ->orderByDesc('id')
             ->get()
-            ->map(fn (Message $message) => [
+            ->map(fn (Post $post) => [
                 'href' => route('dashboard', [
                     'folder' => $folder['slug'],
-                    'topic' => $message->topic->slug,
-                    'message' => $message->slug,
-                    'panel' => 'messages',
+                    'topic' => $post->topic->slug,
+                    'post' => $post->slug,
+                    'panel' => 'posts',
                 ]),
-                'name' => $message->title,
-                'meta' => $message->listMeta(
+                'name' => $post->title,
+                'meta' => $post->listMeta(
                     showSender: true,
                     showRecipient: true,
-                    recipientFallback: $message->topic->name,
+                    recipientFallback: $post->topic->name,
                     timezone: Auth::user()->displayTimezone(),
                     recipientLabel: __('Topic'),
                 ),
-                'attachments_count' => $message->attachments_count,
-                'sort' => $message->listSortValues(
-                    recipientFallback: $message->topic->name,
+                'attachments_count' => $post->attachments_count,
+                'sort' => $post->listSortValues(
+                    recipientFallback: $post->topic->name,
                     dateKey: $folder['slug'] === 'drafts' ? 'saved' : 'sent',
                 ),
-                'badge' => $message->status === MessageStatus::Published ? null : [
-                    'label' => $message->status->label(),
-                    'color' => $message->status->color(),
-                ],
+                'badge' => null,
             ])
             ->all();
     }
@@ -361,20 +371,20 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
     /**
      * @return list<array{key: string, label: string, class: string}>
      */
-    public function selectedMessageListColumns(): array
+    public function selectedPostListColumns(): array
     {
         $folder = $this->selectedSystemFolder();
         $dateLabel = $folder && $folder['slug'] === 'drafts' ? __('Saved') : __('Posted');
 
         $columns = [
-            ['key' => 'name', 'label' => __('Update'), 'class' => 'min-w-0 flex-1'],
+            ['key' => 'name', 'label' => __('Post'), 'class' => 'min-w-0 flex-1'],
         ];
 
         $columns[] = ['key' => 'from', 'label' => __('Author'), 'class' => 'w-28 shrink-0'];
         $columns[] = ['key' => 'to', 'label' => __('Topic'), 'class' => 'w-28 shrink-0'];
 
         $columns[] = ['key' => $folder && $folder['slug'] === 'drafts' ? 'saved' : 'sent', 'label' => $dateLabel, 'class' => 'w-28 shrink-0'];
-        $columns[] = ['key' => 'attachments', 'label' => __('Files'), 'class' => 'w-24 shrink-0'];
+        $columns[] = ['key' => 'attachments', 'label' => __('Files'), 'class' => 'w-12 shrink-0 justify-center'];
 
         return $columns;
     }
@@ -467,10 +477,10 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             $this->selectedSystemFolderSlug = null;
         }
 
-        $this->selectedMessageSlug = null;
-        $this->messageTitle = '';
-        $this->messageBody = '';
-        $this->syncNewMessageTopic();
+        $this->selectedPostSlug = null;
+        $this->postTitle = '';
+        $this->postBody = '';
+        $this->syncNewPostTopic();
         $this->normalizeMobilePanel();
     }
 
@@ -478,21 +488,21 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
     {
         if ($this->selectedSystemFolderSlug) {
             $this->selectedTopicSlug = null;
-            $this->selectedMessageSlug = null;
+            $this->selectedPostSlug = null;
             $this->panelAction = null;
-            $this->mobilePanel = 'messages';
+            $this->mobilePanel = 'posts';
         }
 
         $this->normalizeMobilePanel();
     }
 
-    public function updatedSelectedMessageSlug(): void
+    public function updatedSelectedPostSlug(): void
     {
-        if ($this->selectedMessageSlug) {
+        if ($this->selectedPostSlug) {
             $this->panelAction = null;
         }
 
-        $this->syncSelectedMessageFields();
+        $this->syncSelectedPostFields();
     }
 
     public function updatedSelectedAgentSlug(): void
@@ -506,9 +516,9 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
     public function updatedPanelAction(): void
     {
-        if ($this->isCreatingMessage()) {
-            $this->selectedMessageSlug = null;
-            $this->syncNewMessageTopic();
+        if ($this->isCreatingPost()) {
+            $this->selectedPostSlug = null;
+            $this->syncNewPostTopic();
         }
     }
 
@@ -520,11 +530,11 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
     private function normalizeMobilePanel(): void
     {
-        if (! in_array($this->mobilePanel, ['topics', 'messages', 'agents'], true)) {
+        if (! in_array($this->mobilePanel, ['topics', 'posts', 'agents'], true)) {
             $this->mobilePanel = 'topics';
         }
 
-        if (! $this->selectedTopic() && ! $this->selectedSystemFolder() && ! $this->isCreatingMessage() && $this->mobilePanel === 'messages') {
+        if (! $this->selectedTopic() && ! $this->selectedSystemFolder() && ! $this->isCreatingPost() && $this->mobilePanel === 'posts') {
             $this->mobilePanel = 'topics';
         }
     }
@@ -578,52 +588,52 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         Flux::toast(variant: 'success', text: __('Agent created.'));
     }
 
-    public function createDashboardMessage(): void
+    public function createDashboardPost(): void
     {
-        $this->createDashboardMessageWithStatus(MessageStatus::Draft);
+        $this->createDashboardPostWithStatus(PostStatus::Draft);
     }
 
-    public function sendDashboardMessage(): void
+    public function sendDashboardPost(): void
     {
-        $this->createDashboardMessageWithStatus(MessageStatus::Published);
+        $this->createDashboardPostWithStatus(PostStatus::Published);
     }
 
-    private function createDashboardMessageWithStatus(MessageStatus $status): void
+    private function createDashboardPostWithStatus(PostStatus $status): void
     {
         $workspace = $this->workspace();
 
         abort_unless($workspace, 403);
 
-        $this->normalizeNewMessageTopic();
+        $this->normalizeNewPostTopic();
 
         $validated = $this->validate([
-            'newMessageTitle' => ['required', 'string', 'max:255'],
-            'newMessageBody' => ['nullable', 'string'],
-            'newMessageTopicId' => ['required', 'integer'],
-            'newMessageAgentIds' => ['array'],
-            'newMessageAgentIds.*' => ['integer'],
-            'newMessageUploads.*' => ['file', 'max:51200'],
+            'newPostTitle' => ['required', 'string', 'max:255'],
+            'newPostBody' => ['nullable', 'string'],
+            'newPostTopicId' => ['required', 'integer'],
+            'newPostAgentIds' => ['array'],
+            'newPostAgentIds.*' => ['integer'],
+            'newPostUploads.*' => ['file', 'max:51200'],
         ], [], [
-            'newMessageTitle' => __('title'),
-            'newMessageBody' => __('body'),
-            'newMessageTopicId' => __('topic'),
-            'newMessageAgentIds' => __('requested agents'),
-            'newMessageUploads.*' => __('attachment'),
+            'newPostTitle' => __('title'),
+            'newPostBody' => __('body'),
+            'newPostTopicId' => __('topic'),
+            'newPostAgentIds' => __('requested agents'),
+            'newPostUploads.*' => __('attachment'),
         ]);
 
-        $topic = $workspace->topics()->findOrFail($validated['newMessageTopicId']);
+        $topic = $workspace->topics()->findOrFail($validated['newPostTopicId']);
         $senderPrincipal = $workspace->principalForUser(Auth::user());
 
-        $message = $topic->messages()->create([
-            'title' => $validated['newMessageTitle'],
-            'body' => $validated['newMessageBody'] ?: null,
+        $post = $topic->posts()->create([
+            'title' => $validated['newPostTitle'],
+            'body' => $validated['newPostBody'] ?: null,
             'status' => $status,
             'sender_principal_id' => $senderPrincipal->id,
             'recipient_principal_id' => null,
         ]);
-        $message->assignAgents($validated['newMessageAgentIds']);
+        $post->assignAgents($validated['newPostAgentIds']);
 
-        foreach ($this->newMessageUploads as $upload) {
+        foreach ($this->newPostUploads as $upload) {
             $filename = $upload->getClientOriginalName();
             $path = $upload->storeAs(
                 'attachments/'.Str::uuid(),
@@ -631,7 +641,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                 'public'
             );
 
-            $message->attachments()->create([
+            $post->attachments()->create([
                 'filename' => $filename,
                 'path' => $path,
                 'mime_type' => $upload->getMimeType(),
@@ -640,15 +650,15 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         }
 
         $this->selectedTopicSlug = $topic->slug;
-        $this->selectedMessageSlug = $message->slug;
+        $this->selectedPostSlug = $post->slug;
         $this->panelAction = null;
-        $this->creatingMessageFromRoute = false;
-        $this->mobilePanel = 'messages';
-        $this->reset('newMessageTitle', 'newMessageBody', 'newMessageAgentIds', 'newMessageUploads');
-        $this->newMessageTopicId = $topic->id;
-        $this->syncSelectedMessageFields();
+        $this->creatingPostFromRoute = false;
+        $this->mobilePanel = 'posts';
+        $this->reset('newPostTitle', 'newPostBody', 'newPostAgentIds', 'newPostUploads');
+        $this->newPostTopicId = $topic->id;
+        $this->syncSelectedPostFields();
 
-        Flux::toast(variant: 'success', text: $status === MessageStatus::Draft ? __('Draft created.') : __('Update posted.'));
+        Flux::toast(variant: 'success', text: $status === PostStatus::Draft ? __('Draft created.') : __('Post published.'));
     }
 
     public function assignAgent(int $agentId): void
@@ -736,68 +746,68 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         Flux::toast(variant: 'success', text: __('Version saved.'));
     }
 
-    public function saveSelectedMessage(): void
+    public function saveSelectedPost(): void
     {
-        $message = $this->selectedMessage();
+        $post = $this->selectedPost();
 
-        abort_unless($message && $message->status === MessageStatus::Draft, 403);
+        abort_unless($post && $post->status === PostStatus::Draft, 403);
 
         $workspace = $this->workspace();
 
         abort_unless($workspace, 403);
 
         $validated = $this->validate([
-            'messageTitle' => ['required', 'string', 'max:255'],
-            'messageBody' => ['nullable', 'string'],
-            'messageAgentIds' => ['array'],
-            'messageAgentIds.*' => ['integer'],
+            'postTitle' => ['required', 'string', 'max:255'],
+            'postBody' => ['nullable', 'string'],
+            'postAgentIds' => ['array'],
+            'postAgentIds.*' => ['integer'],
         ], [], [
-            'messageTitle' => __('title'),
-            'messageBody' => __('body'),
-            'messageAgentIds' => __('requested agents'),
+            'postTitle' => __('title'),
+            'postBody' => __('body'),
+            'postAgentIds' => __('requested agents'),
         ]);
 
-        $message->update([
-            'title' => $validated['messageTitle'],
-            'body' => $validated['messageBody'],
+        $post->update([
+            'title' => $validated['postTitle'],
+            'body' => $validated['postBody'],
             'recipient_principal_id' => null,
         ]);
-        $message->assignAgents($validated['messageAgentIds']);
+        $post->assignAgents($validated['postAgentIds']);
 
-        $this->selectedMessageSlug = $message->fresh()->slug;
+        $this->selectedPostSlug = $post->fresh()->slug;
 
         Flux::toast(variant: 'success', text: __('Saved.'));
     }
 
-    public function publishSelectedMessage(): void
+    public function publishSelectedPost(): void
     {
-        $message = $this->selectedMessage();
+        $post = $this->selectedPost();
 
-        abort_unless($message && $message->status === MessageStatus::Draft, 403);
+        abort_unless($post && $post->status === PostStatus::Draft, 403);
 
-        $this->saveSelectedMessage();
+        $this->saveSelectedPost();
 
         $workspace = $this->workspace();
 
         abort_unless($workspace, 403);
 
-        $message->fresh()->update([
-            'sender_principal_id' => $message->sender_principal_id ?: $workspace->principalForUser(Auth::user())->id,
-            'status' => MessageStatus::Published,
+        $post->fresh()->update([
+            'sender_principal_id' => $post->sender_principal_id ?: $workspace->principalForUser(Auth::user())->id,
+            'status' => PostStatus::Published,
         ]);
     }
 
-    public function uploadSelectedMessageAttachments(): void
+    public function uploadSelectedPostAttachments(): void
     {
-        $message = $this->selectedMessage();
+        $post = $this->selectedPost();
 
-        abort_unless($message && $message->status === MessageStatus::Draft, 403);
+        abort_unless($post && $post->status === PostStatus::Draft, 403);
 
         $this->validate([
-            'messageUploads.*' => ['file', 'max:51200'],
+            'postUploads.*' => ['file', 'max:51200'],
         ]);
 
-        foreach ($this->messageUploads as $upload) {
+        foreach ($this->postUploads as $upload) {
             $filename = $upload->getClientOriginalName();
             $path = $upload->storeAs(
                 'attachments/'.Str::uuid(),
@@ -805,7 +815,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                 'public'
             );
 
-            $message->attachments()->create([
+            $post->attachments()->create([
                 'filename' => $filename,
                 'path' => $path,
                 'mime_type' => $upload->getMimeType(),
@@ -813,18 +823,18 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             ]);
         }
 
-        $this->reset('messageUploads');
+        $this->reset('postUploads');
 
         Flux::toast(variant: 'success', text: __('Attachments uploaded.'));
     }
 
-    public function deleteSelectedMessageAttachment(int $attachmentId): void
+    public function deleteSelectedPostAttachment(int $attachmentId): void
     {
-        $message = $this->selectedMessage();
+        $post = $this->selectedPost();
 
-        abort_unless($message && $message->status === MessageStatus::Draft, 403);
+        abort_unless($post && $post->status === PostStatus::Draft, 403);
 
-        $attachment = $message->attachments()->findOrFail($attachmentId);
+        $attachment = $post->attachments()->findOrFail($attachmentId);
 
         Storage::disk('public')->delete($attachment->path);
 
@@ -833,77 +843,77 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         Flux::toast(variant: 'success', text: __('Attachment deleted.'));
     }
 
-    public function archiveSelectedMessage(): void
+    public function archiveSelectedPost(): void
     {
-        $message = $this->selectedMessage();
+        $post = $this->selectedPost();
 
-        abort_unless($message, 404);
+        abort_unless($post, 404);
 
-        $message->update(['status' => MessageStatus::Archived]);
+        $post->update(['status' => PostStatus::Archived]);
     }
 
-    public function unpublishSelectedMessage(): void
+    public function unpublishSelectedPost(): void
     {
-        $message = $this->selectedMessage();
+        $post = $this->selectedPost();
 
-        abort_unless($message && $message->status === MessageStatus::Published, 403);
+        abort_unless($post && $post->status === PostStatus::Published, 403);
 
-        $message->update(['status' => MessageStatus::Draft]);
+        $post->update(['status' => PostStatus::Draft]);
 
-        $this->syncSelectedMessageFields();
+        $this->syncSelectedPostFields();
     }
 
-    public function unarchiveSelectedMessage(): void
+    public function unarchiveSelectedPost(): void
     {
-        $message = $this->selectedMessage();
+        $post = $this->selectedPost();
 
-        abort_unless($message && $message->status === MessageStatus::Archived, 403);
+        abort_unless($post && $post->status === PostStatus::Archived, 403);
 
-        $message->update(['status' => MessageStatus::Draft]);
+        $post->update(['status' => PostStatus::Draft]);
 
-        $this->syncSelectedMessageFields();
+        $this->syncSelectedPostFields();
     }
 
-    private function syncSelectedMessageFields(): void
+    private function syncSelectedPostFields(): void
     {
-        $message = $this->selectedMessage();
+        $post = $this->selectedPost();
 
-        $this->messageTitle = $message?->title ?? '';
-        $this->messageBody = $message?->body ?? '';
-        $this->messageAgentIds = $message?->agentTasks()
-            ->where('event_type', \App\Models\AgentTask::EventMessageAssigned)
+        $this->postTitle = $post?->title ?? '';
+        $this->postBody = $post?->body ?? '';
+        $this->postAgentIds = $post?->agentTasks()
+            ->where('event_type', \App\Models\AgentTask::EventPostAssigned)
             ->pluck('agent_id')
             ->map(fn ($id): int => (int) $id)
             ->all() ?? [];
     }
 
-    private function syncNewMessageTopic(): void
+    private function syncNewPostTopic(): void
     {
         $topic = $this->selectedTopic();
 
         if ($topic) {
-            $this->newMessageTopicId = $topic->id;
+            $this->newPostTopicId = $topic->id;
 
             return;
         }
 
-        if ($this->isCreatingMessage() && ! $this->newMessageTopicId) {
-            $this->newMessageTopicId = $this->workspace()?->topics()->value('id');
+        if ($this->isCreatingPost() && ! $this->newPostTopicId) {
+            $this->newPostTopicId = $this->workspace()?->topics()->value('id');
         }
     }
 
-    private function normalizeNewMessageTopic(): void
+    private function normalizeNewPostTopic(): void
     {
-        if ($this->newMessageTopicId) {
+        if ($this->newPostTopicId) {
             return;
         }
 
-        $this->syncNewMessageTopic();
+        $this->syncNewPostTopic();
     }
 
     private function isCreateRoute(): bool
     {
-        return request()->routeIs('messages.create');
+        return request()->routeIs('posts.create');
     }
 
     private function syncSelectedAgentFields(): void
@@ -922,7 +932,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 <div class="flex min-h-0 w-full flex-1">
     @if ($this->workspace())
         @php
-            $hasSelectedMessagesPanel = (bool) ($this->selectedTopic() || $this->selectedSystemFolder() || $this->isCreatingMessage());
+            $hasSelectedPostsPanel = (bool) ($this->selectedTopic() || $this->selectedSystemFolder() || $this->isCreatingPost());
         @endphp
 
         <div @class([
@@ -952,7 +962,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                 @else
                     <div class="divide-y divide-neutral-200 bg-white xl:flex-1 xl:overflow-auto dark:divide-white/5 dark:bg-zinc-900/20">
                         @foreach ($this->systemFolders() as $folder)
-                            <a href="{{ route('dashboard', ['folder' => $folder['slug'], 'panel' => 'messages']) }}" wire:navigate
+                            <a href="{{ route('dashboard', ['folder' => $folder['slug'], 'panel' => 'posts']) }}" wire:navigate
                                @class([
                                    'flex items-center gap-3 px-4 py-3 hover:bg-neutral-100 dark:hover:bg-white/5',
                                    'bg-blue-100/80 dark:bg-blue-500/15' => $selectedSystemFolderSlug === $folder['slug'],
@@ -970,7 +980,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                         @endforeach
 
                         @foreach ($this->topics() as $topic)
-                            <a href="{{ route('dashboard', ['topic' => $topic->slug, 'panel' => 'messages']) }}" wire:navigate
+                            <a href="{{ route('dashboard', ['topic' => $topic->slug, 'panel' => 'posts']) }}" wire:navigate
                                @class([
                                    'flex items-center gap-3 px-4 py-3 hover:bg-neutral-100 dark:hover:bg-white/5',
                                    'bg-blue-100/80 dark:bg-blue-500/15' => $selectedTopicSlug === $topic->slug,
@@ -983,10 +993,10 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                                 </div>
                                 <div class="flex shrink-0 items-center gap-1">
                                     @if ($topic->published_count > 0)
-                                        <flux:badge color="green" size="sm" title="{{ __('Updates') }}" data-test="topic-{{ $topic->slug }}-published-count" data-count="{{ $topic->published_count }}">{{ $topic->published_count }}</flux:badge>
+                                        <flux:badge color="green" size="sm" title="{{ __('Inbox') }}" data-test="topic-{{ $topic->slug }}-published-count" data-count="{{ $topic->published_count }}">{{ $topic->published_count }}</flux:badge>
                                     @endif
                                     @if ($showArchived && $selectedTopicSlug === $topic->slug && $topic->archived_count > 0)
-                                        <flux:badge color="yellow" size="sm" title="{{ __('Archived messages') }}" data-test="topic-{{ $topic->slug }}-archived-count" data-count="{{ $topic->archived_count }}">{{ $topic->archived_count }}</flux:badge>
+                                        <flux:badge color="yellow" size="sm" title="{{ __('Archived posts') }}" data-test="topic-{{ $topic->slug }}-archived-count" data-count="{{ $topic->archived_count }}">{{ $topic->archived_count }}</flux:badge>
                                     @endif
                                 </div>
                             </a>
@@ -995,43 +1005,43 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                 @endif
             </section>
 
-            @if ($this->selectedTopic() || $this->selectedSystemFolder() || $this->isCreatingMessage())
+            @if ($this->selectedTopic() || $this->selectedSystemFolder() || $this->isCreatingPost())
                 @php
-                    $selectedDashboardMessage = $this->selectedMessage();
+                    $selectedDashboardPost = $this->selectedPost();
                     $selectedDashboardFolder = $this->selectedSystemFolder();
                 @endphp
 
                 <section
-                    id="messages-panel"
-                    data-mobile-panel="messages"
+                    id="posts-panel"
+                    data-mobile-panel="posts"
                     @class([
                         'scroll-mt-4 flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none',
-                        'hidden xl:flex' => $this->mobilePanel !== 'messages',
+                        'hidden xl:flex' => $this->mobilePanel !== 'posts',
                     ])
                 >
-                    @if ($this->isCreatingMessage())
+                    @if ($this->isCreatingPost())
                         <div class="flex items-center justify-between gap-3 border-b border-neutral-300 bg-emerald-50 px-4 py-3 dark:border-white/10 dark:bg-emerald-500/10">
-                            <flux:heading size="sm" class="min-w-0 flex-1 truncate">{{ __('New update') }}</flux:heading>
+                            <flux:heading size="sm" class="min-w-0 flex-1 truncate">{{ __('New post') }}</flux:heading>
 
-                            <flux:button :href="$this->selectedTopic() ? route('dashboard', ['topic' => $this->selectedTopic()->slug, 'panel' => 'messages']) : route('dashboard')" wire:navigate size="xs" variant="filled" icon="arrow-left">
-                                {{ __('Updates') }}
+                            <flux:button :href="$this->postsPanelReturnRoute()" wire:navigate size="xs" variant="filled" icon="arrow-left">
+                                {{ __('Inbox') }}
                             </flux:button>
                         </div>
 
-                        <div class="flex flex-1 flex-col gap-6 overflow-auto px-4 py-4 xl:min-h-0" data-test="dashboard-message-create-panel">
-                            <form id="dashboard-new-message-form" wire:submit="createDashboardMessage" class="flex flex-col gap-6">
-                                <flux:input wire:model="newMessageTitle" :label="__('Title')" required autofocus data-test="new-message-title" />
+                        <div class="flex flex-1 flex-col gap-6 overflow-auto px-4 py-4 xl:min-h-0" data-test="dashboard-post-create-panel">
+                            <form id="dashboard-new-post-form" wire:submit="createDashboardPost" class="flex flex-col gap-6">
+                                <flux:input wire:model="newPostTitle" :label="__('Title')" required autofocus data-test="new-post-title" />
 
-                                @include('partials.message-routing-fields', [
-                                    'topicModel' => 'newMessageTopicId',
-                                    'agentIdsModel' => 'newMessageAgentIds',
+                                @include('partials.post-routing-fields', [
+                                    'topicModel' => 'newPostTopicId',
+                                    'agentIdsModel' => 'newPostAgentIds',
                                     'availableTopics' => $this->availableTopics,
-                                    'availableAgents' => $this->newMessageAssignableAgents(),
+                                    'availableAgents' => $this->newPostAssignableAgents(),
                                     'canChangeTopic' => true,
-                                    'testPrefix' => 'new-message',
+                                    'testPrefix' => 'new-post',
                                 ])
 
-                                <flux:textarea wire:model="newMessageBody" :label="__('Body')" :placeholder="__('Write something...')" rows="12" data-test="new-message-body" />
+                                <flux:textarea wire:model="newPostBody" :label="__('Body')" :placeholder="__('Write something...')" rows="12" data-test="new-post-body" />
                             </form>
 
                             <div class="flex flex-col gap-3">
@@ -1043,114 +1053,113 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                                      x-on:livewire-upload-error="uploading = false"
                                      x-on:livewire-upload-progress="progress = $event.detail.progress"
                                      class="flex flex-col gap-2">
-                                    <flux:input type="file" wire:model="newMessageUploads" multiple />
+                                    <flux:input type="file" wire:model="newPostUploads" multiple />
 
                                     <div x-show="uploading" class="h-1 w-full overflow-hidden rounded-full bg-neutral-100 dark:bg-white/10">
                                         <div class="h-full rounded-full bg-blue-500 transition-all" :style="`width: ${progress}%`"></div>
                                     </div>
 
-                                    @error('newMessageUploads.*')
+                                    @error('newPostUploads.*')
                                         <flux:error>{{ $message }}</flux:error>
                                     @enderror
                                 </div>
                             </div>
 
                             <div class="flex justify-end gap-2">
-                                <flux:button :href="$this->selectedTopic() ? route('dashboard', ['topic' => $this->selectedTopic()->slug, 'panel' => 'messages']) : route('dashboard')" wire:navigate variant="filled">
+                                <flux:button :href="$this->postsPanelReturnRoute()" wire:navigate variant="filled">
                                     {{ __('Cancel') }}
                                 </flux:button>
-                                <flux:button type="submit" form="dashboard-new-message-form" variant="filled" data-test="new-message-save-draft" wire:loading.attr="disabled" wire:target="newMessageUploads">{{ __('Save draft') }}</flux:button>
-                                <flux:button wire:click="sendDashboardMessage" type="button" variant="primary" data-test="new-message-send" wire:loading.attr="disabled" wire:target="newMessageUploads">{{ __('Post') }}</flux:button>
+                                <flux:button type="submit" form="dashboard-new-post-form" variant="filled" data-test="new-post-save-draft" wire:loading.attr="disabled" wire:target="newPostUploads">{{ __('Save draft') }}</flux:button>
+                                <flux:button wire:click="sendDashboardPost" type="button" variant="primary" data-test="new-post-send" wire:loading.attr="disabled" wire:target="newPostUploads">{{ __('Post') }}</flux:button>
                             </div>
                         </div>
-                    @elseif ($selectedDashboardMessage)
+                    @elseif ($selectedDashboardPost)
                         <div class="flex items-center justify-between gap-3 border-b border-neutral-300 bg-emerald-50 px-4 py-3 dark:border-white/10 dark:bg-emerald-500/10">
-                            <flux:heading size="sm" class="min-w-0 flex-1 truncate">{{ $selectedDashboardMessage->title }}</flux:heading>
+                            <flux:heading size="sm" class="min-w-0 flex-1 truncate">{{ $selectedDashboardPost->title }}</flux:heading>
 
-                            <flux:button :href="route('dashboard', ['topic' => $this->selectedTopic()->slug, 'panel' => 'messages'])" wire:navigate size="xs" variant="filled" icon="arrow-left">
-                                {{ __('Updates') }}
+                            <flux:button :href="$this->postsPanelReturnRoute()" wire:navigate size="xs" variant="filled" icon="arrow-left">
+                                {{ __('Inbox') }}
                             </flux:button>
                         </div>
 
-                        <div class="flex flex-1 flex-col gap-6 overflow-auto px-4 py-4 xl:min-h-0" data-test="dashboard-message-panel">
-                            @if ($selectedDashboardMessage->status === MessageStatus::Draft)
-                                <form id="dashboard-selected-message-form" wire:submit="saveSelectedMessage" class="flex flex-col gap-4">
+                        <div class="flex flex-1 flex-col gap-6 overflow-auto px-4 py-4 xl:min-h-0" data-test="dashboard-post-panel">
+                            @if ($selectedDashboardPost->status === PostStatus::Draft)
+                                <form id="dashboard-selected-post-form" wire:submit="saveSelectedPost" class="flex flex-col gap-4">
                                     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                                        <flux:input wire:model="messageTitle" class="flex-1" required />
+                                        <flux:input wire:model="postTitle" class="flex-1" required />
 
                                         <div class="flex shrink-0 items-center gap-2">
-                                            <flux:badge :color="$selectedDashboardMessage->status->color()" size="sm">{{ $selectedDashboardMessage->status->label() }}</flux:badge>
-                                            <flux:button wire:click="archiveSelectedMessage" type="button" size="sm" icon="archive-box">{{ __('Archive') }}</flux:button>
-                                            <flux:button wire:click="publishSelectedMessage" type="button" size="sm" variant="primary" icon="paper-airplane">{{ __('Post') }}</flux:button>
+                                            <flux:button wire:click="archiveSelectedPost" type="button" size="sm" icon="archive-box" icon:variant="outline">{{ __('Archive') }}</flux:button>
+                                            <flux:button wire:click="publishSelectedPost" type="button" size="sm" variant="primary" icon="paper-airplane">{{ __('Post') }}</flux:button>
                                         </div>
                                     </div>
 
-                                    @include('partials.message-routing-fields', [
-                                        'topicName' => $selectedDashboardMessage->topic->name,
-                                        'agentIdsModel' => 'messageAgentIds',
-                                        'availableAgents' => $this->selectedMessageAssignableAgents(),
+                                    @include('partials.post-routing-fields', [
+                                        'topicName' => $selectedDashboardPost->topic->name,
+                                        'agentIdsModel' => 'postAgentIds',
+                                        'availableAgents' => $this->selectedPostAssignableAgents(),
                                         'canChangeTopic' => false,
-                                        'testPrefix' => 'message',
+                                        'testPrefix' => 'post',
                                     ])
 
-                                    <flux:textarea wire:model="messageBody" :placeholder="__('Write something...')" rows="12" />
+                                    <flux:textarea wire:model="postBody" :placeholder="__('Write something...')" rows="12" />
                                 </form>
 
-                                @include('partials.message-attachments', [
-                                    'message' => $selectedDashboardMessage,
-                                    'uploadAction' => 'uploadSelectedMessageAttachments',
-                                    'uploadModel' => 'messageUploads',
-                                    'uploadError' => 'messageUploads.*',
-                                    'deleteAction' => 'deleteSelectedMessageAttachment',
+                                @include('partials.post-attachments', [
+                                    'post' => $selectedDashboardPost,
+                                    'uploadAction' => 'uploadSelectedPostAttachments',
+                                    'uploadModel' => 'postUploads',
+                                    'uploadError' => 'postUploads.*',
+                                    'deleteAction' => 'deleteSelectedPostAttachment',
                                 ])
 
                                 <div class="flex justify-end">
-                                    <flux:button type="submit" form="dashboard-selected-message-form" size="sm" variant="filled">{{ __('Save draft') }}</flux:button>
+                                    <flux:button type="submit" form="dashboard-selected-post-form" size="sm" variant="filled">{{ __('Save draft') }}</flux:button>
                                 </div>
                             @else
                                 <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                                    <flux:heading size="xl" class="min-w-0 flex-1 truncate">{{ $selectedDashboardMessage->title }}</flux:heading>
+                                    <flux:heading size="xl" class="min-w-0 flex-1 truncate">{{ $selectedDashboardPost->title }}</flux:heading>
 
                                     <div class="flex shrink-0 items-center gap-2">
-                                        @if ($selectedDashboardMessage->status === MessageStatus::Published)
-                                            <flux:button wire:click="unpublishSelectedMessage" size="sm" icon="arrow-uturn-left">{{ __('Return to draft') }}</flux:button>
-                                            <flux:button wire:click="archiveSelectedMessage" size="sm" icon="archive-box">{{ __('Archive') }}</flux:button>
-                                        @elseif ($selectedDashboardMessage->status === MessageStatus::Archived)
-                                            <flux:badge :color="$selectedDashboardMessage->status->color()" size="sm">{{ $selectedDashboardMessage->status->label() }}</flux:badge>
-                                            <flux:button wire:click="unarchiveSelectedMessage" size="sm" icon="archive-box-x-mark">{{ __('Unarchive') }}</flux:button>
+                                        @if ($selectedDashboardPost->status === PostStatus::Published)
+                                            <flux:button wire:click="unpublishSelectedPost" size="sm" icon="pencil-square" icon:variant="outline">{{ __('Move to drafts') }}</flux:button>
+                                            <flux:button wire:click="archiveSelectedPost" size="sm" icon="archive-box" icon:variant="outline">{{ __('Archive') }}</flux:button>
+                                        @elseif ($selectedDashboardPost->status === PostStatus::Archived)
+                                            <flux:badge :color="$selectedDashboardPost->status->color()" size="sm">{{ $selectedDashboardPost->status->label() }}</flux:badge>
+                                            <flux:button wire:click="unarchiveSelectedPost" size="sm" icon="archive-box-x-mark">{{ __('Unarchive') }}</flux:button>
                                         @endif
                                     </div>
                                 </div>
 
                                 <div class="flex flex-wrap gap-2">
-                                    @if ($selectedDashboardMessage->sender)
-                                        <flux:badge color="zinc" size="sm">{{ __('From') }}: {{ $selectedDashboardMessage->sender->label() }}</flux:badge>
+                                    @if ($selectedDashboardPost->sender)
+                                        <flux:badge color="zinc" size="sm">{{ __('From') }}: {{ $selectedDashboardPost->sender->label() }}</flux:badge>
                                     @endif
 
                                     <flux:badge color="zinc" size="sm">
                                         {{ __('Topic') }}:
-                                        {{ $selectedDashboardMessage->topic->name }}
+                                        {{ $selectedDashboardPost->topic->name }}
                                     </flux:badge>
 
-                                    @foreach ($selectedDashboardMessage->assignedAgents as $agent)
+                                    @foreach ($selectedDashboardPost->assignedAgents as $agent)
                                         <flux:badge color="amber" size="sm">{{ __('Agent work') }}: {{ $agent->name }}</flux:badge>
                                     @endforeach
                                 </div>
 
                                 <div>
-                                    @if ($selectedDashboardMessage->body)
-                                        <flux:text class="whitespace-pre-wrap text-sm leading-relaxed text-neutral-700 dark:text-neutral-300">{{ $selectedDashboardMessage->body }}</flux:text>
+                                    @if ($selectedDashboardPost->body)
+                                        <flux:text class="whitespace-pre-wrap text-sm leading-relaxed text-neutral-700 dark:text-neutral-300">{{ $selectedDashboardPost->body }}</flux:text>
                                     @else
                                         <flux:text class="text-sm text-neutral-400 dark:text-neutral-600">{{ __('No content.') }}</flux:text>
                                     @endif
                                 </div>
 
-                                @include('partials.message-attachments', [
-                                    'message' => $selectedDashboardMessage,
-                                    'uploadAction' => 'uploadSelectedMessageAttachments',
-                                    'uploadModel' => 'messageUploads',
-                                    'uploadError' => 'messageUploads.*',
-                                    'deleteAction' => 'deleteSelectedMessageAttachment',
+                                @include('partials.post-attachments', [
+                                    'post' => $selectedDashboardPost,
+                                    'uploadAction' => 'uploadSelectedPostAttachments',
+                                    'uploadModel' => 'postUploads',
+                                    'uploadError' => 'postUploads.*',
+                                    'deleteAction' => 'deleteSelectedPostAttachment',
                                 ])
                             @endif
                         </div>
@@ -1158,18 +1167,18 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                         @include('partials.folder-view', [
                             'breadcrumbs' => [
                                 ['label' => $this->workspace()->name, 'href' => route('dashboard')],
-                                ['label' => $selectedDashboardFolder['name'] ?? $this->selectedTopic()?->name ?? __('New update')],
+                                ['label' => $selectedDashboardFolder['name'] ?? $this->selectedTopic()?->name ?? __('New post')],
                             ],
-                            'titleLabel' => __('Updates'),
+                            'titleLabel' => __('Inbox'),
                             'items' => collect($selectedDashboardFolder ? $this->selectedSystemFolderItems() : $this->selectedTopicItems()),
                             'icon' => 'document-text',
                             'iconClass' => 'size-12 text-neutral-400 group-hover:text-neutral-300',
-                            'emptyText' => __('No updates'),
-                            'createHref' => $this->selectedTopic() ? route('messages.create', ['topic' => $this->selectedTopic()->slug]) : route('messages.create'),
-                            'createLabel' => __('New update'),
-                            'createTest' => 'dashboard-new-message-button',
+                            'emptyText' => __('No inbox'),
+                            'createHref' => $this->selectedTopic() ? route('posts.create', ['topic' => $this->selectedTopic()->slug]) : route('posts.create'),
+                            'createLabel' => __('New post'),
+                            'createTest' => 'dashboard-new-post-button',
                             'showArchivedModel' => 'showArchived',
-                            'listColumns' => $this->selectedMessageListColumns(),
+                            'listColumns' => $this->selectedPostListColumns(),
                             'listDefaultSort' => $selectedDashboardFolder && $selectedDashboardFolder['slug'] === 'drafts' ? 'saved' : 'sent',
                             'listDefaultSortDirection' => 'desc',
                             'toolbarClass' => 'border-b border-neutral-300 bg-emerald-50 px-4 py-3 dark:border-white/10 dark:bg-emerald-500/10',
@@ -1180,17 +1189,17 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                 </section>
             @else
                 <section
-                    id="messages-panel"
-                    data-mobile-panel="messages"
+                    id="posts-panel"
+                    data-mobile-panel="posts"
                     @class([
                         'scroll-mt-4 flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none',
-                        'hidden xl:flex' => $this->mobilePanel !== 'messages',
+                        'hidden xl:flex' => $this->mobilePanel !== 'posts',
                     ])
                 >
                     <div class="flex items-center justify-between gap-3 border-b border-neutral-300 bg-emerald-50 px-4 py-3 dark:border-white/10 dark:bg-emerald-500/10">
-                        <flux:heading size="sm">{{ __('Updates') }}</flux:heading>
-                        <flux:button :href="route('messages.create')" wire:navigate size="xs" icon="plus" data-test="dashboard-new-message-button">
-                            {{ __('New update') }}
+                        <flux:heading size="sm">{{ __('Inbox') }}</flux:heading>
+                        <flux:button :href="route('posts.create')" wire:navigate size="xs" icon="plus" data-test="dashboard-new-post-button">
+                            {{ __('New post') }}
                         </flux:button>
                     </div>
 
@@ -1198,7 +1207,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                         <div class="space-y-2">
                             <flux:heading size="sm">{{ __('Select a topic') }}</flux:heading>
                             <flux:text class="text-sm text-neutral-400 dark:text-neutral-600">
-                                {{ __('Choose a topic to view its updates.') }}
+                                {{ __('Choose a topic to view its inbox.') }}
                             </flux:text>
                         </div>
                     </div>
@@ -1357,19 +1366,19 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                 </button>
                 <button
                     type="button"
-                    @if ($hasSelectedMessagesPanel) wire:click="showMobilePanel('messages')" @endif
-                    data-mobile-nav="messages"
-                    aria-pressed="{{ $this->mobilePanel === 'messages' ? 'true' : 'false' }}"
-                    @disabled(! $hasSelectedMessagesPanel)
+                    @if ($hasSelectedPostsPanel) wire:click="showMobilePanel('posts')" @endif
+                    data-mobile-nav="posts"
+                    aria-pressed="{{ $this->mobilePanel === 'posts' ? 'true' : 'false' }}"
+                    @disabled(! $hasSelectedPostsPanel)
                     @class([
                         'flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition',
-                        'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-500/15 dark:text-emerald-200' => $hasSelectedMessagesPanel && $this->mobilePanel === 'messages',
-                        'border-neutral-200 bg-neutral-50 text-neutral-700 dark:border-white/10 dark:bg-white/5 dark:text-neutral-200' => $hasSelectedMessagesPanel && $this->mobilePanel !== 'messages',
-                        'cursor-not-allowed border-neutral-200 bg-neutral-50 text-neutral-300 opacity-60 dark:border-white/10 dark:bg-white/5 dark:text-neutral-600' => ! $hasSelectedMessagesPanel,
+                        'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-500/15 dark:text-emerald-200' => $hasSelectedPostsPanel && $this->mobilePanel === 'posts',
+                        'border-neutral-200 bg-neutral-50 text-neutral-700 dark:border-white/10 dark:bg-white/5 dark:text-neutral-200' => $hasSelectedPostsPanel && $this->mobilePanel !== 'posts',
+                        'cursor-not-allowed border-neutral-200 bg-neutral-50 text-neutral-300 opacity-60 dark:border-white/10 dark:bg-white/5 dark:text-neutral-600' => ! $hasSelectedPostsPanel,
                     ])
                 >
                     <flux:icon name="document-text" class="size-4" />
-                    <span>{{ __('Updates') }}</span>
+                    <span>{{ __('Inbox') }}</span>
                 </button>
                 <button
                     type="button"

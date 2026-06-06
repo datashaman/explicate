@@ -82,11 +82,11 @@ class Topic extends Model
     }
 
     /**
-     * @return HasMany<Message, $this>
+     * @return HasMany<Post, $this>
      */
-    public function messages(): HasMany
+    public function posts(): HasMany
     {
-        return $this->hasMany(Message::class)->orderBy('title');
+        return $this->hasMany(Post::class)->orderBy('title');
     }
 
     /**

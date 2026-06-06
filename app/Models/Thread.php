@@ -67,11 +67,11 @@ class Thread extends Model
     }
 
     /**
-     * @return HasMany<Message, $this>
+     * @return HasMany<Post, $this>
      */
-    public function messages(): HasMany
+    public function posts(): HasMany
     {
-        return $this->hasMany(Message::class)->orderBy('created_at');
+        return $this->hasMany(Post::class)->orderBy('created_at');
     }
 
     /**

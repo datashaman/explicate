@@ -2,18 +2,18 @@
 
 namespace App\Notifications;
 
-use App\Models\Message;
+use App\Models\Post;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Notification;
 
-class MessageReceived extends Notification
+class PostReceived extends Notification
 {
     use Queueable;
 
     /**
      * Create a new notification instance.
      */
-    public function __construct(public Message $message) {}
+    public function __construct(public Post $post) {}
 
     /**
      * Get the notification's delivery channels.
@@ -32,15 +32,15 @@ class MessageReceived extends Notification
      */
     public function toArray(object $notifiable): array
     {
-        $message = $this->message->loadMissing(['sender.user', 'sender.agent', 'topic']);
+        $post = $this->post->loadMissing(['sender.user', 'sender.agent', 'topic']);
 
         return [
-            'message_id' => $message->id,
-            'message_ulid' => $message->ulid,
-            'topic_id' => $message->topic_id,
-            'topic_name' => $message->topic->name,
-            'title' => $message->title,
-            'sender_name' => $message->sender?->label(),
+            'post_id' => $post->id,
+            'post_ulid' => $post->ulid,
+            'topic_id' => $post->topic_id,
+            'topic_name' => $post->topic->name,
+            'title' => $post->title,
+            'sender_name' => $post->sender?->label(),
         ];
     }
 }

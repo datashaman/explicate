@@ -2,12 +2,12 @@
 
 use App\Actions\Agents\ExecuteAgentTask;
 use App\Enums\AgentTaskStatus;
-use App\Enums\MessageStatus;
+use App\Enums\PostStatus;
 use App\Enums\Provider;
 use App\Models\Agent;
 use App\Models\AgentTask;
 use App\Models\AgentVersion;
-use App\Models\Message;
+use App\Models\Post;
 use App\Models\Topic;
 use Laravel\Ai\Ai;
 use Laravel\Ai\AnonymousAgent;
@@ -29,16 +29,16 @@ test('it executes a pending agent task through an anonymous laravel ai agent', f
         'prompt' => 'Answer as a concise researcher.',
     ]);
 
-    $message = Message::factory()->for($this->topic)->create([
+    $post = Post::factory()->for($this->topic)->create([
         'sender_principal_id' => $this->senderPrincipal->id,
         'title' => 'Research this',
         'body' => 'Find the latest internal context.',
-        'status' => MessageStatus::Published,
+        'status' => PostStatus::Published,
     ]);
     $this->topic->agents()->attach($agent);
-    $message->assignAgents([$agent->id]);
+    $post->assignAgents([$agent->id]);
 
-    $task = AgentTask::query()->whereBelongsTo($message)->sole();
+    $task = AgentTask::query()->whereBelongsTo($post)->sole();
 
     $reply = app(ExecuteAgentTask::class)->handle($task);
 
@@ -52,7 +52,7 @@ test('it executes a pending agent task through an anonymous laravel ai agent', f
     expect($reply)->not->toBeNull()
         ->and($reply->title)->toBe('Re: Research this')
         ->and($reply->body)->toBe('The agent response.')
-        ->and($reply->status)->toBe(MessageStatus::Published)
+        ->and($reply->status)->toBe(PostStatus::Published)
         ->and($reply->sender_principal_id)->toBe($this->workspace->principalForAgent($agent)->id)
         ->and($reply->recipient_principal_id)->toBe($this->senderPrincipal->id)
         ->and($task->fresh()->status)->toBe(AgentTaskStatus::Completed)
@@ -65,14 +65,14 @@ test('it marks a task failed when the agent has no executable version', function
     Ai::fakeAgent(AnonymousAgent::class)->preventStrayPrompts();
 
     $agent = Agent::factory()->for($this->workspace)->create(['name' => 'Researcher']);
-    $message = Message::factory()->for($this->topic)->create([
+    $post = Post::factory()->for($this->topic)->create([
         'sender_principal_id' => $this->senderPrincipal->id,
-        'status' => MessageStatus::Published,
+        'status' => PostStatus::Published,
     ]);
     $this->topic->agents()->attach($agent);
-    $message->assignAgents([$agent->id]);
+    $post->assignAgents([$agent->id]);
 
-    $task = AgentTask::query()->whereBelongsTo($message)->sole();
+    $task = AgentTask::query()->whereBelongsTo($post)->sole();
     $exception = null;
 
     try {
@@ -91,19 +91,19 @@ test('it marks a task failed when the agent has no executable version', function
         ->and($task->fresh()->last_error)->toBe('Agent does not have a version to execute.');
 });
 
-test('it ignores assigned draft message tasks until they are available', function () {
+test('it ignores assigned draft post tasks until they are available', function () {
     Ai::fakeAgent(AnonymousAgent::class)->preventStrayPrompts();
 
     $agent = Agent::factory()->for($this->workspace)->create(['name' => 'Researcher']);
     AgentVersion::factory()->for($agent)->create();
-    $message = Message::factory()->for($this->topic)->create([
+    $post = Post::factory()->for($this->topic)->create([
         'sender_principal_id' => $this->senderPrincipal->id,
-        'status' => MessageStatus::Draft,
+        'status' => PostStatus::Draft,
     ]);
     $this->topic->agents()->attach($agent);
-    $message->assignAgents([$agent->id]);
+    $post->assignAgents([$agent->id]);
 
-    $task = AgentTask::query()->whereBelongsTo($message)->sole();
+    $task = AgentTask::query()->whereBelongsTo($post)->sole();
 
     expect(app(ExecuteAgentTask::class)->handle($task))->toBeNull()
         ->and($task->fresh()->status)->toBe(AgentTaskStatus::Pending)

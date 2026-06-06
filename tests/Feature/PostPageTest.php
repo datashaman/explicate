@@ -1,9 +1,9 @@
 <?php
 
-use App\Enums\MessageStatus;
+use App\Enums\PostStatus;
 use App\Models\Agent;
 use App\Models\Attachment;
-use App\Models\Message;
+use App\Models\Post;
 use App\Models\Topic;
 use App\Models\Workspace;
 use Illuminate\Http\UploadedFile;
@@ -14,101 +14,115 @@ use Livewire\Livewire;
 beforeEach(function () {
     [$this->user, $this->workspace] = userWithWorkspace();
     $this->topic = Topic::factory()->for($this->workspace)->create();
-    $this->message = Message::factory()->for($this->topic)->create();
+    $this->post = Post::factory()->for($this->topic)->create();
 });
 
-test('message page loads', function () {
+test('post page loads', function () {
     $this->actingAs($this->user)
-        ->get(route('messages.show', ['message' => $this->message]))
+        ->get(route('posts.show', ['post' => $this->post]))
         ->assertOk()
-        ->assertSee($this->message->title)
-        ->assertSee('data-test="message-panel"', escape: false)
+        ->assertSee($this->post->title)
+        ->assertSee('data-test="post-panel"', escape: false)
         ->assertSee('min-h-[calc(100dvh-4rem)]', escape: false)
         ->assertDontSee('data-flux-breadcrumbs', escape: false);
 });
 
-test('message create route redirects to the dashboard message panel', function () {
-    $this->actingAs($this->user)
-        ->get(route('messages.create'))
+test('draft post page does not show redundant draft status', function () {
+    $this->post->update(['title' => 'Working note']);
+
+    $response = $this->actingAs($this->user)
+        ->get(route('posts.show', ['post' => $this->post]))
         ->assertOk()
-        ->assertSee('data-test="dashboard-message-create-panel"', escape: false);
+        ->assertSee('Working note')
+        ->assertSee('Save draft');
+
+    expect($response->getContent())->not->toContain('>Draft<');
 });
 
-test('message create route uses the selected topic query as the form default', function () {
+test('post create route redirects to the dashboard post panel', function () {
     $this->actingAs($this->user)
-        ->get(route('messages.create', ['topic' => $this->topic->slug]))
+        ->get(route('posts.create'))
         ->assertOk()
-        ->assertSee('data-test="dashboard-message-create-panel"', escape: false)
-        ->assertSee('&quot;newMessageTopicId&quot;:'.$this->topic->id, escape: false);
+        ->assertSee('data-test="dashboard-post-create-panel"', escape: false);
 });
 
-test('message page does not resolve topics outside the current workspace', function () {
+test('post create route uses the selected topic query as the form default', function () {
+    $this->actingAs($this->user)
+        ->get(route('posts.create', ['topic' => $this->topic->slug]))
+        ->assertOk()
+        ->assertSee('data-test="dashboard-post-create-panel"', escape: false)
+        ->assertSee('&quot;newPostTopicId&quot;:'.$this->topic->id, escape: false);
+});
+
+test('post page does not resolve topics outside the current workspace', function () {
     $other = Workspace::factory()->for($this->user->currentTeam)->create();
     $otherTopic = Topic::factory()->for($other)->create();
-    $otherMessage = Message::factory()->for($otherTopic)->create();
+    $otherPost = Post::factory()->for($otherTopic)->create();
 
     $this->actingAs($this->user)
-        ->get(route('messages.show', ['message' => $otherMessage]))
+        ->get(route('posts.show', ['post' => $otherPost]))
         ->assertNotFound();
 });
 
-test('draft message can be saved', function () {
+test('draft post can be saved', function () {
     $this->actingAs($this->user);
 
-    Livewire::test('pages::message', ['message' => $this->message])
+    Livewire::test('pages::post', ['post' => $this->post])
         ->set('body', 'Hello world')
         ->call('save')
         ->assertHasNoErrors();
 
-    expect($this->message->fresh()->body)->toBe('Hello world');
+    expect($this->post->fresh()->body)->toBe('Hello world');
 });
 
-test('draft message save clears legacy direct recipient', function () {
+test('draft post save clears legacy direct recipient', function () {
     $agent = Agent::factory()->for($this->workspace)->create(['name' => 'Researcher']);
     $agentPrincipal = $this->workspace->principalForAgent($agent);
-    $this->message->update(['recipient_principal_id' => $agentPrincipal->id]);
+    $this->post->update(['recipient_principal_id' => $agentPrincipal->id]);
 
     $this->actingAs($this->user);
 
-    Livewire::test('pages::message', ['message' => $this->message])
+    Livewire::test('pages::post', ['post' => $this->post])
         ->set('title', 'Topic draft')
         ->call('save')
         ->assertHasNoErrors();
 
-    expect($this->message->fresh())
+    expect($this->post->fresh())
         ->title->toBe('Topic draft')
         ->recipient_principal_id->toBeNull();
 });
 
-test('published message page shows sender and topic', function () {
+test('published post page shows sender and topic', function () {
     $senderPrincipal = $this->workspace->principalForUser($this->user);
 
-    $this->message->update([
-        'status' => MessageStatus::Published,
+    $this->post->update([
+        'status' => PostStatus::Published,
         'sender_principal_id' => $senderPrincipal->id,
     ]);
 
     $this->actingAs($this->user)
-        ->get(route('messages.show', ['message' => $this->message]))
+        ->get(route('posts.show', ['post' => $this->post]))
         ->assertOk()
         ->assertSee('From')
         ->assertSee($this->user->name)
         ->assertSee('Topic')
-        ->assertSee($this->topic->name);
+        ->assertSee($this->topic->name)
+        ->assertSee('Move to drafts')
+        ->assertDontSee('Return to draft');
 });
 
-test('message list metadata uses sender recipient fallback and timestamp labels', function () {
+test('post list metadata uses sender recipient fallback and timestamp labels', function () {
     $senderPrincipal = $this->workspace->principalForUser($this->user);
     $updatedAt = now()->subMinutes(5);
 
-    $this->message->timestamps = false;
-    $this->message->forceFill([
-        'status' => MessageStatus::Published,
+    $this->post->timestamps = false;
+    $this->post->forceFill([
+        'status' => PostStatus::Published,
         'sender_principal_id' => $senderPrincipal->id,
         'updated_at' => $updatedAt,
     ])->save();
 
-    expect($this->message->fresh()->load('sender.user')->listMeta(
+    expect($this->post->fresh()->load('sender.user')->listMeta(
         showSender: true,
         showRecipient: true,
         recipientFallback: $this->topic->name,
@@ -119,19 +133,19 @@ test('message list metadata uses sender recipient fallback and timestamp labels'
     ]);
 });
 
-test('message list timestamp titles use the user timezone when provided', function () {
+test('post list timestamp titles use the user timezone when provided', function () {
     $updatedAt = now()->setTimezone('UTC')->setTime(12, 0);
 
     Date::setTestNow($updatedAt);
 
     try {
-        $this->message->timestamps = false;
-        $this->message->forceFill([
-            'status' => MessageStatus::Published,
+        $this->post->timestamps = false;
+        $this->post->forceFill([
+            'status' => PostStatus::Published,
             'updated_at' => $updatedAt,
         ])->save();
 
-        expect($this->message->fresh()->listMeta(
+        expect($this->post->fresh()->listMeta(
             showSender: false,
             showRecipient: false,
             timezone: 'Africa/Johannesburg',
@@ -147,19 +161,19 @@ test('message list timestamp titles use the user timezone when provided', functi
     }
 });
 
-test('message list sort values are normalized for deterministic column sorting', function () {
+test('post list sort values are normalized for deterministic column sorting', function () {
     $senderPrincipal = $this->workspace->principalForUser($this->user);
-    Attachment::factory()->count(2)->for($this->message)->create();
+    Attachment::factory()->count(2)->for($this->post)->create();
 
-    $this->message->timestamps = false;
-    $this->message->forceFill([
+    $this->post->timestamps = false;
+    $this->post->forceFill([
         'title' => 'Mixed Case Title',
-        'status' => MessageStatus::Draft,
+        'status' => PostStatus::Draft,
         'sender_principal_id' => $senderPrincipal->id,
         'updated_at' => now()->setTimestamp(123),
     ])->save();
 
-    expect($this->message->fresh()->loadCount('attachments')->load('sender.user')->listSortValues('Topic fallback'))->toMatchArray([
+    expect($this->post->fresh()->loadCount('attachments')->load('sender.user')->listSortValues('Topic fallback'))->toMatchArray([
         'name' => 'mixed case title',
         'from' => str($this->user->name)->lower()->toString(),
         'to' => 'topic fallback',
@@ -169,12 +183,12 @@ test('message list sort values are normalized for deterministic column sorting',
     ]);
 });
 
-test('published message cannot be saved', function () {
-    $this->message->update(['status' => MessageStatus::Published]);
+test('published post cannot be saved', function () {
+    $this->post->update(['status' => PostStatus::Published]);
 
     $this->actingAs($this->user);
 
-    Livewire::test('pages::message', ['message' => $this->message])
+    Livewire::test('pages::post', ['post' => $this->post])
         ->set('body', 'Hello world')
         ->call('save')
         ->assertForbidden();
@@ -187,46 +201,46 @@ test('attachments can be uploaded', function () {
 
     $file = UploadedFile::fake()->create('report.pdf', 512, 'application/pdf');
 
-    Livewire::test('pages::message', ['message' => $this->message])
+    Livewire::test('pages::post', ['post' => $this->post])
         ->set('uploads', [$file])
         ->call('uploadAttachments')
         ->assertHasNoErrors();
 
-    expect($this->message->attachments()->count())->toBe(1);
-    expect($this->message->attachments()->first()->filename)->toBe('report.pdf');
+    expect($this->post->attachments()->count())->toBe(1);
+    expect($this->post->attachments()->first()->filename)->toBe('report.pdf');
 });
 
-test('draft message publishes as a topic update', function () {
+test('draft post publishes as a topic post', function () {
     $this->actingAs($this->user);
 
     $senderPrincipal = $this->workspace->principalForUser($this->user);
 
-    Livewire::test('pages::message', ['message' => $this->message])
-        ->set('title', 'Topic update')
+    Livewire::test('pages::post', ['post' => $this->post])
+        ->set('title', 'Topic post')
         ->call('publish')
         ->assertHasNoErrors();
 
-    expect($this->message->fresh())
-        ->title->toBe('Topic update')
+    expect($this->post->fresh())
+        ->title->toBe('Topic post')
         ->sender_principal_id->toBe($senderPrincipal->id)
         ->recipient_principal_id->toBeNull()
-        ->status->toBe(MessageStatus::Published);
+        ->status->toBe(PostStatus::Published);
 });
 
-test('a topic has many messages', function () {
-    Message::factory()->count(2)->for($this->topic)->create();
+test('a topic has many posts', function () {
+    Post::factory()->count(2)->for($this->topic)->create();
 
-    expect($this->topic->messages()->count())->toBe(3); // 1 from beforeEach + 2
+    expect($this->topic->posts()->count())->toBe(3); // 1 from beforeEach + 2
 });
 
-test('a message has many attachments', function () {
-    Attachment::factory()->count(2)->for($this->message)->create();
+test('a post has many attachments', function () {
+    Attachment::factory()->count(2)->for($this->post)->create();
 
-    expect($this->message->attachments()->count())->toBe(2);
+    expect($this->post->attachments()->count())->toBe(2);
 });
 
 test('attachments are soft deleted', function () {
-    $attachment = Attachment::factory()->for($this->message)->create();
+    $attachment = Attachment::factory()->for($this->post)->create();
     $attachment->delete();
 
     expect(Attachment::withTrashed()->find($attachment->id))->not->toBeNull();

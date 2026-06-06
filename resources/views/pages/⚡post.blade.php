@@ -1,9 +1,9 @@
 <?php
 
-use App\Enums\MessageStatus;
+use App\Enums\PostStatus;
 use App\Models\Attachment;
 use App\Models\Agent;
-use App\Models\Message;
+use App\Models\Post;
 use App\Models\Topic;
 use Flux\Flux;
 use Illuminate\Support\Facades\Auth;
@@ -15,12 +15,12 @@ use Livewire\Attributes\Title;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 
-new #[Layout('layouts::workspace'), Title('Update')] class extends Component {
+new #[Layout('layouts::workspace'), Title('Post')] class extends Component {
     use WithFileUploads;
 
     public Topic $topic;
 
-    public Message $message;
+    public Post $post;
 
     public string $title = '';
 
@@ -32,9 +32,9 @@ new #[Layout('layouts::workspace'), Title('Update')] class extends Component {
     /** @var array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile> */
     public array $uploads = [];
 
-    public function mount(Message $message): void
+    public function mount(Post $post): void
     {
-        $topic = $message->topic;
+        $topic = $post->topic;
 
         abort_unless(
             Auth::user()->currentWorkspace?->id === $topic->workspace_id,
@@ -42,10 +42,10 @@ new #[Layout('layouts::workspace'), Title('Update')] class extends Component {
         );
 
         $this->topic = $topic;
-        $this->title = $message->title;
-        $this->body = $message->body ?? '';
-        $this->agentIds = $message->agentTasks()
-            ->where('event_type', \App\Models\AgentTask::EventMessageAssigned)
+        $this->title = $post->title;
+        $this->body = $post->body ?? '';
+        $this->agentIds = $post->agentTasks()
+            ->where('event_type', \App\Models\AgentTask::EventPostAssigned)
             ->pluck('agent_id')
             ->map(fn ($id): int => (int) $id)
             ->all();
@@ -68,7 +68,7 @@ new #[Layout('layouts::workspace'), Title('Update')] class extends Component {
 
     public function save(): void
     {
-        abort_unless($this->message->status === MessageStatus::Draft, 403);
+        abort_unless($this->post->status === PostStatus::Draft, 403);
 
         $workspace = Auth::user()->currentWorkspace;
 
@@ -83,19 +83,19 @@ new #[Layout('layouts::workspace'), Title('Update')] class extends Component {
             'agentIds' => __('requested agents'),
         ]);
 
-        $this->message->update([
+        $this->post->update([
             'title' => $validated['title'],
             'body' => $validated['body'],
             'recipient_principal_id' => null,
         ]);
-        $this->message->assignAgents($validated['agentIds']);
+        $this->post->assignAgents($validated['agentIds']);
 
         Flux::toast(variant: 'success', text: __('Saved.'));
     }
 
     public function publish(): void
     {
-        abort_unless($this->message->status === MessageStatus::Draft, 403);
+        abort_unless($this->post->status === PostStatus::Draft, 403);
 
         $workspace = Auth::user()->currentWorkspace;
 
@@ -110,24 +110,24 @@ new #[Layout('layouts::workspace'), Title('Update')] class extends Component {
             'agentIds' => __('requested agents'),
         ]);
 
-        $this->message->update([
+        $this->post->update([
             'title' => $validated['title'],
             'body' => $validated['body'],
             'recipient_principal_id' => null,
-            'sender_principal_id' => $this->message->sender_principal_id ?: $workspace->principalForUser(Auth::user())->id,
-            'status' => MessageStatus::Published,
+            'sender_principal_id' => $this->post->sender_principal_id ?: $workspace->principalForUser(Auth::user())->id,
+            'status' => PostStatus::Published,
         ]);
-        $this->message->assignAgents($validated['agentIds']);
+        $this->post->assignAgents($validated['agentIds']);
     }
 
     public function unpublish(): void
     {
-        $this->message->update(['status' => MessageStatus::Draft]);
+        $this->post->update(['status' => PostStatus::Draft]);
 
-        $this->title = $this->message->title;
-        $this->body = $this->message->body ?? '';
-        $this->agentIds = $this->message->agentTasks()
-            ->where('event_type', \App\Models\AgentTask::EventMessageAssigned)
+        $this->title = $this->post->title;
+        $this->body = $this->post->body ?? '';
+        $this->agentIds = $this->post->agentTasks()
+            ->where('event_type', \App\Models\AgentTask::EventPostAssigned)
             ->pluck('agent_id')
             ->map(fn ($id): int => (int) $id)
             ->all();
@@ -135,17 +135,17 @@ new #[Layout('layouts::workspace'), Title('Update')] class extends Component {
 
     public function archive(): void
     {
-        $this->message->update(['status' => MessageStatus::Archived]);
+        $this->post->update(['status' => PostStatus::Archived]);
     }
 
     public function unarchive(): void
     {
-        $this->message->update(['status' => MessageStatus::Draft]);
+        $this->post->update(['status' => PostStatus::Draft]);
 
-        $this->title = $this->message->title;
-        $this->body = $this->message->body ?? '';
-        $this->agentIds = $this->message->agentTasks()
-            ->where('event_type', \App\Models\AgentTask::EventMessageAssigned)
+        $this->title = $this->post->title;
+        $this->body = $this->post->body ?? '';
+        $this->agentIds = $this->post->agentTasks()
+            ->where('event_type', \App\Models\AgentTask::EventPostAssigned)
             ->pluck('agent_id')
             ->map(fn ($id): int => (int) $id)
             ->all();
@@ -153,7 +153,7 @@ new #[Layout('layouts::workspace'), Title('Update')] class extends Component {
 
     public function uploadAttachments(): void
     {
-        abort_unless($this->message->status === MessageStatus::Draft, 403);
+        abort_unless($this->post->status === PostStatus::Draft, 403);
 
         $this->validate([
             'uploads.*' => ['file', 'max:51200'],
@@ -167,7 +167,7 @@ new #[Layout('layouts::workspace'), Title('Update')] class extends Component {
                 'public'
             );
 
-            $this->message->attachments()->create([
+            $this->post->attachments()->create([
                 'filename' => $filename,
                 'path' => $path,
                 'mime_type' => $upload->getMimeType(),
@@ -182,9 +182,9 @@ new #[Layout('layouts::workspace'), Title('Update')] class extends Component {
 
     public function deleteAttachment(int $attachmentId): void
     {
-        abort_unless($this->message->status === MessageStatus::Draft, 403);
+        abort_unless($this->post->status === PostStatus::Draft, 403);
 
-        $attachment = $this->message->attachments()->findOrFail($attachmentId);
+        $attachment = $this->post->attachments()->findOrFail($attachmentId);
 
         Storage::disk('public')->delete($attachment->path);
 
@@ -196,31 +196,30 @@ new #[Layout('layouts::workspace'), Title('Update')] class extends Component {
 }; ?>
 
 <div class="flex h-full w-full flex-1 flex-col gap-3 xl:flex-1">
-    <section class="flex min-h-[calc(100dvh-4rem)] flex-col overflow-hidden rounded-xl border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] xl:h-full xl:min-h-[24rem] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none" data-test="message-panel">
+    <section class="flex min-h-[calc(100dvh-4rem)] flex-col overflow-hidden rounded-xl border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] xl:h-full xl:min-h-[24rem] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none" data-test="post-panel">
         <div class="flex items-center justify-between gap-3 border-b border-neutral-300 bg-emerald-50 px-4 py-3 dark:border-white/10 dark:bg-emerald-500/10">
-            <flux:heading size="sm" class="min-w-0 flex-1 truncate">{{ $message->title }}</flux:heading>
+            <flux:heading size="sm" class="min-w-0 flex-1 truncate">{{ $post->title }}</flux:heading>
         </div>
 
         <div class="flex flex-1 flex-col gap-6 overflow-auto px-4 py-4 xl:min-h-0">
-            @if ($message->status === App\Enums\MessageStatus::Draft)
+            @if ($post->status === App\Enums\PostStatus::Draft)
                 {{-- Draft: editable --}}
                 <form wire:submit="save" class="flex flex-col gap-4">
                     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <flux:input wire:model="title" class="flex-1" required />
 
                         <div class="flex shrink-0 items-center gap-2">
-                            <flux:badge :color="$message->status->color()" size="sm">{{ $message->status->label() }}</flux:badge>
-                            <flux:button wire:click="archive" type="button" size="sm" icon="archive-box">{{ __('Archive') }}</flux:button>
+                            <flux:button wire:click="archive" type="button" size="sm" icon="archive-box" icon:variant="outline">{{ __('Archive') }}</flux:button>
                             <flux:button wire:click="publish" type="button" size="sm" variant="primary" icon="paper-airplane">{{ __('Post') }}</flux:button>
                         </div>
                     </div>
 
-                    @include('partials.message-routing-fields', [
+                    @include('partials.post-routing-fields', [
                         'topicName' => $topic->name,
                         'agentIdsModel' => 'agentIds',
                         'availableAgents' => $this->availableAgents,
                         'canChangeTopic' => false,
-                        'testPrefix' => 'message',
+                        'testPrefix' => 'post',
                     ])
 
                     <flux:textarea wire:model="body" :placeholder="__('Write something...')" rows="12" />
@@ -230,24 +229,24 @@ new #[Layout('layouts::workspace'), Title('Update')] class extends Component {
                     </div>
                 </form>
             @else
-                {{-- Non-draft messages are read-only. --}}
+                {{-- Non-draft posts are read-only. --}}
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <flux:heading size="xl" class="min-w-0 flex-1 truncate">{{ $message->title }}</flux:heading>
+                    <flux:heading size="xl" class="min-w-0 flex-1 truncate">{{ $post->title }}</flux:heading>
 
                     <div class="flex shrink-0 items-center gap-2">
-                        @if ($message->status === App\Enums\MessageStatus::Published)
-                            <flux:button wire:click="unpublish" size="sm" icon="arrow-uturn-left">{{ __('Return to draft') }}</flux:button>
-                            <flux:button wire:click="archive" size="sm" icon="archive-box">{{ __('Archive') }}</flux:button>
-                        @elseif ($message->status === App\Enums\MessageStatus::Archived)
-                            <flux:badge :color="$message->status->color()" size="sm">{{ $message->status->label() }}</flux:badge>
+                        @if ($post->status === App\Enums\PostStatus::Published)
+                            <flux:button wire:click="unpublish" size="sm" icon="pencil-square" icon:variant="outline">{{ __('Move to drafts') }}</flux:button>
+                            <flux:button wire:click="archive" size="sm" icon="archive-box" icon:variant="outline">{{ __('Archive') }}</flux:button>
+                        @elseif ($post->status === App\Enums\PostStatus::Archived)
+                            <flux:badge :color="$post->status->color()" size="sm">{{ $post->status->label() }}</flux:badge>
                             <flux:button wire:click="unarchive" size="sm" icon="archive-box-x-mark">{{ __('Unarchive') }}</flux:button>
                         @endif
                     </div>
                 </div>
 
                 <div class="flex flex-wrap gap-2">
-                    @if ($message->sender)
-                        <flux:badge color="zinc" size="sm">{{ __('From') }}: {{ $message->sender->label() }}</flux:badge>
+                    @if ($post->sender)
+                        <flux:badge color="zinc" size="sm">{{ __('From') }}: {{ $post->sender->label() }}</flux:badge>
                     @endif
 
                     <flux:badge color="zinc" size="sm">
@@ -255,22 +254,22 @@ new #[Layout('layouts::workspace'), Title('Update')] class extends Component {
                         {{ $topic->name }}
                     </flux:badge>
 
-                    @foreach ($message->assignedAgents as $agent)
+                    @foreach ($post->assignedAgents as $agent)
                         <flux:badge color="amber" size="sm">{{ __('Agent work') }}: {{ $agent->name }}</flux:badge>
                     @endforeach
                 </div>
 
                 <div>
-                    @if ($message->body)
-                        <flux:text class="whitespace-pre-wrap text-sm leading-relaxed text-neutral-700 dark:text-neutral-300">{{ $message->body }}</flux:text>
+                    @if ($post->body)
+                        <flux:text class="whitespace-pre-wrap text-sm leading-relaxed text-neutral-700 dark:text-neutral-300">{{ $post->body }}</flux:text>
                     @else
                         <flux:text class="text-sm text-neutral-400 dark:text-neutral-600">{{ __('No content.') }}</flux:text>
                     @endif
                 </div>
             @endif
 
-            @include('partials.message-attachments', [
-                'message' => $message,
+            @include('partials.post-attachments', [
+                'post' => $post,
                 'uploadAction' => 'uploadAttachments',
                 'uploadModel' => 'uploads',
                 'uploadError' => 'uploads.*',

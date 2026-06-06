@@ -13,17 +13,17 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('messages', function (Blueprint $table) {
+        Schema::table('posts', function (Blueprint $table) {
             $table->ulid('ulid')->nullable()->after('id')->unique();
         });
 
-        DB::table('messages')
+        DB::table('posts')
             ->whereNull('ulid')
             ->orderBy('id')
             ->get(['id'])
-            ->each(function (object $message): void {
-                DB::table('messages')
-                    ->where('id', $message->id)
+            ->each(function (object $post): void {
+                DB::table('posts')
+                    ->where('id', $post->id)
                     ->update(['ulid' => (string) Str::ulid()]);
             });
     }
@@ -33,7 +33,7 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('messages', function (Blueprint $table) {
+        Schema::table('posts', function (Blueprint $table) {
             $table->dropColumn('ulid');
         });
     }

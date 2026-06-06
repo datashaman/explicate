@@ -11,15 +11,15 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('messages', function (Blueprint $table) {
-            $table->renameColumn('name', 'title');
+        Schema::table('posts', function (Blueprint $table) {
+            $table->string('status')->default('draft')->after('body');
         });
     }
 
     public function down(): void
     {
-        Schema::table('messages', function (Blueprint $table) {
-            $table->renameColumn('title', 'name');
+        Schema::table('posts', function (Blueprint $table) {
+            $table->dropColumn('status');
         });
     }
 };

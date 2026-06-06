@@ -9,10 +9,10 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['agent_id', 'message_id', 'event_type', 'status', 'priority', 'available_at', 'locked_at', 'attempts', 'last_error'])]
+#[Fillable(['agent_id', 'post_id', 'event_type', 'status', 'priority', 'available_at', 'locked_at', 'attempts', 'last_error'])]
 class AgentTask extends Model
 {
-    public const string EventMessageAssigned = 'message_assigned';
+    public const string EventPostAssigned = 'post_assigned';
 
     /** @use HasFactory<AgentTaskFactory> */
     use HasFactory;
@@ -36,10 +36,10 @@ class AgentTask extends Model
     }
 
     /**
-     * @return BelongsTo<Message, $this>
+     * @return BelongsTo<Post, $this>
      */
-    public function message(): BelongsTo
+    public function post(): BelongsTo
     {
-        return $this->belongsTo(Message::class);
+        return $this->belongsTo(Post::class);
     }
 }

@@ -1,26 +1,26 @@
 <?php
 
-use App\Enums\MessageStatus;
+use App\Enums\PostStatus;
 use App\Mcp\Resources\AgentResource;
 use App\Mcp\Resources\AgentTaskResource;
 use App\Mcp\Resources\AgentTasksResource;
-use App\Mcp\Resources\MessageResource;
 use App\Mcp\Resources\PlaybookResource;
-use App\Mcp\Resources\TopicMessagesResource;
+use App\Mcp\Resources\PostResource;
+use App\Mcp\Resources\TopicPostsResource;
 use App\Mcp\Resources\TopicResource;
 use App\Mcp\Resources\WhoamiResource;
 use App\Mcp\Resources\WorkspaceAgentsResource;
 use App\Mcp\Resources\WorkspacesResource;
 use App\Mcp\Resources\WorkspaceTopicsResource;
 use App\Mcp\Servers\TopicForgeServer;
-use App\Mcp\Tools\CreateMessageTool;
+use App\Mcp\Tools\CreatePostTool;
 use App\Mcp\Tools\GetAgentTaskTool;
 use App\Mcp\Tools\GetAgentTool;
-use App\Mcp\Tools\GetMessageTool;
+use App\Mcp\Tools\GetPostTool;
 use App\Mcp\Tools\GetTopicTool;
 use App\Mcp\Tools\ListAgentsTool;
 use App\Mcp\Tools\ListAgentTasksTool;
-use App\Mcp\Tools\ListMessagesTool;
+use App\Mcp\Tools\ListPostsTool;
 use App\Mcp\Tools\ListTopicsTool;
 use App\Mcp\Tools\ListWorkspacesTool;
 use App\Mcp\Tools\SwitchWorkspaceTool;
@@ -29,7 +29,7 @@ use App\Models\Agent;
 use App\Models\AgentTask;
 use App\Models\AgentVersion;
 use App\Models\Attachment;
-use App\Models\Message;
+use App\Models\Post;
 use App\Models\Topic;
 use App\Models\User;
 use App\Models\Workspace;
@@ -87,7 +87,7 @@ test('list topics defaults to the current workspace', function () {
         'name' => 'Alpha Topic',
         'slug' => 'alpha-topic',
     ]);
-    Message::factory()->for($topic)->count(2)->create();
+    Post::factory()->for($topic)->count(2)->create();
     Topic::factory()->for($otherWorkspace)->create([
         'name' => 'Hidden Topic',
         'slug' => 'hidden-topic',
@@ -104,14 +104,14 @@ test('list topics defaults to the current workspace', function () {
                     'id' => $topic->id,
                     'name' => 'Alpha Topic',
                     'slug' => 'alpha-topic',
-                    'messages_count' => 2,
+                    'posts_count' => 2,
                     'resource_uri' => 'topic-forge://workspaces/strategy/topics/alpha-topic',
                 ],
             ],
         ]);
 });
 
-test('switch workspace updates the current mcp workspace context', function () {
+test('switch workspace inbox the current mcp workspace context', function () {
     $user = User::factory()->create();
     $initialWorkspace = Workspace::factory()->for($user->currentTeam)->create([
         'name' => 'Initial Workspace',
@@ -156,7 +156,7 @@ test('switch workspace updates the current mcp workspace context', function () {
                     'id' => $targetTopic->id,
                     'name' => 'Target Topic',
                     'slug' => 'target-topic',
-                    'messages_count' => 0,
+                    'posts_count' => 0,
                     'resource_uri' => 'topic-forge://workspaces/target-workspace/topics/target-topic',
                 ],
             ],
@@ -177,9 +177,9 @@ test('topic forge tools expose switch workspace instead of workspace slug parame
         'get-agent-task',
         'get-topic',
         'get-agent',
-        'list-messages',
-        'get-message',
-        'create-message',
+        'list-posts',
+        'get-post',
+        'create-post',
     ] as $toolName) {
         expect($tools[$toolName]['inputSchema']['properties'] ?? [])->not->toHaveKey('workspace_slug');
     }
@@ -197,7 +197,7 @@ test('get topic returns attached agents for an accessible workspace', function (
         'name' => 'Alpha Topic',
         'slug' => 'alpha-topic',
     ]);
-    Message::factory()->for($topic)->count(2)->create();
+    Post::factory()->for($topic)->count(2)->create();
 
     $agent = Agent::factory()->for($workspace)->create([
         'name' => 'Research Agent',
@@ -219,7 +219,7 @@ test('get topic returns attached agents for an accessible workspace', function (
         ->assertStructuredContent(fn ($json) => $json
             ->where('workspace.slug', 'strategy')
             ->where('topic.slug', 'alpha-topic')
-            ->where('topic.messages_count', 2)
+            ->where('topic.posts_count', 2)
             ->where('topic.resource_uri', 'topic-forge://workspaces/strategy/topics/alpha-topic')
             ->where('agents.0.slug', 'research-agent')
             ->where('agents.0.latest_version', 1)
@@ -317,7 +317,7 @@ test('get agent returns topics and version history for an accessible workspace',
         );
 });
 
-test('list messages returns topic messages ordered by title', function () {
+test('list posts returns topic posts ordered by title', function () {
     $user = User::factory()->create();
     $workspace = Workspace::factory()->for($user->currentTeam)->create([
         'slug' => 'strategy',
@@ -327,20 +327,20 @@ test('list messages returns topic messages ordered by title', function () {
     $topic = Topic::factory()->for($workspace)->create([
         'slug' => 'alpha-topic',
     ]);
-    Message::factory()->for($topic)->create([
+    Post::factory()->for($topic)->create([
         'title' => 'Zulu Note',
         'slug' => 'zulu-note',
-        'status' => MessageStatus::Published,
+        'status' => PostStatus::Published,
         'body' => 'Ready to ship.',
     ]);
-    Message::factory()->for($topic)->create([
+    Post::factory()->for($topic)->create([
         'title' => 'Alpha Draft',
         'slug' => 'alpha-draft',
-        'status' => MessageStatus::Draft,
+        'status' => PostStatus::Draft,
         'body' => null,
     ]);
 
-    $response = TopicForgeServer::actingAs($user)->tool(ListMessagesTool::class, [
+    $response = TopicForgeServer::actingAs($user)->tool(ListPostsTool::class, [
         'topic_slug' => 'alpha-topic',
     ]);
 
@@ -350,18 +350,18 @@ test('list messages returns topic messages ordered by title', function () {
             ->where('workspace.slug', 'strategy')
             ->where('topic.slug', 'alpha-topic')
             ->where('topic.resource_uri', 'topic-forge://workspaces/strategy/topics/alpha-topic')
-            ->where('messages.0.title', 'Alpha Draft')
-            ->where('messages.0.has_body', false)
-            ->where('messages.0.resource_uri', 'topic-forge://workspaces/strategy/topics/alpha-topic/messages/alpha-draft')
-            ->where('messages.1.title', 'Zulu Note')
-            ->where('messages.1.status', 'published')
-            ->where('messages.1.has_body', true)
-            ->where('messages.1.resource_uri', 'topic-forge://workspaces/strategy/topics/alpha-topic/messages/zulu-note')
+            ->where('posts.0.title', 'Alpha Draft')
+            ->where('posts.0.has_body', false)
+            ->where('posts.0.resource_uri', 'topic-forge://workspaces/strategy/topics/alpha-topic/posts/alpha-draft')
+            ->where('posts.1.title', 'Zulu Note')
+            ->where('posts.1.status', 'published')
+            ->where('posts.1.has_body', true)
+            ->where('posts.1.resource_uri', 'topic-forge://workspaces/strategy/topics/alpha-topic/posts/zulu-note')
             ->etc()
         );
 });
 
-test('list messages includes direct messages with sender and recipient context', function () {
+test('list posts includes direct posts with sender and recipient context', function () {
     $user = User::factory()->create();
     $workspace = Workspace::factory()->for($user->currentTeam)->create([
         'slug' => 'strategy',
@@ -378,31 +378,31 @@ test('list messages includes direct messages with sender and recipient context',
     $senderPrincipal = $workspace->principalForUser($user);
     $agentPrincipal = $workspace->principalForAgent($agent);
 
-    Message::factory()->for($topic)->create([
+    Post::factory()->for($topic)->create([
         'title' => 'Agent Request',
         'slug' => 'agent-request',
-        'status' => MessageStatus::Published,
+        'status' => PostStatus::Published,
         'sender_principal_id' => $senderPrincipal->id,
         'recipient_principal_id' => $agentPrincipal->id,
     ]);
 
-    $response = TopicForgeServer::actingAs($user)->tool(ListMessagesTool::class, [
+    $response = TopicForgeServer::actingAs($user)->tool(ListPostsTool::class, [
         'topic_slug' => 'alpha-topic',
     ]);
 
     $response
         ->assertOk()
         ->assertStructuredContent(fn ($json) => $json
-            ->where('messages.0.slug', 'agent-request')
-            ->where('messages.0.sender.type', 'user')
-            ->where('messages.0.sender.name', $user->name)
-            ->where('messages.0.recipient.type', 'agent')
-            ->where('messages.0.recipient.name', 'Research Agent')
+            ->where('posts.0.slug', 'agent-request')
+            ->where('posts.0.sender.type', 'user')
+            ->where('posts.0.sender.name', $user->name)
+            ->where('posts.0.recipient.type', 'agent')
+            ->where('posts.0.recipient.name', 'Research Agent')
             ->etc()
         );
 });
 
-test('get message returns the message body and attachment metadata', function () {
+test('get post returns the post body and attachment metadata', function () {
     $user = User::factory()->create();
     $workspace = Workspace::factory()->for($user->currentTeam)->create([
         'slug' => 'strategy',
@@ -413,22 +413,22 @@ test('get message returns the message body and attachment metadata', function ()
         'name' => 'Alpha Topic',
         'slug' => 'alpha-topic',
     ]);
-    $message = Message::factory()->for($topic)->create([
+    $post = Post::factory()->for($topic)->create([
         'title' => 'Alpha Draft',
         'slug' => 'alpha-draft',
-        'status' => MessageStatus::Draft,
+        'status' => PostStatus::Draft,
         'sender_principal_id' => $workspace->principalForUser($user)->id,
         'body' => 'Draft body',
     ]);
-    Attachment::factory()->for($message)->create([
+    Attachment::factory()->for($post)->create([
         'filename' => 'report.pdf',
         'mime_type' => 'application/pdf',
         'size' => 4096,
     ]);
 
-    $response = TopicForgeServer::actingAs($user)->tool(GetMessageTool::class, [
+    $response = TopicForgeServer::actingAs($user)->tool(GetPostTool::class, [
         'topic_slug' => 'alpha-topic',
-        'message_slug' => 'alpha-draft',
+        'post_slug' => 'alpha-draft',
     ]);
 
     $response
@@ -437,10 +437,10 @@ test('get message returns the message body and attachment metadata', function ()
             ->where('workspace.slug', 'strategy')
             ->where('topic.slug', 'alpha-topic')
             ->where('topic.resource_uri', 'topic-forge://workspaces/strategy/topics/alpha-topic')
-            ->where('message.slug', 'alpha-draft')
-            ->where('message.sender.name', $user->name)
-            ->where('message.body', 'Draft body')
-            ->where('message.resource_uri', 'topic-forge://workspaces/strategy/topics/alpha-topic/messages/alpha-draft')
+            ->where('post.slug', 'alpha-draft')
+            ->where('post.sender.name', $user->name)
+            ->where('post.body', 'Draft body')
+            ->where('post.resource_uri', 'topic-forge://workspaces/strategy/topics/alpha-topic/posts/alpha-draft')
             ->where('attachments.0.filename', 'report.pdf')
             ->where('attachments.0.mime_type', 'application/pdf')
             ->where('attachments.0.size', 4096)
@@ -448,7 +448,7 @@ test('get message returns the message body and attachment metadata', function ()
         );
 });
 
-test('list agent tasks returns message-derived work for an agent', function () {
+test('list agent tasks returns post-derived work for an agent', function () {
     $user = User::factory()->create();
     $workspace = Workspace::factory()->for($user->currentTeam)->create([
         'slug' => 'strategy',
@@ -462,16 +462,16 @@ test('list agent tasks returns message-derived work for an agent', function () {
         'name' => 'Research Agent',
         'slug' => 'research-agent',
     ]);
-    $message = Message::factory()->for($topic)->create([
+    $post = Post::factory()->for($topic)->create([
         'title' => 'Agent Request',
         'slug' => 'agent-request',
-        'status' => MessageStatus::Published,
+        'status' => PostStatus::Published,
         'sender_principal_id' => $workspace->principalForUser($user)->id,
         'body' => 'Please summarize.',
     ]);
     $topic->agents()->attach($agent);
-    $message->assignAgents([$agent->id]);
-    $task = AgentTask::query()->whereBelongsTo($message)->first();
+    $post->assignAgents([$agent->id]);
+    $task = AgentTask::query()->whereBelongsTo($post)->first();
 
     $response = TopicForgeServer::actingAs($user)->tool(ListAgentTasksTool::class, [
         'agent_slug' => 'research-agent',
@@ -485,15 +485,15 @@ test('list agent tasks returns message-derived work for an agent', function () {
             ->where('agent.tasks_resource_uri', 'topic-forge://workspaces/strategy/agents/research-agent/tasks')
             ->where('tasks.0.id', $task->id)
             ->where('tasks.0.status', 'pending')
-            ->where('tasks.0.event_type', AgentTask::EventMessageAssigned)
-            ->where('tasks.0.message.slug', 'agent-request')
-            ->where('tasks.0.message.has_body', true)
+            ->where('tasks.0.event_type', AgentTask::EventPostAssigned)
+            ->where('tasks.0.post.slug', 'agent-request')
+            ->where('tasks.0.post.has_body', true)
             ->where('tasks.0.resource_uri', "topic-forge://workspaces/strategy/agents/research-agent/tasks/{$task->id}")
             ->etc()
         );
 });
 
-test('get agent task returns full message context for agent work', function () {
+test('get agent task returns full post context for agent work', function () {
     $user = User::factory()->create();
     $workspace = Workspace::factory()->for($user->currentTeam)->create([
         'slug' => 'strategy',
@@ -507,16 +507,16 @@ test('get agent task returns full message context for agent work', function () {
         'name' => 'Research Agent',
         'slug' => 'research-agent',
     ]);
-    $message = Message::factory()->for($topic)->create([
+    $post = Post::factory()->for($topic)->create([
         'title' => 'Agent Request',
         'slug' => 'agent-request',
-        'status' => MessageStatus::Published,
+        'status' => PostStatus::Published,
         'sender_principal_id' => $workspace->principalForUser($user)->id,
         'body' => 'Please summarize.',
     ]);
     $topic->agents()->attach($agent);
-    $message->assignAgents([$agent->id]);
-    $task = AgentTask::query()->whereBelongsTo($message)->first();
+    $post->assignAgents([$agent->id]);
+    $task = AgentTask::query()->whereBelongsTo($post)->first();
 
     $response = TopicForgeServer::actingAs($user)->tool(GetAgentTaskTool::class, [
         'agent_slug' => 'research-agent',
@@ -529,14 +529,14 @@ test('get agent task returns full message context for agent work', function () {
             ->where('workspace.slug', 'strategy')
             ->where('agent.slug', 'research-agent')
             ->where('task.id', $task->id)
-            ->where('task.message.slug', 'agent-request')
-            ->where('task.message.body', 'Please summarize.')
-            ->where('task.message.assigned_agents.0.name', 'Research Agent')
+            ->where('task.post.slug', 'agent-request')
+            ->where('task.post.body', 'Please summarize.')
+            ->where('task.post.assigned_agents.0.name', 'Research Agent')
             ->etc()
         );
 });
 
-test('create message creates a draft by default', function () {
+test('create post creates a draft by default', function () {
     $user = User::factory()->create();
     $workspace = Workspace::factory()->for($user->currentTeam)->create([
         'slug' => 'strategy',
@@ -547,17 +547,17 @@ test('create message creates a draft by default', function () {
         'slug' => 'alpha-topic',
     ]);
 
-    $response = TopicForgeServer::actingAs($user)->tool(CreateMessageTool::class, [
+    $response = TopicForgeServer::actingAs($user)->tool(CreatePostTool::class, [
         'topic_slug' => 'alpha-topic',
-        'title' => 'New MCP Message',
+        'title' => 'New MCP Post',
         'body' => 'Created through the MCP server.',
     ]);
 
-    $message = $topic->messages()->where('title', 'New MCP Message')->first();
+    $post = $topic->posts()->where('title', 'New MCP Post')->first();
 
-    expect($message)->not->toBeNull();
-    expect($message?->status)->toBe(MessageStatus::Draft);
-    expect($message?->slug)->toBe('new-mcp-message');
+    expect($post)->not->toBeNull();
+    expect($post?->status)->toBe(PostStatus::Draft);
+    expect($post?->slug)->toBe('new-mcp-post');
 
     $response
         ->assertOk()
@@ -565,9 +565,9 @@ test('create message creates a draft by default', function () {
             ->where('workspace.slug', 'strategy')
             ->where('topic.slug', 'alpha-topic')
             ->where('topic.resource_uri', 'topic-forge://workspaces/strategy/topics/alpha-topic')
-            ->where('message.title', 'New MCP Message')
-            ->where('message.status', 'draft')
-            ->where('message.resource_uri', 'topic-forge://workspaces/strategy/topics/alpha-topic/messages/new-mcp-message')
+            ->where('post.title', 'New MCP Post')
+            ->where('post.status', 'draft')
+            ->where('post.resource_uri', 'topic-forge://workspaces/strategy/topics/alpha-topic/posts/new-mcp-post')
             ->etc()
         );
 });
@@ -583,10 +583,10 @@ test('topic resource returns topic context by uri template', function () {
         'name' => 'Alpha Topic',
         'slug' => 'alpha-topic',
     ]);
-    Message::factory()->for($topic)->create([
+    Post::factory()->for($topic)->create([
         'title' => 'Alpha Draft',
         'slug' => 'alpha-draft',
-        'status' => MessageStatus::Draft,
+        'status' => PostStatus::Draft,
         'body' => 'Draft body',
     ]);
 
@@ -605,7 +605,7 @@ test('topic resource returns topic context by uri template', function () {
         ->assertSee('"slug":"alpha-topic"')
         ->assertSee('"resource_uri":"topic-forge://workspaces/strategy/topics/alpha-topic"')
         ->assertSee('"title":"Alpha Draft"')
-        ->assertSee('"resource_uri":"topic-forge://workspaces/strategy/topics/alpha-topic/messages/alpha-draft"')
+        ->assertSee('"resource_uri":"topic-forge://workspaces/strategy/topics/alpha-topic/posts/alpha-draft"')
         ->assertSee('"body":"Draft body"');
 });
 
@@ -620,7 +620,7 @@ test('workspace topics resource returns topics for a workspace by uri template',
         'name' => 'Alpha Topic',
         'slug' => 'alpha-topic',
     ]);
-    Message::factory()->for($topic)->count(2)->create();
+    Post::factory()->for($topic)->count(2)->create();
 
     $resource = new class(app(TopicForgeContext::class)) extends WorkspaceTopicsResource
     {
@@ -636,7 +636,7 @@ test('workspace topics resource returns topics for a workspace by uri template',
         ->assertOk()
         ->assertSee('"slug":"strategy"')
         ->assertSee('"slug":"alpha-topic"')
-        ->assertSee('"messages_count":2')
+        ->assertSee('"posts_count":2')
         ->assertSee('"resource_uri":"topic-forge://workspaces/strategy/topics/alpha-topic"');
 });
 
@@ -651,7 +651,7 @@ test('workspace topics resource is readable through a concrete template uri', fu
         'name' => 'Alpha Topic',
         'slug' => 'alpha-topic',
     ]);
-    Message::factory()->for($topic)->count(2)->create();
+    Post::factory()->for($topic)->count(2)->create();
 
     app('auth')->guard()->setUser($user);
     app('auth')->shouldUse(null);
@@ -663,7 +663,7 @@ test('workspace topics resource is readable through a concrete template uri', fu
     expect($response['result']['contents'][0]['uri'])->toBe('topic-forge://workspaces/strategy/topics');
     expect($response['result']['contents'][0]['text'])->toContain('"slug":"strategy"');
     expect($response['result']['contents'][0]['text'])->toContain('"slug":"alpha-topic"');
-    expect($response['result']['contents'][0]['text'])->toContain('"messages_count":2');
+    expect($response['result']['contents'][0]['text'])->toContain('"posts_count":2');
     expect($response['result']['contents'][0]['text'])->toContain('"resource_uri":"topic-forge://workspaces/strategy/topics/alpha-topic"');
 });
 
@@ -705,7 +705,7 @@ test('workspace agents resource returns agents for a workspace by uri template',
         ->assertSee('"resource_uri":"topic-forge://workspaces/strategy/agents/research-agent"');
 });
 
-test('topic messages resource returns messages for a topic by uri template', function () {
+test('topic posts resource returns posts for a topic by uri template', function () {
     $user = User::factory()->create();
     $workspace = Workspace::factory()->for($user->currentTeam)->create([
         'slug' => 'strategy',
@@ -716,24 +716,24 @@ test('topic messages resource returns messages for a topic by uri template', fun
         'name' => 'Alpha Topic',
         'slug' => 'alpha-topic',
     ]);
-    Message::factory()->for($topic)->create([
+    Post::factory()->for($topic)->create([
         'title' => 'Zulu Note',
         'slug' => 'zulu-note',
-        'status' => MessageStatus::Published,
+        'status' => PostStatus::Published,
         'body' => 'Ready to ship.',
     ]);
-    Message::factory()->for($topic)->create([
+    Post::factory()->for($topic)->create([
         'title' => 'Alpha Draft',
         'slug' => 'alpha-draft',
-        'status' => MessageStatus::Draft,
+        'status' => PostStatus::Draft,
         'body' => null,
     ]);
 
-    $resource = new class(app(TopicForgeContext::class)) extends TopicMessagesResource
+    $resource = new class(app(TopicForgeContext::class)) extends TopicPostsResource
     {
         public function uri(): string
         {
-            return 'topic-forge://workspaces/strategy/topics/alpha-topic/messages';
+            return 'topic-forge://workspaces/strategy/topics/alpha-topic/posts';
         }
     };
 
@@ -744,11 +744,11 @@ test('topic messages resource returns messages for a topic by uri template', fun
         ->assertSee('"slug":"alpha-topic"')
         ->assertSee('"title":"Alpha Draft"')
         ->assertSee('"has_body":false')
-        ->assertSee('"resource_uri":"topic-forge://workspaces/strategy/topics/alpha-topic/messages/alpha-draft"')
+        ->assertSee('"resource_uri":"topic-forge://workspaces/strategy/topics/alpha-topic/posts/alpha-draft"')
         ->assertSee('"title":"Zulu Note"');
 });
 
-test('message resource returns message context by uri template', function () {
+test('post resource returns post context by uri template', function () {
     $user = User::factory()->create();
     $workspace = Workspace::factory()->for($user->currentTeam)->create([
         'slug' => 'strategy',
@@ -759,23 +759,23 @@ test('message resource returns message context by uri template', function () {
         'name' => 'Alpha Topic',
         'slug' => 'alpha-topic',
     ]);
-    $message = Message::factory()->for($topic)->create([
+    $post = Post::factory()->for($topic)->create([
         'title' => 'Alpha Draft',
         'slug' => 'alpha-draft',
-        'status' => MessageStatus::Draft,
+        'status' => PostStatus::Draft,
         'body' => 'Draft body',
     ]);
-    Attachment::factory()->for($message)->create([
+    Attachment::factory()->for($post)->create([
         'filename' => 'report.pdf',
         'mime_type' => 'application/pdf',
         'size' => 4096,
     ]);
 
-    $resource = new class(app(TopicForgeContext::class)) extends MessageResource
+    $resource = new class(app(TopicForgeContext::class)) extends PostResource
     {
         public function uri(): string
         {
-            return 'topic-forge://workspaces/strategy/topics/alpha-topic/messages/alpha-draft';
+            return 'topic-forge://workspaces/strategy/topics/alpha-topic/posts/alpha-draft';
         }
     };
 
@@ -784,7 +784,7 @@ test('message resource returns message context by uri template', function () {
     $response
         ->assertOk()
         ->assertSee('"slug":"alpha-draft"')
-        ->assertSee('"resource_uri":"topic-forge://workspaces/strategy/topics/alpha-topic/messages/alpha-draft"')
+        ->assertSee('"resource_uri":"topic-forge://workspaces/strategy/topics/alpha-topic/posts/alpha-draft"')
         ->assertSee('"filename":"report.pdf"');
 });
 
@@ -802,15 +802,15 @@ test('agent tasks resource returns queued work by uri template', function () {
         'name' => 'Research Agent',
         'slug' => 'research-agent',
     ]);
-    $message = Message::factory()->for($topic)->create([
+    $post = Post::factory()->for($topic)->create([
         'title' => 'Agent Request',
         'slug' => 'agent-request',
-        'status' => MessageStatus::Published,
+        'status' => PostStatus::Published,
         'sender_principal_id' => $workspace->principalForUser($user)->id,
     ]);
     $topic->agents()->attach($agent);
-    $message->assignAgents([$agent->id]);
-    $task = AgentTask::query()->whereBelongsTo($message)->first();
+    $post->assignAgents([$agent->id]);
+    $task = AgentTask::query()->whereBelongsTo($post)->first();
 
     $resource = new class(app(TopicForgeContext::class)) extends AgentTasksResource
     {
@@ -845,16 +845,16 @@ test('agent task resource returns queued work by uri template', function () {
         'name' => 'Research Agent',
         'slug' => 'research-agent',
     ]);
-    $message = Message::factory()->for($topic)->create([
+    $post = Post::factory()->for($topic)->create([
         'title' => 'Agent Request',
         'slug' => 'agent-request',
-        'status' => MessageStatus::Published,
+        'status' => PostStatus::Published,
         'sender_principal_id' => $workspace->principalForUser($user)->id,
         'body' => 'Please summarize.',
     ]);
     $topic->agents()->attach($agent);
-    $message->assignAgents([$agent->id]);
-    $task = AgentTask::query()->whereBelongsTo($message)->first();
+    $post->assignAgents([$agent->id]);
+    $task = AgentTask::query()->whereBelongsTo($post)->first();
 
     $resource = new class(app(TopicForgeContext::class), $task->id) extends AgentTaskResource
     {
@@ -948,7 +948,7 @@ test('playbook resource returns top-level navigation guidance', function () {
     $response
         ->assertOk()
         ->assertSee('"resource_uri":"topic-forge://playbook"')
-        ->assertSee('topic-forge://workspaces/{workspace}/topics/{topic}/messages/{message}');
+        ->assertSee('topic-forge://workspaces/{workspace}/topics/{topic}/posts/{post}');
 });
 
 test('playbook resource is readable by its static uri', function () {
@@ -1068,11 +1068,11 @@ test('local mcp resource auth errors stay on the json rpc channel', function () 
 
     expect($output)->not->toContain('Illuminate\\Auth\\AuthenticationException');
 
-    $messages = collect(explode("\n", $output))
+    $posts = collect(explode("\n", $output))
         ->map(fn (string $line): array => json_decode($line, true, flags: JSON_THROW_ON_ERROR));
 
-    expect($messages)->toHaveCount(2);
-    expect($messages[1]['error']['message'])->toBe('You must be authenticated to use the Topic Forge MCP server.');
+    expect($posts)->toHaveCount(2);
+    expect($posts[1]['error']['message'])->toBe('You must be authenticated to use the Topic Forge MCP server.');
 });
 
 test('local mcp resources authenticate from the configured env user', function () {
@@ -1116,15 +1116,15 @@ test('invalid local mcp auth config does not write laravel exceptions to stdout'
 
     expect($output)->not->toContain('Illuminate\\Auth\\AuthenticationException');
 
-    $messages = collect(explode("\n", $output))
+    $posts = collect(explode("\n", $output))
         ->map(fn (string $line): array => json_decode($line, true, flags: JSON_THROW_ON_ERROR));
 
-    expect($messages)->toHaveCount(2);
-    expect($messages[0]['result']['serverInfo']['name'])->toBe('Topic Forge Server');
-    expect($messages[1]['error']['message'])->toBe('The configured MCP local auth user could not be resolved.');
+    expect($posts)->toHaveCount(2);
+    expect($posts[0]['result']['serverInfo']['name'])->toBe('Topic Forge Server');
+    expect($posts[1]['error']['message'])->toBe('The configured MCP local auth user could not be resolved.');
 });
 
-test('topic forge server lists topic, message, and agent resource templates', function () {
+test('topic forge server lists topic, post, and agent resource templates', function () {
     $response = topicForgeServerMethodResponse('resources/templates/list');
 
     expect($response['result']['resourceTemplates'])->toHaveCount(8);
@@ -1138,7 +1138,7 @@ test('topic forge server lists topic, message, and agent resource templates', fu
     ))->toBeTrue();
 
     expect(collect($response['result']['resourceTemplates'])->contains(
-        fn (array $resource): bool => $resource['uriTemplate'] === 'topic-forge://workspaces/{workspace}/topics/{topic}/messages'
+        fn (array $resource): bool => $resource['uriTemplate'] === 'topic-forge://workspaces/{workspace}/topics/{topic}/posts'
     ))->toBeTrue();
 
     expect(collect($response['result']['resourceTemplates'])->contains(
@@ -1147,8 +1147,8 @@ test('topic forge server lists topic, message, and agent resource templates', fu
     ))->toBeTrue();
 
     expect(collect($response['result']['resourceTemplates'])->contains(
-        fn (array $resource): bool => $resource['name'] === 'message-resource'
-            && $resource['uriTemplate'] === 'topic-forge://workspaces/{workspace}/topics/{topic}/messages/{message}'
+        fn (array $resource): bool => $resource['name'] === 'post-resource'
+            && $resource['uriTemplate'] === 'topic-forge://workspaces/{workspace}/topics/{topic}/posts/{post}'
     ))->toBeTrue();
 
     expect(collect($response['result']['resourceTemplates'])->contains(

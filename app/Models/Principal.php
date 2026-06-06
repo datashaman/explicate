@@ -44,19 +44,19 @@ class Principal extends Model
     }
 
     /**
-     * @return HasMany<Message, $this>
+     * @return HasMany<Post, $this>
      */
-    public function sentMessages(): HasMany
+    public function sentPosts(): HasMany
     {
-        return $this->hasMany(Message::class, 'sender_principal_id');
+        return $this->hasMany(Post::class, 'sender_principal_id');
     }
 
     /**
-     * @return HasMany<Message, $this>
+     * @return HasMany<Post, $this>
      */
-    public function receivedMessages(): HasMany
+    public function receivedPosts(): HasMany
     {
-        return $this->hasMany(Message::class, 'recipient_principal_id');
+        return $this->hasMany(Post::class, 'recipient_principal_id');
     }
 
     public function label(): string

@@ -13,8 +13,8 @@ use Laravel\Mcp\Server\Contracts\HasUriTemplate;
 use Laravel\Mcp\Server\Resource;
 use Laravel\Mcp\Support\UriTemplate;
 
-#[Description('List messages for a topic inside an accessible workspace.')]
-class TopicMessagesResource extends Resource implements HasUriTemplate
+#[Description('List posts for a topic inside an accessible workspace.')]
+class TopicPostsResource extends Resource implements HasUriTemplate
 {
     use FormatsMcpPayloads;
     use HandlesResourceExceptions;
@@ -23,7 +23,7 @@ class TopicMessagesResource extends Resource implements HasUriTemplate
 
     public function uriTemplate(): UriTemplate
     {
-        return new UriTemplate('topic-forge://workspaces/{workspace}/topics/{topic}/messages');
+        return new UriTemplate('topic-forge://workspaces/{workspace}/topics/{topic}/posts');
     }
 
     public function handle(Request $request): Response
@@ -37,11 +37,11 @@ class TopicMessagesResource extends Resource implements HasUriTemplate
                 (string) $request->get('workspace'),
             );
 
-            $messages = $topic->messages()
+            $posts = $topic->posts()
                 ->with(['topic.workspace', 'sender.user', 'sender.agent', 'recipient.user', 'recipient.agent'])
                 ->orderBy('title')
                 ->get()
-                ->map(fn ($message) => $this->messagePayload($message))
+                ->map(fn ($post) => $this->postPayload($post))
                 ->values()
                 ->all();
 
@@ -51,7 +51,7 @@ class TopicMessagesResource extends Resource implements HasUriTemplate
                     ...$topic->only(['id', 'name', 'slug']),
                     'resource_uri' => "topic-forge://workspaces/{$topic->workspace->slug}/topics/{$topic->slug}",
                 ],
-                'messages' => $messages,
+                'posts' => $posts,
             ]);
         });
     }

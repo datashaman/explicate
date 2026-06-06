@@ -4,7 +4,7 @@ namespace App\Mcp;
 
 use App\Models\Agent;
 use App\Models\AgentTask;
-use App\Models\Message;
+use App\Models\Post;
 use App\Models\Topic;
 use App\Models\User;
 use App\Models\Workspace;
@@ -80,17 +80,17 @@ class TopicForgeContext
         return $agent;
     }
 
-    public function messageFor(User $user, string $topicSlug, string $messageSlug, ?string $workspaceSlug = null): Message
+    public function postFor(User $user, string $topicSlug, string $postSlug, ?string $workspaceSlug = null): Post
     {
         $topic = $this->topicFor($user, $topicSlug, $workspaceSlug);
 
-        $message = $topic->messages()->where('slug', $messageSlug)->first();
+        $post = $topic->posts()->where('slug', $postSlug)->first();
 
-        if (! $message instanceof Message) {
-            throw new AuthorizationException('The requested message is not accessible for the authenticated user.');
+        if (! $post instanceof Post) {
+            throw new AuthorizationException('The requested post is not accessible for the authenticated user.');
         }
 
-        return $message;
+        return $post;
     }
 
     public function agentTaskFor(User $user, string $agentSlug, int $taskId, ?string $workspaceSlug = null): AgentTask

@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('messages', function (Blueprint $table) {
+        Schema::table('posts', function (Blueprint $table) {
             $table->foreignId('thread_id')
                 ->nullable()
                 ->after('topic_id')
@@ -25,7 +25,7 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('messages', function (Blueprint $table) {
+        Schema::table('posts', function (Blueprint $table) {
             $table->dropConstrainedForeignId('thread_id');
         });
     }

@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('agent_tasks', function (Blueprint $table) {
             $table->id();
             $table->foreignId('agent_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('message_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('post_id')->constrained()->cascadeOnDelete();
             $table->string('event_type');
             $table->string('status')->default('pending');
             $table->unsignedSmallInteger('priority')->default(0);
@@ -24,7 +24,7 @@ return new class extends Migration
             $table->text('last_error')->nullable();
             $table->timestamps();
 
-            $table->unique(['agent_id', 'message_id', 'event_type']);
+            $table->unique(['agent_id', 'post_id', 'event_type']);
             $table->index(['agent_id', 'status', 'available_at']);
         });
     }

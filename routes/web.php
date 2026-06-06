@@ -2,7 +2,7 @@
 
 use App\Http\Middleware\EnsureTeamMembership;
 use App\Models\Agent;
-use App\Models\Message;
+use App\Models\Post;
 use App\Models\Topic;
 use Illuminate\Support\Facades\Route;
 
@@ -18,12 +18,12 @@ Route::bind('topic', function (string $value): Topic {
         ->firstOrFail();
 });
 
-Route::bind('message', function (string $value): Message {
+Route::bind('post', function (string $value): Post {
     $workspace = request()->user()?->currentWorkspace;
 
     abort_unless($workspace, 404);
 
-    return Message::query()
+    return Post::query()
         ->where('ulid', $value)
         ->whereHas('topic', fn ($query) => $query->where('workspace_id', $workspace->id))
         ->firstOrFail();
@@ -42,9 +42,9 @@ Route::bind('agent', function (string $value): Agent {
 Route::middleware(['auth', 'verified', EnsureTeamMembership::class])
     ->group(function () {
         Route::livewire('dashboard', 'pages::dashboard')->name('dashboard');
-        Route::livewire('messages/new', 'pages::dashboard')->name('messages.create');
+        Route::livewire('posts/new', 'pages::dashboard')->name('posts.create');
         Route::livewire('topics/{topic}', 'pages::topic')->name('topics.show');
-        Route::livewire('messages/{message}', 'pages::message')->name('messages.show');
+        Route::livewire('posts/{post}', 'pages::post')->name('posts.show');
         Route::livewire('agents', 'pages::agents')->name('agents');
         Route::livewire('agents/{agent}', 'pages::agent')->name('agents.show');
     });

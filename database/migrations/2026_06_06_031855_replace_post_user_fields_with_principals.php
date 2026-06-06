@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('messages', function (Blueprint $table) {
+        Schema::table('posts', function (Blueprint $table) {
             $table->foreignId('sender_principal_id')
                 ->nullable()
                 ->index();
@@ -29,14 +29,14 @@ return new class extends Migration
      */
     public function down(): void
     {
-        if (Schema::hasColumn('messages', 'sender_principal_id')) {
-            Schema::table('messages', function (Blueprint $table) {
+        if (Schema::hasColumn('posts', 'sender_principal_id')) {
+            Schema::table('posts', function (Blueprint $table) {
                 $table->dropColumn('sender_principal_id');
             });
         }
 
-        if (Schema::hasColumn('messages', 'recipient_principal_id')) {
-            Schema::table('messages', function (Blueprint $table) {
+        if (Schema::hasColumn('posts', 'recipient_principal_id')) {
+            Schema::table('posts', function (Blueprint $table) {
                 $table->dropColumn('recipient_principal_id');
             });
         }

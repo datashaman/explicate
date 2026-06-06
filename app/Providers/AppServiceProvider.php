@@ -2,8 +2,8 @@
 
 namespace App\Providers;
 
-use App\Events\MessageSent;
-use App\Listeners\CreateMessageNotification;
+use App\Events\PostSent;
+use App\Listeners\CreatePostNotification;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
@@ -29,7 +29,7 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->configureDefaults();
 
-        Event::listen(MessageSent::class, CreateMessageNotification::class);
+        Event::listen(PostSent::class, CreatePostNotification::class);
 
         Passport::authorizationView(function (array $parameters) {
             return view('mcp.authorize', $parameters);

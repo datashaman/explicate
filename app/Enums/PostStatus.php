@@ -2,7 +2,7 @@
 
 namespace App\Enums;
 
-enum MessageStatus: string
+enum PostStatus: string
 {
     case Draft = 'draft';
     case Published = 'published';
