@@ -234,12 +234,18 @@ test('dashboard inbox folder shows all published topic inbox', function () {
         ->assertSee('For me')
         ->assertSee('For someone else')
         ->assertSee('For the topic')
-        ->assertSeeText('From:')
+        ->assertDontSeeText('Author')
+        ->assertSee('data-test="folder-list-sort-sender"', escape: false)
+        ->assertSeeText('Sender:')
         ->assertSeeText($recipient->name)
-        ->assertSeeText('Sent:')
-        ->assertSeeText('9 minutes ago')
+        ->assertSee('data-test="folder-list-sort-topic"', escape: false)
         ->assertSeeText('Topic:')
-        ->assertSeeText('Design');
+        ->assertSeeText('Design')
+        ->assertSee('data-test="folder-list-sort-recipient"', escape: false)
+        ->assertSeeText('Recipient:')
+        ->assertSeeText($user->name)
+        ->assertSeeText('Sent:')
+        ->assertSeeText('9 minutes ago');
 });
 
 test('dashboard post panel returns to the selected folder before the post topic', function () {
@@ -287,20 +293,30 @@ test('dashboard archived folder shows archived inbox', function () {
 
     $topic = Topic::factory()->for($workspace)->create(['name' => 'Design', 'slug' => 'design']);
     $userPrincipal = $workspace->principalForUser($user);
+    [$recipient, $recipientPrincipal] = teamMemberPrincipal($user, $workspace);
 
     Post::factory()->for($topic)->create([
         'title' => 'Archived post',
         'updated_at' => now()->subMinutes(11),
         'status' => PostStatus::Archived,
         'sender_principal_id' => $userPrincipal->id,
+        'recipient_principal_id' => $recipientPrincipal->id,
     ]);
 
     $response = $this->actingAs($user)
         ->get(route('dashboard', ['folder' => 'archived', 'panel' => 'posts']))
         ->assertOk()
         ->assertSee('Archived post')
+        ->assertDontSeeText('Author')
+        ->assertSee('data-test="folder-list-sort-sender"', escape: false)
+        ->assertSeeText('Sender:')
+        ->assertSeeText($user->name)
+        ->assertSee('data-test="folder-list-sort-topic"', escape: false)
         ->assertSeeText('Topic:')
         ->assertSeeText('Design')
+        ->assertSee('data-test="folder-list-sort-recipient"', escape: false)
+        ->assertSeeText('Recipient:')
+        ->assertSeeText($recipient->name)
         ->assertSeeText('Sent:')
         ->assertSeeText('11 minutes ago');
 

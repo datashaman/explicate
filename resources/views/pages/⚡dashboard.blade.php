@@ -370,13 +370,16 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                             'title' => $post->updated_at->timezone($timezone)->isoFormat('LLLL'),
                         ],
                     ]
-                    : $post->listMeta(
-                        showSender: true,
-                        showRecipient: true,
-                        recipientFallback: $post->topic->name,
-                        timezone: $timezone,
-                        recipientLabel: __('Topic'),
-                    );
+                    : [
+                        ...($post->sender ? [['label' => __('Sender'), 'value' => $post->sender->label()]] : []),
+                        ['label' => __('Topic'), 'value' => $post->topic->name],
+                        ...($post->recipient ? [['label' => __('Recipient'), 'value' => $post->recipient->label()]] : []),
+                        [
+                            'label' => __('Sent'),
+                            'value' => $post->updated_at->diffForHumans(),
+                            'title' => $post->updated_at->timezone($timezone)->isoFormat('LLLL'),
+                        ],
+                    ];
 
                 $sort = $isDraftsFolder
                     ? [
@@ -422,8 +425,9 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             $columns[] = ['key' => 'topic', 'label' => __('Topic'), 'class' => 'w-28 shrink-0'];
             $columns[] = ['key' => 'recipient', 'label' => __('Recipient'), 'class' => 'w-28 shrink-0'];
         } else {
-            $columns[] = ['key' => 'from', 'label' => __('Author'), 'class' => 'w-28 shrink-0'];
-            $columns[] = ['key' => 'to', 'label' => __('Topic'), 'class' => 'w-28 shrink-0'];
+            $columns[] = ['key' => 'sender', 'label' => __('Sender'), 'class' => 'w-28 shrink-0'];
+            $columns[] = ['key' => 'topic', 'label' => __('Topic'), 'class' => 'w-28 shrink-0'];
+            $columns[] = ['key' => 'recipient', 'label' => __('Recipient'), 'class' => 'w-28 shrink-0'];
         }
 
         $columns[] = ['key' => $folder && $folder['slug'] === 'drafts' ? 'saved' : 'sent', 'label' => $dateLabel, 'class' => 'w-28 shrink-0'];

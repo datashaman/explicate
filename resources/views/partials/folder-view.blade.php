@@ -326,6 +326,7 @@
                             $metaTitlesByLabel = collect($item['meta'] ?? [])->mapWithKeys(fn ($meta) => [$meta['label'] => $meta['title'] ?? null]);
                             $columnLabels = [
                                 'from' => __('From'),
+                                'sender' => __('Sender'),
                                 'topic' => __('Topic'),
                                 'recipient' => __('Recipient'),
                                 'sent' => __('Sent'),
