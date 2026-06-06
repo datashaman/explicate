@@ -2,6 +2,8 @@
 
 use App\Enums\MessageStatus;
 use App\Mcp\Resources\AgentResource;
+use App\Mcp\Resources\AgentTaskResource;
+use App\Mcp\Resources\AgentTasksResource;
 use App\Mcp\Resources\MessageResource;
 use App\Mcp\Resources\PlaybookResource;
 use App\Mcp\Resources\TopicMessagesResource;
@@ -12,16 +14,19 @@ use App\Mcp\Resources\WorkspacesResource;
 use App\Mcp\Resources\WorkspaceTopicsResource;
 use App\Mcp\Servers\TopicForgeServer;
 use App\Mcp\Tools\CreateMessageTool;
+use App\Mcp\Tools\GetAgentTaskTool;
 use App\Mcp\Tools\GetAgentTool;
 use App\Mcp\Tools\GetMessageTool;
 use App\Mcp\Tools\GetTopicTool;
 use App\Mcp\Tools\ListAgentsTool;
+use App\Mcp\Tools\ListAgentTasksTool;
 use App\Mcp\Tools\ListMessagesTool;
 use App\Mcp\Tools\ListTopicsTool;
 use App\Mcp\Tools\ListWorkspacesTool;
 use App\Mcp\Tools\SwitchWorkspaceTool;
 use App\Mcp\TopicForgeContext;
 use App\Models\Agent;
+use App\Models\AgentTask;
 use App\Models\AgentVersion;
 use App\Models\Attachment;
 use App\Models\Message;
@@ -168,6 +173,8 @@ test('topic forge tools expose switch workspace instead of workspace slug parame
     foreach ([
         'list-topics',
         'list-agents',
+        'list-agent-tasks',
+        'get-agent-task',
         'get-topic',
         'get-agent',
         'list-messages',
@@ -354,6 +361,47 @@ test('list messages returns topic messages ordered by title', function () {
         );
 });
 
+test('list messages includes direct messages with sender and recipient context', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->for($user->currentTeam)->create([
+        'slug' => 'strategy',
+    ]);
+    $user->switchWorkspace($workspace);
+
+    $topic = Topic::factory()->for($workspace)->create([
+        'slug' => 'alpha-topic',
+    ]);
+    $agent = Agent::factory()->for($workspace)->create([
+        'name' => 'Research Agent',
+        'slug' => 'research-agent',
+    ]);
+    $senderPrincipal = $workspace->principalForUser($user);
+    $agentPrincipal = $workspace->principalForAgent($agent);
+
+    Message::factory()->for($topic)->create([
+        'title' => 'Agent Request',
+        'slug' => 'agent-request',
+        'status' => MessageStatus::Published,
+        'sender_principal_id' => $senderPrincipal->id,
+        'recipient_principal_id' => $agentPrincipal->id,
+    ]);
+
+    $response = TopicForgeServer::actingAs($user)->tool(ListMessagesTool::class, [
+        'topic_slug' => 'alpha-topic',
+    ]);
+
+    $response
+        ->assertOk()
+        ->assertStructuredContent(fn ($json) => $json
+            ->where('messages.0.slug', 'agent-request')
+            ->where('messages.0.sender.type', 'user')
+            ->where('messages.0.sender.name', $user->name)
+            ->where('messages.0.recipient.type', 'agent')
+            ->where('messages.0.recipient.name', 'Research Agent')
+            ->etc()
+        );
+});
+
 test('get message returns the message body and attachment metadata', function () {
     $user = User::factory()->create();
     $workspace = Workspace::factory()->for($user->currentTeam)->create([
@@ -369,6 +417,7 @@ test('get message returns the message body and attachment metadata', function ()
         'title' => 'Alpha Draft',
         'slug' => 'alpha-draft',
         'status' => MessageStatus::Draft,
+        'sender_principal_id' => $workspace->principalForUser($user)->id,
         'body' => 'Draft body',
     ]);
     Attachment::factory()->for($message)->create([
@@ -389,11 +438,98 @@ test('get message returns the message body and attachment metadata', function ()
             ->where('topic.slug', 'alpha-topic')
             ->where('topic.resource_uri', 'topic-forge://workspaces/strategy/topics/alpha-topic')
             ->where('message.slug', 'alpha-draft')
+            ->where('message.sender.name', $user->name)
             ->where('message.body', 'Draft body')
             ->where('message.resource_uri', 'topic-forge://workspaces/strategy/topics/alpha-topic/messages/alpha-draft')
             ->where('attachments.0.filename', 'report.pdf')
             ->where('attachments.0.mime_type', 'application/pdf')
             ->where('attachments.0.size', 4096)
+            ->etc()
+        );
+});
+
+test('list agent tasks returns message-derived work for an agent', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->for($user->currentTeam)->create([
+        'slug' => 'strategy',
+    ]);
+    $user->switchWorkspace($workspace);
+
+    $topic = Topic::factory()->for($workspace)->create([
+        'slug' => 'alpha-topic',
+    ]);
+    $agent = Agent::factory()->for($workspace)->create([
+        'name' => 'Research Agent',
+        'slug' => 'research-agent',
+    ]);
+    $message = Message::factory()->for($topic)->create([
+        'title' => 'Agent Request',
+        'slug' => 'agent-request',
+        'status' => MessageStatus::Published,
+        'sender_principal_id' => $workspace->principalForUser($user)->id,
+        'recipient_principal_id' => $workspace->principalForAgent($agent)->id,
+        'body' => 'Please summarize.',
+    ]);
+    $task = AgentTask::query()->whereBelongsTo($message)->first();
+
+    $response = TopicForgeServer::actingAs($user)->tool(ListAgentTasksTool::class, [
+        'agent_slug' => 'research-agent',
+    ]);
+
+    $response
+        ->assertOk()
+        ->assertStructuredContent(fn ($json) => $json
+            ->where('workspace.slug', 'strategy')
+            ->where('agent.slug', 'research-agent')
+            ->where('agent.tasks_resource_uri', 'topic-forge://workspaces/strategy/agents/research-agent/tasks')
+            ->where('tasks.0.id', $task->id)
+            ->where('tasks.0.status', 'pending')
+            ->where('tasks.0.event_type', 'message_received')
+            ->where('tasks.0.message.slug', 'agent-request')
+            ->where('tasks.0.message.has_body', true)
+            ->where('tasks.0.resource_uri', "topic-forge://workspaces/strategy/agents/research-agent/tasks/{$task->id}")
+            ->etc()
+        );
+});
+
+test('get agent task returns full message context for agent work', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->for($user->currentTeam)->create([
+        'slug' => 'strategy',
+    ]);
+    $user->switchWorkspace($workspace);
+
+    $topic = Topic::factory()->for($workspace)->create([
+        'slug' => 'alpha-topic',
+    ]);
+    $agent = Agent::factory()->for($workspace)->create([
+        'name' => 'Research Agent',
+        'slug' => 'research-agent',
+    ]);
+    $message = Message::factory()->for($topic)->create([
+        'title' => 'Agent Request',
+        'slug' => 'agent-request',
+        'status' => MessageStatus::Published,
+        'sender_principal_id' => $workspace->principalForUser($user)->id,
+        'recipient_principal_id' => $workspace->principalForAgent($agent)->id,
+        'body' => 'Please summarize.',
+    ]);
+    $task = AgentTask::query()->whereBelongsTo($message)->first();
+
+    $response = TopicForgeServer::actingAs($user)->tool(GetAgentTaskTool::class, [
+        'agent_slug' => 'research-agent',
+        'task_id' => $task->id,
+    ]);
+
+    $response
+        ->assertOk()
+        ->assertStructuredContent(fn ($json) => $json
+            ->where('workspace.slug', 'strategy')
+            ->where('agent.slug', 'research-agent')
+            ->where('task.id', $task->id)
+            ->where('task.message.slug', 'agent-request')
+            ->where('task.message.body', 'Please summarize.')
+            ->where('task.message.recipient.name', 'Research Agent')
             ->etc()
         );
 });
@@ -650,6 +786,95 @@ test('message resource returns message context by uri template', function () {
         ->assertSee('"filename":"report.pdf"');
 });
 
+test('agent tasks resource returns queued work by uri template', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->for($user->currentTeam)->create([
+        'slug' => 'strategy',
+    ]);
+    $user->switchWorkspace($workspace);
+
+    $topic = Topic::factory()->for($workspace)->create([
+        'slug' => 'alpha-topic',
+    ]);
+    $agent = Agent::factory()->for($workspace)->create([
+        'name' => 'Research Agent',
+        'slug' => 'research-agent',
+    ]);
+    $message = Message::factory()->for($topic)->create([
+        'title' => 'Agent Request',
+        'slug' => 'agent-request',
+        'status' => MessageStatus::Published,
+        'sender_principal_id' => $workspace->principalForUser($user)->id,
+        'recipient_principal_id' => $workspace->principalForAgent($agent)->id,
+    ]);
+    $task = AgentTask::query()->whereBelongsTo($message)->first();
+
+    $resource = new class(app(TopicForgeContext::class)) extends AgentTasksResource
+    {
+        public function uri(): string
+        {
+            return 'topic-forge://workspaces/strategy/agents/research-agent/tasks';
+        }
+    };
+
+    $response = TopicForgeServer::actingAs($user)->resource($resource);
+
+    $response
+        ->assertOk()
+        ->assertSee('"slug":"research-agent"')
+        ->assertSee('"tasks_resource_uri":"topic-forge://workspaces/strategy/agents/research-agent/tasks"')
+        ->assertSee('"id":'.$task->id)
+        ->assertSee('"slug":"agent-request"')
+        ->assertSee('"resource_uri":"topic-forge://workspaces/strategy/agents/research-agent/tasks/'.$task->id.'"');
+});
+
+test('agent task resource returns queued work by uri template', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->for($user->currentTeam)->create([
+        'slug' => 'strategy',
+    ]);
+    $user->switchWorkspace($workspace);
+
+    $topic = Topic::factory()->for($workspace)->create([
+        'slug' => 'alpha-topic',
+    ]);
+    $agent = Agent::factory()->for($workspace)->create([
+        'name' => 'Research Agent',
+        'slug' => 'research-agent',
+    ]);
+    $message = Message::factory()->for($topic)->create([
+        'title' => 'Agent Request',
+        'slug' => 'agent-request',
+        'status' => MessageStatus::Published,
+        'sender_principal_id' => $workspace->principalForUser($user)->id,
+        'recipient_principal_id' => $workspace->principalForAgent($agent)->id,
+        'body' => 'Please summarize.',
+    ]);
+    $task = AgentTask::query()->whereBelongsTo($message)->first();
+
+    $resource = new class(app(TopicForgeContext::class), $task->id) extends AgentTaskResource
+    {
+        public function __construct(TopicForgeContext $context, private int $taskId)
+        {
+            parent::__construct($context);
+        }
+
+        public function uri(): string
+        {
+            return "topic-forge://workspaces/strategy/agents/research-agent/tasks/{$this->taskId}";
+        }
+    };
+
+    $response = TopicForgeServer::actingAs($user)->resource($resource);
+
+    $response
+        ->assertOk()
+        ->assertSee('"id":'.$task->id)
+        ->assertSee('"body":"Please summarize."')
+        ->assertSee('"recipient":{"id":')
+        ->assertSee('"name":"Research Agent"');
+});
+
 test('agent resource returns agent context by uri template', function () {
     $user = User::factory()->create();
     $workspace = Workspace::factory()->for($user->currentTeam)->create([
@@ -898,7 +1123,7 @@ test('invalid local mcp auth config does not write laravel exceptions to stdout'
 test('topic forge server lists topic, message, and agent resource templates', function () {
     $response = topicForgeServerMethodResponse('resources/templates/list');
 
-    expect($response['result']['resourceTemplates'])->toHaveCount(6);
+    expect($response['result']['resourceTemplates'])->toHaveCount(8);
 
     expect(collect($response['result']['resourceTemplates'])->contains(
         fn (array $resource): bool => $resource['uriTemplate'] === 'topic-forge://workspaces/{workspace}/topics'
@@ -925,6 +1150,16 @@ test('topic forge server lists topic, message, and agent resource templates', fu
     expect(collect($response['result']['resourceTemplates'])->contains(
         fn (array $resource): bool => $resource['name'] === 'agent-resource'
             && $resource['uriTemplate'] === 'topic-forge://workspaces/{workspace}/agents/{agent}'
+    ))->toBeTrue();
+
+    expect(collect($response['result']['resourceTemplates'])->contains(
+        fn (array $resource): bool => $resource['name'] === 'agent-tasks-resource'
+            && $resource['uriTemplate'] === 'topic-forge://workspaces/{workspace}/agents/{agent}/tasks'
+    ))->toBeTrue();
+
+    expect(collect($response['result']['resourceTemplates'])->contains(
+        fn (array $resource): bool => $resource['name'] === 'agent-task-resource'
+            && $resource['uriTemplate'] === 'topic-forge://workspaces/{workspace}/agents/{agent}/tasks/{task}'
     ))->toBeTrue();
 });
 

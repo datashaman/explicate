@@ -2,6 +2,7 @@
 
 namespace App\Mcp\Tools;
 
+use App\Mcp\Concerns\FormatsMcpPayloads;
 use App\Mcp\TopicForgeContext;
 use App\Models\User;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
@@ -20,6 +21,8 @@ use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 #[IsIdempotent]
 class GetMessageTool extends Tool
 {
+    use FormatsMcpPayloads;
+
     public function __construct(protected TopicForgeContext $context) {}
 
     /**
@@ -39,7 +42,7 @@ class GetMessageTool extends Tool
             $validated['topic_slug'],
             $validated['message_slug'],
         );
-        $message->load(['topic.workspace', 'attachments']);
+        $message->load(['topic.workspace', 'attachments', 'sender.user', 'sender.agent', 'recipient.user', 'recipient.agent']);
 
         return Response::structured([
             'workspace' => $message->topic->workspace->only(['id', 'name', 'slug']),
@@ -47,16 +50,7 @@ class GetMessageTool extends Tool
                 ...$message->topic->only(['id', 'name', 'slug']),
                 'resource_uri' => "topic-forge://workspaces/{$message->topic->workspace->slug}/topics/{$message->topic->slug}",
             ],
-            'message' => [
-                'id' => $message->id,
-                'title' => $message->title,
-                'slug' => $message->slug,
-                'status' => $message->status->value,
-                'sender_principal_id' => $message->sender_principal_id,
-                'recipient_principal_id' => $message->recipient_principal_id,
-                'body' => $message->body,
-                'resource_uri' => "topic-forge://workspaces/{$message->topic->workspace->slug}/topics/{$message->topic->slug}/messages/{$message->slug}",
-            ],
+            'message' => $this->messagePayload($message, includeBody: true),
             'attachments' => $message->attachments
                 ->map(fn ($attachment) => [
                     'id' => $attachment->id,

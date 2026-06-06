@@ -36,6 +36,8 @@ class PlaybookResource extends Resource
                 'topic_messages' => 'topic-forge://workspaces/{workspace}/topics/{topic}/messages',
                 'message' => 'topic-forge://workspaces/{workspace}/topics/{topic}/messages/{message}',
                 'agent' => 'topic-forge://workspaces/{workspace}/agents/{agent}',
+                'agent_tasks' => 'topic-forge://workspaces/{workspace}/agents/{agent}/tasks',
+                'agent_task' => 'topic-forge://workspaces/{workspace}/agents/{agent}/tasks/{task}',
             ],
         ]);
     }

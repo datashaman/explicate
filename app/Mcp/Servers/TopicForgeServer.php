@@ -3,6 +3,8 @@
 namespace App\Mcp\Servers;
 
 use App\Mcp\Resources\AgentResource;
+use App\Mcp\Resources\AgentTaskResource;
+use App\Mcp\Resources\AgentTasksResource;
 use App\Mcp\Resources\MessageResource;
 use App\Mcp\Resources\PlaybookResource;
 use App\Mcp\Resources\TopicMessagesResource;
@@ -12,10 +14,12 @@ use App\Mcp\Resources\WorkspaceAgentsResource;
 use App\Mcp\Resources\WorkspacesResource;
 use App\Mcp\Resources\WorkspaceTopicsResource;
 use App\Mcp\Tools\CreateMessageTool;
+use App\Mcp\Tools\GetAgentTaskTool;
 use App\Mcp\Tools\GetAgentTool;
 use App\Mcp\Tools\GetMessageTool;
 use App\Mcp\Tools\GetTopicTool;
 use App\Mcp\Tools\ListAgentsTool;
+use App\Mcp\Tools\ListAgentTasksTool;
 use App\Mcp\Tools\ListMessagesTool;
 use App\Mcp\Tools\ListTopicsTool;
 use App\Mcp\Tools\ListWorkspacesTool;
@@ -39,6 +43,8 @@ class TopicForgeServer extends Server
         SwitchWorkspaceTool::class,
         ListTopicsTool::class,
         ListAgentsTool::class,
+        ListAgentTasksTool::class,
+        GetAgentTaskTool::class,
         GetTopicTool::class,
         GetAgentTool::class,
         ListMessagesTool::class,
@@ -52,6 +58,8 @@ class TopicForgeServer extends Server
         PlaybookResource::class,
         WorkspaceTopicsResource::class,
         WorkspaceAgentsResource::class,
+        AgentTasksResource::class,
+        AgentTaskResource::class,
         TopicMessagesResource::class,
         TopicResource::class,
         MessageResource::class,

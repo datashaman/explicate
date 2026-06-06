@@ -2,6 +2,7 @@
 
 namespace App\Mcp\Tools;
 
+use App\Mcp\Concerns\FormatsMcpPayloads;
 use App\Mcp\TopicForgeContext;
 use App\Models\User;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
@@ -20,6 +21,8 @@ use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 #[IsIdempotent]
 class ListMessagesTool extends Tool
 {
+    use FormatsMcpPayloads;
+
     public function __construct(protected TopicForgeContext $context) {}
 
     /**
@@ -36,17 +39,10 @@ class ListMessagesTool extends Tool
         $topic = $this->context->topicFor($user, $validated['topic_slug']);
 
         $messages = $topic->messages()
-            ->whereNull('recipient_principal_id')
+            ->with(['topic.workspace', 'sender.user', 'sender.agent', 'recipient.user', 'recipient.agent'])
             ->orderBy('title')
             ->get()
-            ->map(fn ($message) => [
-                'id' => $message->id,
-                'title' => $message->title,
-                'slug' => $message->slug,
-                'status' => $message->status->value,
-                'has_body' => filled($message->body),
-                'resource_uri' => "topic-forge://workspaces/{$topic->workspace->slug}/topics/{$topic->slug}/messages/{$message->slug}",
-            ])
+            ->map(fn ($message) => $this->messagePayload($message))
             ->values()
             ->all();
 

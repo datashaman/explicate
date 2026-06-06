@@ -3,6 +3,7 @@
 namespace App\Mcp;
 
 use App\Models\Agent;
+use App\Models\AgentTask;
 use App\Models\Message;
 use App\Models\Topic;
 use App\Models\User;
@@ -90,5 +91,18 @@ class TopicForgeContext
         }
 
         return $message;
+    }
+
+    public function agentTaskFor(User $user, string $agentSlug, int $taskId, ?string $workspaceSlug = null): AgentTask
+    {
+        $agent = $this->agentFor($user, $agentSlug, $workspaceSlug);
+
+        $task = $agent->tasks()->whereKey($taskId)->first();
+
+        if (! $task instanceof AgentTask) {
+            throw new AuthorizationException('The requested agent task is not accessible for the authenticated user.');
+        }
+
+        return $task;
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Mcp\Resources;
 
+use App\Mcp\Concerns\FormatsMcpPayloads;
 use App\Mcp\Resources\Concerns\HandlesResourceExceptions;
 use App\Mcp\TopicForgeContext;
 use App\Models\User;
@@ -12,16 +13,17 @@ use Laravel\Mcp\Server\Contracts\HasUriTemplate;
 use Laravel\Mcp\Server\Resource;
 use Laravel\Mcp\Support\UriTemplate;
 
-#[Description('Read an agent with its attached topics and version history from an accessible workspace.')]
-class AgentResource extends Resource implements HasUriTemplate
+#[Description('List message-derived work queued for an agent inside an accessible workspace.')]
+class AgentTasksResource extends Resource implements HasUriTemplate
 {
+    use FormatsMcpPayloads;
     use HandlesResourceExceptions;
 
     public function __construct(protected TopicForgeContext $context) {}
 
     public function uriTemplate(): UriTemplate
     {
-        return new UriTemplate('topic-forge://workspaces/{workspace}/agents/{agent}');
+        return new UriTemplate('topic-forge://workspaces/{workspace}/agents/{agent}/tasks');
     }
 
     public function handle(Request $request): Response
@@ -34,7 +36,16 @@ class AgentResource extends Resource implements HasUriTemplate
                 (string) $request->get('agent'),
                 (string) $request->get('workspace'),
             );
-            $agent->load(['workspace', 'topics', 'latestVersion', 'versions']);
+
+            $tasks = $agent->tasks()
+                ->with(['agent.workspace', 'message.topic.workspace', 'message.sender.user', 'message.sender.agent', 'message.recipient.user', 'message.recipient.agent'])
+                ->orderByDesc('priority')
+                ->orderBy('available_at')
+                ->orderBy('id')
+                ->get()
+                ->map(fn ($task) => $this->agentTaskPayload($task))
+                ->values()
+                ->all();
 
             return Response::json([
                 'workspace' => $agent->workspace->only(['id', 'name', 'slug']),
@@ -42,32 +53,10 @@ class AgentResource extends Resource implements HasUriTemplate
                     'id' => $agent->id,
                     'name' => $agent->name,
                     'slug' => $agent->slug,
-                    'latest_version' => $agent->latestVersion?->version,
-                    'latest_model' => $agent->latestVersion?->model,
                     'resource_uri' => "topic-forge://workspaces/{$agent->workspace->slug}/agents/{$agent->slug}",
                     'tasks_resource_uri' => "topic-forge://workspaces/{$agent->workspace->slug}/agents/{$agent->slug}/tasks",
                 ],
-                'topics' => $agent->topics
-                    ->map(fn ($topic) => [
-                        'id' => $topic->id,
-                        'name' => $topic->name,
-                        'slug' => $topic->slug,
-                        'resource_uri' => "topic-forge://workspaces/{$agent->workspace->slug}/topics/{$topic->slug}",
-                    ])
-                    ->values()
-                    ->all(),
-                'versions' => $agent->versions
-                    ->sortByDesc('version')
-                    ->values()
-                    ->map(fn ($version) => [
-                        'version' => $version->version,
-                        'provider' => $version->provider->value,
-                        'model' => $version->model,
-                        'reasoning_effort' => $version->reasoning_effort?->value,
-                        'prompt' => $version->prompt,
-                        'created_at' => $version->created_at?->toIso8601String(),
-                    ])
-                    ->all(),
+                'tasks' => $tasks,
             ]);
         });
     }

@@ -2,6 +2,7 @@
 
 namespace App\Mcp\Resources;
 
+use App\Mcp\Concerns\FormatsMcpPayloads;
 use App\Mcp\Resources\Concerns\HandlesResourceExceptions;
 use App\Mcp\TopicForgeContext;
 use App\Models\User;
@@ -15,6 +16,7 @@ use Laravel\Mcp\Support\UriTemplate;
 #[Description('Read a message with its attachments from an accessible workspace topic.')]
 class MessageResource extends Resource implements HasUriTemplate
 {
+    use FormatsMcpPayloads;
     use HandlesResourceExceptions;
 
     public function __construct(protected TopicForgeContext $context) {}
@@ -43,26 +45,7 @@ class MessageResource extends Resource implements HasUriTemplate
                     ...$message->topic->only(['id', 'name', 'slug']),
                     'resource_uri' => "topic-forge://workspaces/{$message->topic->workspace->slug}/topics/{$message->topic->slug}",
                 ],
-                'message' => [
-                    'id' => $message->id,
-                    'title' => $message->title,
-                    'slug' => $message->slug,
-                    'status' => $message->status->value,
-                    'sender_principal_id' => $message->sender_principal_id,
-                    'sender' => $message->sender ? [
-                        'id' => $message->sender->id,
-                        'type' => $message->sender->type,
-                        'name' => $message->sender->label(),
-                    ] : null,
-                    'recipient_principal_id' => $message->recipient_principal_id,
-                    'recipient' => $message->recipient ? [
-                        'id' => $message->recipient->id,
-                        'type' => $message->recipient->type,
-                        'name' => $message->recipient->label(),
-                    ] : null,
-                    'body' => $message->body,
-                    'resource_uri' => "topic-forge://workspaces/{$message->topic->workspace->slug}/topics/{$message->topic->slug}/messages/{$message->slug}",
-                ],
+                'message' => $this->messagePayload($message, includeBody: true),
                 'attachments' => $message->attachments
                     ->map(fn ($attachment) => [
                         'id' => $attachment->id,
