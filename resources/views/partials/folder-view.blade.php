@@ -57,17 +57,17 @@
                         </div>
                     @endisset
 
-                    <div class="flex items-center rounded-lg border border-neutral-200 dark:border-white/10">
+                    <div class="flex items-center rounded-md border border-neutral-200 dark:border-white/10">
                         <button @click="setView('icons')" title="{{ __('Icon view') }}"
                                 :class="view === 'icons' ? 'bg-neutral-100 dark:bg-white/10 text-neutral-900 dark:text-white' : 'text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300'"
-                                class="rounded-l-lg p-1.5 transition-colors">
-                            <flux:icon name="squares-2x2" variant="mini" class="size-4" />
+                                class="rounded-l-md p-1 transition-colors">
+                            <flux:icon name="squares-2x2" variant="mini" class="size-3.5" />
                         </button>
                         <div class="w-px self-stretch bg-neutral-200 dark:bg-white/10"></div>
                         <button @click="setView('list')" title="{{ __('List view') }}"
                                 :class="view === 'list' ? 'bg-neutral-100 dark:bg-white/10 text-neutral-900 dark:text-white' : 'text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300'"
-                                class="rounded-r-lg p-1.5 transition-colors">
-                            <flux:icon name="list-bullet" variant="mini" class="size-4" />
+                                class="rounded-r-md p-1 transition-colors">
+                            <flux:icon name="list-bullet" variant="mini" class="size-3.5" />
                         </button>
                     </div>
 
@@ -100,17 +100,17 @@
                     </div>
                 @endisset
 
-                <div class="flex items-center rounded-lg border border-neutral-200 dark:border-white/10">
+                <div class="flex items-center rounded-md border border-neutral-200 dark:border-white/10">
                     <button @click="setView('icons')" title="{{ __('Icon view') }}"
                             :class="view === 'icons' ? 'bg-neutral-100 dark:bg-white/10 text-neutral-900 dark:text-white' : 'text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300'"
-                            class="rounded-l-lg p-1.5 transition-colors">
-                        <flux:icon name="squares-2x2" variant="mini" class="size-4" />
+                            class="rounded-l-md p-1 transition-colors">
+                        <flux:icon name="squares-2x2" variant="mini" class="size-3.5" />
                     </button>
                     <div class="w-px self-stretch bg-neutral-200 dark:bg-white/10"></div>
                     <button @click="setView('list')" title="{{ __('List view') }}"
                             :class="view === 'list' ? 'bg-neutral-100 dark:bg-white/10 text-neutral-900 dark:text-white' : 'text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300'"
-                            class="rounded-r-lg p-1.5 transition-colors">
-                        <flux:icon name="list-bullet" variant="mini" class="size-4" />
+                            class="rounded-r-md p-1 transition-colors">
+                        <flux:icon name="list-bullet" variant="mini" class="size-3.5" />
                     </button>
                 </div>
             </div>
@@ -184,17 +184,17 @@
                     </div>
                 @endisset
 
-                <div class="flex items-center rounded-lg border border-neutral-200 dark:border-white/10">
+                <div class="flex items-center rounded-md border border-neutral-200 dark:border-white/10">
                     <button @click="setView('icons')" title="{{ __('Icon view') }}"
                             :class="view === 'icons' ? 'bg-neutral-100 dark:bg-white/10 text-neutral-900 dark:text-white' : 'text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300'"
-                            class="rounded-l-lg p-1.5 transition-colors">
-                        <flux:icon name="squares-2x2" variant="mini" class="size-4" />
+                            class="rounded-l-md p-1 transition-colors">
+                        <flux:icon name="squares-2x2" variant="mini" class="size-3.5" />
                     </button>
                     <div class="w-px self-stretch bg-neutral-200 dark:bg-white/10"></div>
                     <button @click="setView('list')" title="{{ __('List view') }}"
                             :class="view === 'list' ? 'bg-neutral-100 dark:bg-white/10 text-neutral-900 dark:text-white' : 'text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300'"
-                            class="rounded-r-lg p-1.5 transition-colors">
-                        <flux:icon name="list-bullet" variant="mini" class="size-4" />
+                            class="rounded-r-md p-1 transition-colors">
+                        <flux:icon name="list-bullet" variant="mini" class="size-3.5" />
                     </button>
                 </div>
 
