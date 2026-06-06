@@ -11,6 +11,7 @@ use App\Models\Topic;
 use App\Models\User;
 use App\Models\Workspace;
 use Illuminate\Database\QueryException;
+use Illuminate\Http\UploadedFile;
 use Livewire\Livewire;
 
 test('a workspace can have many topics', function () {
@@ -589,6 +590,8 @@ test('dashboard shows new message form in the main panel', function () {
         ->get(route('messages.create', ['topic' => $topic->slug]))
         ->assertOk()
         ->assertSee('data-test="dashboard-message-create-panel"', escape: false)
+        ->assertSee('id="dashboard-new-message-form"', escape: false)
+        ->assertSee('form="dashboard-new-message-form"', escape: false)
         ->assertSee('New message')
         ->assertSee('Save draft')
         ->assertSee('Send')
@@ -604,10 +607,29 @@ test('dashboard shows new message form in the message panel without a selected t
         ->get(route('messages.create'))
         ->assertOk()
         ->assertSee('data-test="dashboard-message-create-panel"', escape: false)
+        ->assertSee('id="dashboard-new-message-form"', escape: false)
+        ->assertSee('form="dashboard-new-message-form"', escape: false)
         ->assertSee('New message')
         ->assertSee('Save draft')
         ->assertSee('Send')
         ->assertSee($topic->name);
+});
+
+test('dashboard keeps route-based new message form open while attachments upload', function () {
+    [$user, $workspace] = userWithWorkspace();
+
+    $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
+    $file = UploadedFile::fake()->create('brief.pdf', 128, 'application/pdf');
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::dashboard')
+        ->set('creatingMessageFromRoute', true)
+        ->set('selectedTopicSlug', $topic->slug)
+        ->set('newMessageUploads', [$file])
+        ->assertSet('creatingMessageFromRoute', true)
+        ->assertSee('id="dashboard-new-message-form"', escape: false)
+        ->assertSee('form="dashboard-new-message-form"', escape: false);
 });
 
 test('dashboard can create a draft message in the main panel', function () {

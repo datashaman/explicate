@@ -182,33 +182,35 @@ new #[Title('New Message')] class extends Component {
         <flux:breadcrumbs.item>{{ __('New message') }}</flux:breadcrumbs.item>
     </flux:breadcrumbs>
 
-    <form wire:submit="create" class="flex flex-col gap-6">
-        <div class="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_10rem_16rem]">
-            <flux:input wire:model="title" :label="__('Title')" required autofocus />
+    <div class="flex flex-col gap-6">
+        <form id="message-create-form" wire:submit="create" class="flex flex-col gap-6">
+            <div class="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_10rem_16rem]">
+                <flux:input wire:model="title" :label="__('Title')" required autofocus />
 
-            <flux:select wire:model.live="target" :label="__('To')" required>
-                <flux:select.option value="topic">{{ __('Topic') }}</flux:select.option>
-                <flux:select.option value="principal">{{ __('Principal') }}</flux:select.option>
-            </flux:select>
+                <flux:select wire:model.live="target" :label="__('To')" required>
+                    <flux:select.option value="topic">{{ __('Topic') }}</flux:select.option>
+                    <flux:select.option value="principal">{{ __('Principal') }}</flux:select.option>
+                </flux:select>
 
-            <flux:select wire:model="topicId" :label="__('Topic')" placeholder="{{ __('Select a topic…') }}" required>
-                @foreach ($this->availableTopics as $topic)
-                    <flux:select.option :value="$topic->id">{{ $topic->name }}</flux:select.option>
-                @endforeach
-            </flux:select>
-        </div>
+                <flux:select wire:model="topicId" :label="__('Topic')" placeholder="{{ __('Select a topic…') }}" required>
+                    @foreach ($this->availableTopics as $topic)
+                        <flux:select.option :value="$topic->id">{{ $topic->name }}</flux:select.option>
+                    @endforeach
+                </flux:select>
+            </div>
 
-        @if ($target === 'principal')
-            <flux:select wire:model="recipientPrincipalId" :label="__('Recipient')" placeholder="{{ __('Select a principal…') }}" required>
-                @foreach ($this->availableRecipients as $recipient)
-                    <flux:select.option :value="$recipient->id">
-                        {{ $recipient->label() }} · {{ $recipient->type === \App\Models\Principal::TypeAgent ? __('Agent') : __('User') }}
-                    </flux:select.option>
-                @endforeach
-            </flux:select>
-        @endif
+            @if ($target === 'principal')
+                <flux:select wire:model="recipientPrincipalId" :label="__('Recipient')" placeholder="{{ __('Select a principal…') }}" required>
+                    @foreach ($this->availableRecipients as $recipient)
+                        <flux:select.option :value="$recipient->id">
+                            {{ $recipient->label() }} · {{ $recipient->type === \App\Models\Principal::TypeAgent ? __('Agent') : __('User') }}
+                        </flux:select.option>
+                    @endforeach
+                </flux:select>
+            @endif
 
-        <flux:textarea wire:model="body" :label="__('Body')" :placeholder="__('Write something...')" rows="12" />
+            <flux:textarea wire:model="body" :label="__('Body')" :placeholder="__('Write something...')" rows="12" />
+        </form>
 
         <div class="flex flex-col gap-3">
             <flux:heading size="sm">{{ __('Attachments') }}</flux:heading>
@@ -235,8 +237,8 @@ new #[Title('New Message')] class extends Component {
             <flux:button :href="request()->query('topic') ? route('topics.show', ['topic' => request()->query('topic')]) : route('dashboard')" wire:navigate variant="filled">
                 {{ __('Cancel') }}
             </flux:button>
-            <flux:button type="submit" variant="filled">{{ __('Save draft') }}</flux:button>
-            <flux:button wire:click="send" type="button" variant="primary">{{ __('Send') }}</flux:button>
+            <flux:button type="submit" form="message-create-form" variant="filled" wire:loading.attr="disabled" wire:target="uploads">{{ __('Save draft') }}</flux:button>
+            <flux:button wire:click="send" type="button" variant="primary" wire:loading.attr="disabled" wire:target="uploads">{{ __('Send') }}</flux:button>
         </div>
-    </form>
+    </div>
 </div>

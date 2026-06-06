@@ -38,6 +38,8 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
     #[Url(as: 'panel')]
     public string $mobilePanel = 'topics';
 
+    public bool $creatingMessageFromRoute = false;
+
     public string $topicName = '';
 
     public string $agentName = '';
@@ -86,6 +88,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
     public function mount(): void
     {
         if ($this->isCreateRoute()) {
+            $this->creatingMessageFromRoute = true;
             $this->mobilePanel = 'messages';
         }
 
@@ -155,7 +158,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
     public function isCreatingMessage(): bool
     {
-        return $this->isCreateRoute() || $this->panelAction === 'new-message';
+        return $this->creatingMessageFromRoute || $this->panelAction === 'new-message';
     }
 
     /** @return list<array{slug: string, name: string, icon: string, count: int}> */
@@ -673,6 +676,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         $this->selectedTopicSlug = $topic->slug;
         $this->selectedMessageSlug = $message->slug;
         $this->panelAction = null;
+        $this->creatingMessageFromRoute = false;
         $this->mobilePanel = 'messages';
         $this->reset('newMessageTitle', 'newMessageBody', 'newMessageUploads');
         $this->newMessageTarget = 'topic';
@@ -1041,7 +1045,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                         </div>
 
                         <div class="flex flex-1 flex-col gap-6 overflow-auto px-4 py-4 xl:min-h-0" data-test="dashboard-message-create-panel">
-                            <form wire:submit="createDashboardMessage" class="flex flex-col gap-6">
+                            <form id="dashboard-new-message-form" wire:submit="createDashboardMessage" class="flex flex-col gap-6">
                                 <div class="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_10rem_16rem]">
                                     <flux:input wire:model="newMessageTitle" :label="__('Title')" required autofocus data-test="new-message-title" />
 
@@ -1068,36 +1072,36 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                                 @endif
 
                                 <flux:textarea wire:model="newMessageBody" :label="__('Body')" :placeholder="__('Write something...')" rows="12" data-test="new-message-body" />
-
-                                <div class="flex flex-col gap-3">
-                                    <flux:heading size="sm">{{ __('Attachments') }}</flux:heading>
-
-                                    <div x-data="{ uploading: false, progress: 0 }"
-                                         x-on:livewire-upload-start="uploading = true"
-                                         x-on:livewire-upload-finish="uploading = false"
-                                         x-on:livewire-upload-error="uploading = false"
-                                         x-on:livewire-upload-progress="progress = $event.detail.progress"
-                                         class="flex flex-col gap-2">
-                                        <flux:input type="file" wire:model="newMessageUploads" multiple />
-
-                                        <div x-show="uploading" class="h-1 w-full overflow-hidden rounded-full bg-neutral-100 dark:bg-white/10">
-                                            <div class="h-full rounded-full bg-blue-500 transition-all" :style="`width: ${progress}%`"></div>
-                                        </div>
-
-                                        @error('newMessageUploads.*')
-                                            <flux:error>{{ $message }}</flux:error>
-                                        @enderror
-                                    </div>
-                                </div>
-
-                                <div class="flex justify-end gap-2">
-                                    <flux:button :href="$this->selectedTopic() ? route('dashboard', ['topic' => $this->selectedTopic()->slug, 'panel' => 'messages']) : route('dashboard')" wire:navigate variant="filled">
-                                        {{ __('Cancel') }}
-                                    </flux:button>
-                                    <flux:button type="submit" variant="filled" data-test="new-message-save-draft">{{ __('Save draft') }}</flux:button>
-                                    <flux:button wire:click="sendDashboardMessage" type="button" variant="primary" data-test="new-message-send">{{ __('Send') }}</flux:button>
-                                </div>
                             </form>
+
+                            <div class="flex flex-col gap-3">
+                                <flux:heading size="sm">{{ __('Attachments') }}</flux:heading>
+
+                                <div x-data="{ uploading: false, progress: 0 }"
+                                     x-on:livewire-upload-start="uploading = true"
+                                     x-on:livewire-upload-finish="uploading = false"
+                                     x-on:livewire-upload-error="uploading = false"
+                                     x-on:livewire-upload-progress="progress = $event.detail.progress"
+                                     class="flex flex-col gap-2">
+                                    <flux:input type="file" wire:model="newMessageUploads" multiple />
+
+                                    <div x-show="uploading" class="h-1 w-full overflow-hidden rounded-full bg-neutral-100 dark:bg-white/10">
+                                        <div class="h-full rounded-full bg-blue-500 transition-all" :style="`width: ${progress}%`"></div>
+                                    </div>
+
+                                    @error('newMessageUploads.*')
+                                        <flux:error>{{ $message }}</flux:error>
+                                    @enderror
+                                </div>
+                            </div>
+
+                            <div class="flex justify-end gap-2">
+                                <flux:button :href="$this->selectedTopic() ? route('dashboard', ['topic' => $this->selectedTopic()->slug, 'panel' => 'messages']) : route('dashboard')" wire:navigate variant="filled">
+                                    {{ __('Cancel') }}
+                                </flux:button>
+                                <flux:button type="submit" form="dashboard-new-message-form" variant="filled" data-test="new-message-save-draft" wire:loading.attr="disabled" wire:target="newMessageUploads">{{ __('Save draft') }}</flux:button>
+                                <flux:button wire:click="sendDashboardMessage" type="button" variant="primary" data-test="new-message-send" wire:loading.attr="disabled" wire:target="newMessageUploads">{{ __('Send') }}</flux:button>
+                            </div>
                         </div>
                     @elseif ($selectedDashboardMessage)
                         <div class="flex items-center justify-between gap-3 border-b border-neutral-300 bg-emerald-50 px-4 py-3 dark:border-white/10 dark:bg-emerald-500/10">

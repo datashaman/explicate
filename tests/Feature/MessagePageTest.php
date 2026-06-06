@@ -193,6 +193,14 @@ test('message can be created from dedicated create page with attachments', funct
     expect($message->attachments->first()->filename)->toBe('brief.pdf');
 });
 
+test('dedicated create page keeps attachments outside the submit form', function () {
+    $this->actingAs($this->user);
+
+    Livewire::test('pages::message-create')
+        ->assertSee('id="message-create-form"', escape: false)
+        ->assertSee('form="message-create-form"', escape: false);
+});
+
 test('message can be made actionable from dedicated create page', function () {
     $this->actingAs($this->user);
 
