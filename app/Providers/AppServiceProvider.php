@@ -2,9 +2,13 @@
 
 namespace App\Providers;
 
+use App\Events\MessageSent;
+use App\Listeners\CreateAgentMessageTask;
+use App\Listeners\CreateMessageNotification;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
 use Laravel\Passport\Passport;
@@ -25,6 +29,9 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureDefaults();
+
+        Event::listen(MessageSent::class, CreateMessageNotification::class);
+        Event::listen(MessageSent::class, CreateAgentMessageTask::class);
 
         Passport::authorizationView(function (array $parameters) {
             return view('mcp.authorize', $parameters);

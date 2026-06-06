@@ -93,6 +93,14 @@ class Agent extends Model
     }
 
     /**
+     * @return HasMany<AgentTask, $this>
+     */
+    public function tasks(): HasMany
+    {
+        return $this->hasMany(AgentTask::class);
+    }
+
+    /**
      * @return HasOne<AgentVersion, $this>
      */
     public function latestVersion(): HasOne

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\MessageStatus;
+use App\Events\MessageSent;
 use Database\Factories\MessageFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -43,6 +44,18 @@ class Message extends Model
         static::updating(function (Message $message) {
             if ($message->isDirty('title')) {
                 $message->slug = static::generateUniqueSlug($message->topic_id, $message->title, $message->id);
+            }
+        });
+
+        static::created(function (Message $message) {
+            if ($message->status === MessageStatus::Published) {
+                MessageSent::dispatch($message);
+            }
+        });
+
+        static::updated(function (Message $message) {
+            if ($message->wasChanged('status') && $message->status === MessageStatus::Published) {
+                MessageSent::dispatch($message);
             }
         });
     }
