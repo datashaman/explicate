@@ -37,6 +37,7 @@ new class extends Component {
         $user->switchWorkspace($workspace);
 
         $this->dispatch('workspace-switched');
+        $this->redirectRoute('dashboard', navigate: true);
     }
 }; ?>
 

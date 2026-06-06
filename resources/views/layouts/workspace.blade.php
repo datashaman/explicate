@@ -4,7 +4,18 @@
         @include('partials.head')
     </head>
     <body class="min-h-dvh bg-white dark:bg-zinc-800">
-        <main class="flex min-h-dvh w-full flex-col px-2 pt-2 pb-1 sm:px-3 sm:pt-3 sm:pb-2 lg:px-3">
+        <main class="flex min-h-dvh w-full flex-col gap-2 px-2 pt-2 pb-1 sm:px-3 sm:pt-3 sm:pb-2 lg:px-3">
+            <header class="flex items-center justify-between gap-3 rounded-lg border border-neutral-300 bg-white px-3 py-2 shadow-sm shadow-black/[0.04] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none">
+                <a href="{{ route('dashboard') }}" wire:navigate class="flex min-w-0 items-center gap-2 text-sm font-semibold text-neutral-800 dark:text-neutral-100">
+                    <flux:icon name="layout-grid" class="size-4 shrink-0 text-neutral-500 dark:text-neutral-400" />
+                    <span class="truncate">{{ __('Topic Forge') }}</span>
+                </a>
+
+                <div class="flex min-w-0 items-center gap-2">
+                    <livewire:workspace-switcher />
+                </div>
+            </header>
+
             {{ $slot }}
         </main>
 

@@ -81,8 +81,9 @@ test('dashboard routes do not include team or workspace slugs', function () {
     $topic = Topic::factory()->for($workspace)->create(['slug' => 'current-topic']);
 
     expect(route('dashboard', absolute: false))->toBe('/dashboard')
-        ->and(route('topics.show', ['topic' => $topic->slug], false))->toBe('/dashboard/current-topic')
-        ->and(route('messages.create', ['topic' => $topic->slug], false))->toBe('/dashboard/new-message?topic=current-topic');
+        ->and(route('topics.show', ['topic' => $topic->slug], false))->toBe('/topics/current-topic')
+        ->and(route('messages.show', ['topic' => $topic->slug, 'message' => 'current-message'], false))->toBe('/topics/current-topic/messages/current-message')
+        ->and(route('messages.create', ['topic' => $topic->slug], false))->toBe('/messages/new?topic=current-topic');
 });
 
 test('topic routes resolve slugs inside the current workspace', function () {

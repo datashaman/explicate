@@ -36,7 +36,8 @@ test('user can switch workspace', function () {
     Livewire::actingAs($user)
         ->test('workspace-switcher')
         ->call('switchWorkspace', $workspace->slug)
-        ->assertDispatched('workspace-switched');
+        ->assertDispatched('workspace-switched')
+        ->assertRedirect(route('dashboard'));
 
     expect($user->fresh()->current_workspace_id)->toBe($workspace->id);
 });
