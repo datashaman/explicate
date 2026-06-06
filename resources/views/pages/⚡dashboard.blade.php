@@ -254,7 +254,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
     }
 
     /**
-     * @return list<array{href: string, name: string, badge: array{label: string, color: string}|null}>
+     * @return list<array{href: string, name: string, meta: list<array{label: string, value: string}>, badge: array{label: string, color: string}|null}>
      */
     public function selectedTopicItems(): array
     {
@@ -265,6 +265,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         }
 
         return $topic->messages()
+            ->with(['sender.user', 'sender.agent'])
             ->when(! $this->showArchived, fn ($query) => $query->where('status', '!=', MessageStatus::Archived))
             ->where('status', '!=', MessageStatus::Draft)
             ->whereNull('recipient_principal_id')
@@ -272,6 +273,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             ->map(fn (Message $message) => [
                 'href' => route('dashboard', ['topic' => $topic->slug, 'message' => $message->slug, 'panel' => 'messages']),
                 'name' => $message->title,
+                'meta' => $this->messageItemMeta($message, showSender: true, showRecipient: false),
                 'badge' => $message->status === MessageStatus::Published ? null : [
                     'label' => $message->status->label(),
                     'color' => $message->status->color(),
@@ -281,7 +283,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
     }
 
     /**
-     * @return list<array{href: string, name: string, badge: array{label: string, color: string}|null}>
+     * @return list<array{href: string, name: string, meta: list<array{label: string, value: string}>, badge: array{label: string, color: string}|null}>
      */
     public function selectedSystemFolderItems(): array
     {
@@ -294,7 +296,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         }
 
         return Message::query()
-            ->with('topic')
+            ->with(['topic', 'sender.user', 'sender.agent', 'recipient.user', 'recipient.agent'])
             ->whereHas('topic', fn ($query) => $query->where('workspace_id', $workspace->id))
             ->when($folder['slug'] === 'draft', fn ($query) => $query->where('status', MessageStatus::Draft))
             ->when($folder['slug'] === 'sent', fn ($query) => $query->where('status', MessageStatus::Published)->where('sender_principal_id', $currentPrincipal?->id ?? 0))
@@ -310,6 +312,11 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                     'panel' => 'messages',
                 ]),
                 'name' => $message->title,
+                'meta' => $this->messageItemMeta(
+                    $message,
+                    showSender: $folder['slug'] !== 'sent',
+                    showRecipient: $folder['slug'] !== 'inbox',
+                ),
                 'badge' => $message->status === MessageStatus::Published ? null : [
                     'label' => $message->status->label(),
                     'color' => $message->status->color(),
@@ -887,6 +894,29 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         }
 
         return $currentPrincipalId ?: $this->availablePrincipals->first()?->id;
+    }
+
+    /**
+     * @return list<array{label: string, value: string}>
+     */
+    private function messageItemMeta(Message $message, bool $showSender, bool $showRecipient): array
+    {
+        $meta = [];
+
+        if ($showSender && $message->sender) {
+            $meta[] = ['label' => __('From'), 'value' => $message->sender->label()];
+        }
+
+        if ($showRecipient) {
+            $meta[] = ['label' => __('To'), 'value' => $message->recipient?->label() ?? $message->topic->name];
+        }
+
+        $meta[] = [
+            'label' => $message->status === MessageStatus::Draft ? __('Saved') : __('Sent'),
+            'value' => $message->updated_at->diffForHumans(),
+        ];
+
+        return $meta;
     }
 
     private function syncSelectedAgentFields(): void

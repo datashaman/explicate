@@ -16,6 +16,7 @@
         $titleLabel = $titleLabel ?? null;
         $toolbarClass = $toolbarClass ?? null;
         $contentClass = $contentClass ?? 'mt-4 overflow-auto';
+        $listIconClass = $listIconClass ?? str($iconClass)->replaceMatches('/\bsize-\S+/', 'size-5')->toString();
     @endphp
 
     {{-- Toolbar --}}
@@ -223,21 +224,27 @@
     <div @class([$contentClass])>
         @if ($items->isNotEmpty())
             <template x-if="view === 'icons'">
-                <div class="flex flex-wrap justify-start gap-6 content-start">
+                <div class="flex flex-wrap content-start justify-start gap-3">
                     @foreach ($items as $item)
+                        @php $itemKey = md5($item['href']); @endphp
                         <a href="{{ $item['href'] }}" wire:navigate
-                           class="group flex w-24 flex-col items-center gap-1 rounded-lg p-2 text-center hover:bg-neutral-100 dark:hover:bg-white/5">
-                            <flux:icon :name="$icon" class="{{ $iconClass }} drop-shadow-sm" />
-                            <span class="break-normal text-xs text-neutral-700 dark:text-neutral-300">{{ $item['name'] }}</span>
+                           wire:key="folder-icon-{{ $itemKey }}"
+                           class="group flex h-32 w-28 flex-col items-center gap-1 rounded-lg p-2 text-center hover:bg-neutral-100 dark:hover:bg-white/5">
+                            <span class="flex h-14 items-center justify-center">
+                                <flux:icon :name="$icon" class="{{ $iconClass }} drop-shadow-sm" />
+                            </span>
+                            <span class="line-clamp-2 min-h-8 w-full text-xs leading-4 text-neutral-700 dark:text-neutral-300">{{ $item['name'] }}</span>
                             @if (!empty($item['counts']))
-                                <div class="flex flex-wrap justify-center gap-1">
+                                <div class="flex h-5 flex-wrap items-center justify-center gap-1 overflow-hidden">
                                     @foreach ($item['counts'] as $count)
                                         <flux:badge :color="$count['color']" size="sm" :title="$count['label']">{{ $count['value'] }}</flux:badge>
                                     @endforeach
                                 </div>
                             @endif
                             @if (!empty($item['badge']))
-                                <flux:badge :color="$item['badge']['color']" size="sm">{{ $item['badge']['label'] }}</flux:badge>
+                                <div class="h-5 overflow-hidden">
+                                    <flux:badge :color="$item['badge']['color']" size="sm">{{ $item['badge']['label'] }}</flux:badge>
+                                </div>
                             @endif
                         </a>
                     @endforeach
@@ -247,12 +254,38 @@
             <template x-if="view === 'list'">
                 <div class="divide-y divide-neutral-100 dark:divide-white/5">
                     @foreach ($items as $item)
+                        @php $itemKey = md5($item['href']); @endphp
                         <a href="{{ $item['href'] }}" wire:navigate
-                           class="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-neutral-100 dark:hover:bg-white/5">
-                            <flux:icon :name="$icon" class="{{ $iconClass }} shrink-0" />
-                            <span class="flex-1 text-sm text-neutral-700 dark:text-neutral-300">{{ $item['name'] }}</span>
+                           wire:key="folder-list-{{ $itemKey }}"
+                           class="flex min-h-12 items-center gap-3 rounded-lg px-2 py-2 hover:bg-neutral-100 dark:hover:bg-white/5">
+                            <span class="flex size-10 shrink-0 items-center justify-center">
+                                <flux:icon :name="$icon" class="{{ $listIconClass }} shrink-0" />
+                            </span>
+                            <span class="min-w-0 flex-1">
+                                <span class="block truncate text-sm text-neutral-700 dark:text-neutral-300">{{ $item['name'] }}</span>
+                                @if (!empty($item['meta']))
+                                    <span class="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-neutral-500 sm:hidden dark:text-neutral-400">
+                                        @foreach ($item['meta'] as $meta)
+                                            <span class="max-w-full truncate">
+                                                <span class="text-neutral-400 dark:text-neutral-500">{{ $meta['label'] }}:</span>
+                                                {{ $meta['value'] }}
+                                            </span>
+                                        @endforeach
+                                    </span>
+                                @endif
+                            </span>
+                            @if (!empty($item['meta']))
+                                <div class="hidden shrink-0 items-center gap-3 sm:flex">
+                                    @foreach ($item['meta'] as $meta)
+                                        <span class="w-28 truncate text-xs text-neutral-500 dark:text-neutral-400" title="{{ $meta['label'] }}: {{ $meta['value'] }}">
+                                            <span class="text-neutral-400 dark:text-neutral-500">{{ $meta['label'] }}:</span>
+                                            {{ $meta['value'] }}
+                                        </span>
+                                    @endforeach
+                                </div>
+                            @endif
                             @if (!empty($item['counts']))
-                                <div class="flex items-center gap-1">
+                                <div class="flex shrink-0 items-center gap-1">
                                     @foreach ($item['counts'] as $count)
                                         <flux:badge :color="$count['color']" size="sm" :title="$count['label']">{{ $count['value'] }}</flux:badge>
                                     @endforeach

@@ -119,6 +119,7 @@ test('dashboard system draft folder shows draft messages across topics', functio
 
     $designDraft = Message::factory()->for($design)->create([
         'title' => 'Design draft',
+        'updated_at' => now()->subMinutes(7),
         'status' => MessageStatus::Draft,
     ]);
 
@@ -139,6 +140,8 @@ test('dashboard system draft folder shows draft messages across topics', functio
             'message' => $designDraft->slug,
             'panel' => 'messages',
         ])), escape: false)
+        ->assertSeeText('Saved:')
+        ->assertSeeText('7 minutes ago')
         ->assertDontSee('Engineering sent');
 });
 
@@ -182,6 +185,7 @@ test('dashboard inbox only shows messages addressed to the current user', functi
 
     Message::factory()->for($topic)->create([
         'title' => 'For me',
+        'updated_at' => now()->subMinutes(9),
         'status' => MessageStatus::Published,
         'sender_principal_id' => $recipientPrincipal->id,
         'recipient_principal_id' => $userPrincipal->id,
@@ -204,8 +208,43 @@ test('dashboard inbox only shows messages addressed to the current user', functi
         ->get(route('dashboard', ['folder' => 'inbox', 'panel' => 'messages']))
         ->assertOk()
         ->assertSee('For me')
+        ->assertSeeText('From:')
+        ->assertSeeText($recipient->name)
+        ->assertSeeText('Sent:')
+        ->assertSeeText('9 minutes ago')
+        ->assertDontSeeText('To:')
         ->assertDontSee('For someone else')
         ->assertDontSee('For the topic');
+});
+
+test('dashboard sent folder shows recipients and sent time', function () {
+    $user = User::factory()->create();
+    $recipient = User::factory()->create(['name' => 'Message Recipient']);
+    $workspace = Workspace::factory()->for($user->currentTeam)->create();
+    $user->switchWorkspace($workspace);
+    $user->currentTeam->memberships()->create(['user_id' => $recipient->id, 'role' => TeamRole::Member]);
+
+    $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
+    $userPrincipal = $workspace->principalForUser($user);
+    $recipientPrincipal = $workspace->principalForUser($recipient);
+
+    Message::factory()->for($topic)->create([
+        'title' => 'Sent direct message',
+        'updated_at' => now()->subMinutes(11),
+        'status' => MessageStatus::Published,
+        'sender_principal_id' => $userPrincipal->id,
+        'recipient_principal_id' => $recipientPrincipal->id,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('dashboard', ['folder' => 'sent', 'panel' => 'messages']))
+        ->assertOk()
+        ->assertSee('Sent direct message')
+        ->assertSeeText('To:')
+        ->assertSeeText('Message Recipient')
+        ->assertSeeText('Sent:')
+        ->assertSeeText('11 minutes ago')
+        ->assertDontSeeText('From:');
 });
 
 test('dashboard archived toggle only filters the selected messages list', function () {
@@ -846,7 +885,11 @@ test('topic page left aligns message icons in icon view', function () {
     $user->switchWorkspace($workspace);
 
     $topic = Topic::factory()->for($workspace)->create();
-    Message::factory()->for($topic)->create(['status' => MessageStatus::Published]);
+    Message::factory()->for($topic)->create([
+        'updated_at' => now()->subMinutes(13),
+        'status' => MessageStatus::Published,
+        'sender_principal_id' => $workspace->principalForUser($user)->id,
+    ]);
 
     $this->actingAs($user)
         ->get(route('topics.show', ['topic' => $topic->slug]))
@@ -861,6 +904,17 @@ test('topic page left aligns message icons in icon view', function () {
         ->assertSee('flex w-full flex-wrap items-center justify-between gap-2 md:hidden', escape: false)
         ->assertSee('x-if="view === \'icons\'"', escape: false)
         ->assertSee('x-if="view === \'list\'"', escape: false)
+        ->assertSee('flex h-32 w-28 flex-col items-center gap-1', escape: false)
+        ->assertSee('line-clamp-2 min-h-8 w-full text-xs leading-4', escape: false)
+        ->assertSee('flex min-h-12 items-center gap-3', escape: false)
+        ->assertSee('min-w-0 flex-1', escape: false)
+        ->assertSee('block truncate text-sm', escape: false)
+        ->assertSee('wire:key="folder-icon-', escape: false)
+        ->assertSee('wire:key="folder-list-', escape: false)
+        ->assertSeeText('From:')
+        ->assertSeeText($user->name)
+        ->assertSeeText('Sent:')
+        ->assertSeeText('13 minutes ago')
         ->assertSee('grid grid-cols-1 items-stretch gap-3 xl:flex-1 xl:auto-rows-fr xl:grid-cols-[minmax(0,1fr)_19rem]', escape: false)
         ->assertSee('xl:h-full', escape: false)
         ->assertDontSee('xl:sticky xl:top-6');
