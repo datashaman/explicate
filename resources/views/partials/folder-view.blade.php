@@ -21,10 +21,10 @@
     {{-- Toolbar --}}
     <div @class(['flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between', $toolbarClass])>
         @if ($titleLabel)
-            <div class="flex items-center justify-between gap-3">
+            <div class="flex w-full min-w-0 items-center justify-between gap-3">
                 <flux:heading size="sm">{{ $titleLabel }}</flux:heading>
 
-                <div class="flex items-center gap-2">
+                <div class="flex shrink-0 items-center gap-2 md:hidden">
                     <flux:button
                         x-on:click="controlsOpen = !controlsOpen"
                         x-bind:aria-expanded="controlsOpen ? 'true' : 'false'"
@@ -43,13 +43,49 @@
                         </flux:modal.trigger>
                     @endisset
                 </div>
+
+                <div class="hidden shrink-0 items-center gap-3 md:flex">
+                    @isset($showArchivedModel)
+                        <div x-data="{
+                            init() {
+                                const stored = localStorage.getItem('show-archived');
+                                if (stored !== null) $wire.set('{{ $showArchivedModel }}', stored === 'true');
+                                $watch('$wire.{{ $showArchivedModel }}', v => localStorage.setItem('show-archived', v));
+                            }
+                        }">
+                            <flux:checkbox wire:model.live="{{ $showArchivedModel }}" :label="__('Show archived')" />
+                        </div>
+                    @endisset
+
+                    <div class="flex items-center rounded-lg border border-neutral-200 dark:border-white/10">
+                        <button @click="setView('icons')" title="{{ __('Icon view') }}"
+                                :class="view === 'icons' ? 'bg-neutral-100 dark:bg-white/10 text-neutral-900 dark:text-white' : 'text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300'"
+                                class="rounded-l-lg p-1.5 transition-colors">
+                            <flux:icon name="squares-2x2" variant="mini" class="size-4" />
+                        </button>
+                        <div class="w-px self-stretch bg-neutral-200 dark:bg-white/10"></div>
+                        <button @click="setView('list')" title="{{ __('List view') }}"
+                                :class="view === 'list' ? 'bg-neutral-100 dark:bg-white/10 text-neutral-900 dark:text-white' : 'text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300'"
+                                class="rounded-r-lg p-1.5 transition-colors">
+                            <flux:icon name="list-bullet" variant="mini" class="size-4" />
+                        </button>
+                    </div>
+
+                    @isset($createHref)
+                        <flux:button :href="$createHref" wire:navigate icon="plus" size="xs">{{ $createLabel }}</flux:button>
+                    @else
+                        <flux:modal.trigger :name="$createModal">
+                            <flux:button icon="plus" size="xs">{{ $createLabel }}</flux:button>
+                        </flux:modal.trigger>
+                    @endisset
+                </div>
             </div>
 
             <div
                 x-show="controlsOpen"
                 x-cloak
                 x-transition.opacity.duration.150ms
-                class="flex w-full flex-wrap items-center justify-between gap-2"
+                class="flex w-full flex-wrap items-center justify-between gap-2 md:hidden"
                 data-test="folder-controls-drawer"
             >
                 @isset($showArchivedModel)
