@@ -304,13 +304,13 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                                 </div>
                                 <div class="flex shrink-0 items-center gap-1">
                                     @if ($topic->draft_count > 0)
-                                        <flux:badge color="zinc" size="sm">{{ $topic->draft_count }}</flux:badge>
+                                        <flux:badge color="zinc" size="sm" title="{{ __('Draft messages') }}" data-test="topic-{{ $topic->slug }}-draft-count" data-count="{{ $topic->draft_count }}">{{ $topic->draft_count }}</flux:badge>
                                     @endif
                                     @if ($topic->published_count > 0)
-                                        <flux:badge color="green" size="sm">{{ $topic->published_count }}</flux:badge>
+                                        <flux:badge color="green" size="sm" title="{{ __('Published messages') }}" data-test="topic-{{ $topic->slug }}-published-count" data-count="{{ $topic->published_count }}">{{ $topic->published_count }}</flux:badge>
                                     @endif
-                                    @if ($showArchived && $topic->archived_count > 0)
-                                        <flux:badge color="yellow" size="sm">{{ $topic->archived_count }}</flux:badge>
+                                    @if ($showArchived && $selectedTopicSlug === $topic->slug && $topic->archived_count > 0)
+                                        <flux:badge color="yellow" size="sm" title="{{ __('Archived messages') }}" data-test="topic-{{ $topic->slug }}-archived-count" data-count="{{ $topic->archived_count }}">{{ $topic->archived_count }}</flux:badge>
                                     @endif
                                 </div>
                             </a>

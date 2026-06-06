@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\MessageStatus;
 use App\Enums\Provider;
 use App\Enums\ReasoningEffort;
 use App\Models\Agent;
@@ -71,6 +72,63 @@ test('dashboard shows topics as folders for current workspace', function () {
         ->assertDontSee($message->title)
         ->assertSee('Select a topic')
         ->assertSee('Choose a topic to view its messages.');
+});
+
+test('dashboard archived toggle only filters the selected messages list', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->for($user->currentTeam)->create();
+    $user->switchWorkspace($workspace);
+
+    $design = Topic::factory()->for($workspace)->create([
+        'name' => 'Design',
+        'slug' => 'design',
+    ]);
+
+    $engineering = Topic::factory()->for($workspace)->create([
+        'name' => 'Engineering',
+        'slug' => 'engineering',
+    ]);
+
+    Message::factory()->for($design)->create([
+        'title' => 'Design draft',
+        'status' => MessageStatus::Draft,
+    ]);
+
+    Message::factory()->for($design)->create([
+        'title' => 'Design published',
+        'status' => MessageStatus::Published,
+    ]);
+
+    Message::factory()->for($design)->create([
+        'title' => 'Design archived',
+        'status' => MessageStatus::Archived,
+    ]);
+
+    Message::factory()->count(9)->for($engineering)->create([
+        'status' => MessageStatus::Archived,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('dashboard', ['topic' => $design->slug]))
+        ->assertOk()
+        ->assertSee('Design draft')
+        ->assertSee('data-test="topic-design-draft-count"', escape: false)
+        ->assertSee('title="Draft messages"', escape: false)
+        ->assertSee('data-test="topic-design-published-count"', escape: false)
+        ->assertSee('title="Published messages"', escape: false)
+        ->assertDontSee('Design archived')
+        ->assertDontSee('data-test="topic-design-archived-count"', escape: false)
+        ->assertDontSee('data-test="topic-engineering-archived-count"', escape: false);
+
+    Livewire::actingAs($user)
+        ->test('pages::dashboard')
+        ->set('selectedTopicSlug', $design->slug)
+        ->set('showArchived', true)
+        ->assertSee('Design archived')
+        ->assertSee('data-test="topic-design-archived-count"', escape: false)
+        ->assertSee('title="Archived messages"', escape: false)
+        ->assertSee('data-count="1"', escape: false)
+        ->assertDontSee('data-test="topic-engineering-archived-count"', escape: false);
 });
 
 test('dashboard routes do not include team or workspace slugs', function () {
