@@ -58,7 +58,7 @@ class DatabaseSeeder extends Seeder
             ],
             [
                 'name' => 'SEO Analyst',
-                'provider' => Provider::Google,
+                'provider' => Provider::Gemini,
                 'model' => 'gemini-2.5-pro',
                 'reasoning_effort' => null,
                 'prompt' => 'Optimize content structure, discover keyword clusters, and flag gaps.',

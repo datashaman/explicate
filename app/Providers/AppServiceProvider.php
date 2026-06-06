@@ -3,7 +3,6 @@
 namespace App\Providers;
 
 use App\Events\MessageSent;
-use App\Listeners\CreateAgentMessageTask;
 use App\Listeners\CreateMessageNotification;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Date;
@@ -31,7 +30,6 @@ class AppServiceProvider extends ServiceProvider
         $this->configureDefaults();
 
         Event::listen(MessageSent::class, CreateMessageNotification::class);
-        Event::listen(MessageSent::class, CreateAgentMessageTask::class);
 
         Passport::authorizationView(function (array $parameters) {
             return view('mcp.authorize', $parameters);

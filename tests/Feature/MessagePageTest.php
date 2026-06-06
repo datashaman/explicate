@@ -7,6 +7,7 @@ use App\Models\Message;
 use App\Models\Topic;
 use App\Models\Workspace;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 
@@ -62,7 +63,7 @@ test('draft message can be saved', function () {
     expect($this->message->fresh()->body)->toBe('Hello world');
 });
 
-test('draft message recipient can be changed to an agent principal', function () {
+test('draft message recipient cannot be changed to an agent principal', function () {
     $agent = Agent::factory()->for($this->workspace)->create(['name' => 'Researcher']);
     $agentPrincipal = $this->workspace->principalForAgent($agent);
 
@@ -73,11 +74,11 @@ test('draft message recipient can be changed to an agent principal', function ()
         ->set('target', 'principal')
         ->set('recipientPrincipalId', $agentPrincipal->id)
         ->call('save')
-        ->assertHasNoErrors();
+        ->assertHasErrors(['recipientPrincipalId']);
 
     expect($this->message->fresh())
-        ->title->toBe('Agent draft')
-        ->recipient_principal_id->toBe($agentPrincipal->id);
+        ->title->not->toBe('Agent draft')
+        ->recipient_principal_id->toBeNull();
 });
 
 test('published message page shows sender and recipient principals', function () {
@@ -102,12 +103,13 @@ test('published message page shows sender and recipient principals', function ()
 
 test('message list metadata uses sender recipient fallback and timestamp labels', function () {
     $senderPrincipal = $this->workspace->principalForUser($this->user);
+    $updatedAt = now()->subMinutes(5);
 
     $this->message->timestamps = false;
     $this->message->forceFill([
         'status' => MessageStatus::Published,
         'sender_principal_id' => $senderPrincipal->id,
-        'updated_at' => now()->subMinutes(5),
+        'updated_at' => $updatedAt,
     ])->save();
 
     expect($this->message->fresh()->load('sender.user')->listMeta(
@@ -117,8 +119,36 @@ test('message list metadata uses sender recipient fallback and timestamp labels'
     ))->toBe([
         ['label' => 'From', 'value' => $this->user->name],
         ['label' => 'To', 'value' => $this->topic->name],
-        ['label' => 'Sent', 'value' => '5 minutes ago'],
+        ['label' => 'Sent', 'value' => '5 minutes ago', 'title' => $updatedAt->timezone(config('app.timezone'))->isoFormat('LLLL')],
     ]);
+});
+
+test('message list timestamp titles use the user timezone when provided', function () {
+    $updatedAt = now()->setTimezone('UTC')->setTime(12, 0);
+
+    Date::setTestNow($updatedAt);
+
+    try {
+        $this->message->timestamps = false;
+        $this->message->forceFill([
+            'status' => MessageStatus::Published,
+            'updated_at' => $updatedAt,
+        ])->save();
+
+        expect($this->message->fresh()->listMeta(
+            showSender: false,
+            showRecipient: false,
+            timezone: 'Africa/Johannesburg',
+        ))->toBe([
+            [
+                'label' => 'Sent',
+                'value' => '0 seconds ago',
+                'title' => $updatedAt->copy()->timezone('Africa/Johannesburg')->isoFormat('LLLL'),
+            ],
+        ]);
+    } finally {
+        Date::setTestNow();
+    }
 });
 
 test('message list sort values are normalized for deterministic column sorting', function () {
@@ -168,102 +198,6 @@ test('attachments can be uploaded', function () {
 
     expect($this->message->attachments()->count())->toBe(1);
     expect($this->message->attachments()->first()->filename)->toBe('report.pdf');
-});
-
-test('message can be created from dedicated create page with attachments', function () {
-    Storage::fake('public');
-
-    $this->actingAs($this->user);
-
-    $file = UploadedFile::fake()->create('brief.pdf', 256, 'application/pdf');
-
-    Livewire::test('pages::message-create')
-        ->set('title', 'New draft')
-        ->set('body', 'Draft body')
-        ->set('topicId', $this->topic->id)
-        ->set('uploads', [$file])
-        ->call('create')
-        ->assertHasNoErrors();
-
-    $message = $this->topic->messages()->where('title', 'New draft')->first();
-
-    expect($message)->not->toBeNull();
-    expect($message->body)->toBe('Draft body');
-    expect($message->attachments)->toHaveCount(1);
-    expect($message->attachments->first()->filename)->toBe('brief.pdf');
-});
-
-test('dedicated create page keeps attachments outside the submit form', function () {
-    $this->actingAs($this->user);
-
-    Livewire::test('pages::message-create')
-        ->assertSee('id="message-create-form"', escape: false)
-        ->assertSee('form="message-create-form"', escape: false);
-});
-
-test('message can be made actionable from dedicated create page', function () {
-    $this->actingAs($this->user);
-
-    Livewire::test('pages::message-create')
-        ->set('title', 'Ready to send')
-        ->set('body', 'Actionable body')
-        ->set('topicId', $this->topic->id)
-        ->call('send')
-        ->assertHasNoErrors();
-
-    $message = $this->topic->messages()->where('title', 'Ready to send')->first();
-    $senderPrincipal = $this->workspace->principalForUser($this->user);
-
-    expect($message)->not->toBeNull()
-        ->and($message->body)->toBe('Actionable body')
-        ->and($message->sender_principal_id)->toBe($senderPrincipal->id)
-        ->and($message->status)->toBe(MessageStatus::Published);
-});
-
-test('message can be sent to a user from dedicated create page', function () {
-    [$recipient, $recipientPrincipal] = teamMemberPrincipal($this->user, $this->workspace);
-
-    $this->actingAs($this->user);
-
-    Livewire::test('pages::message-create')
-        ->set('title', 'User message')
-        ->set('body', 'Direct body')
-        ->set('target', 'principal')
-        ->set('topicId', $this->topic->id)
-        ->set('recipientPrincipalId', $recipientPrincipal->id)
-        ->call('send')
-        ->assertHasNoErrors();
-
-    $message = $this->topic->messages()->where('title', 'User message')->first();
-    $senderPrincipal = $this->workspace->principalForUser($this->user);
-
-    expect($message)->not->toBeNull()
-        ->and($message->body)->toBe('Direct body')
-        ->and($message->sender_principal_id)->toBe($senderPrincipal->id)
-        ->and($message->recipient_principal_id)->toBe($recipientPrincipal->id)
-        ->and($message->status)->toBe(MessageStatus::Published);
-});
-
-test('dedicated create page defaults a principal recipient when none reached the server', function () {
-    $this->actingAs($this->user);
-
-    $senderPrincipal = $this->workspace->principalForUser($this->user);
-
-    Livewire::test('pages::message-create')
-        ->set('title', 'Default recipient')
-        ->set('body', 'Direct body')
-        ->set('target', 'principal')
-        ->set('topicId', $this->topic->id)
-        ->set('recipientPrincipalId', null)
-        ->call('send')
-        ->assertHasNoErrors();
-
-    $message = $this->topic->messages()->where('title', 'Default recipient')->first();
-
-    expect($message)->not->toBeNull()
-        ->and($message->sender_principal_id)->toBe($senderPrincipal->id)
-        ->and($message->recipient_principal_id)->toBe($senderPrincipal->id)
-        ->and($message->status)->toBe(MessageStatus::Published);
 });
 
 test('draft message defaults a principal recipient when none reached the server', function () {

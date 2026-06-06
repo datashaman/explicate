@@ -467,9 +467,10 @@ test('list agent tasks returns message-derived work for an agent', function () {
         'slug' => 'agent-request',
         'status' => MessageStatus::Published,
         'sender_principal_id' => $workspace->principalForUser($user)->id,
-        'recipient_principal_id' => $workspace->principalForAgent($agent)->id,
         'body' => 'Please summarize.',
     ]);
+    $topic->agents()->attach($agent);
+    $message->assignAgents([$agent->id]);
     $task = AgentTask::query()->whereBelongsTo($message)->first();
 
     $response = TopicForgeServer::actingAs($user)->tool(ListAgentTasksTool::class, [
@@ -484,7 +485,7 @@ test('list agent tasks returns message-derived work for an agent', function () {
             ->where('agent.tasks_resource_uri', 'topic-forge://workspaces/strategy/agents/research-agent/tasks')
             ->where('tasks.0.id', $task->id)
             ->where('tasks.0.status', 'pending')
-            ->where('tasks.0.event_type', 'message_received')
+            ->where('tasks.0.event_type', AgentTask::EventMessageAssigned)
             ->where('tasks.0.message.slug', 'agent-request')
             ->where('tasks.0.message.has_body', true)
             ->where('tasks.0.resource_uri', "topic-forge://workspaces/strategy/agents/research-agent/tasks/{$task->id}")
@@ -511,9 +512,10 @@ test('get agent task returns full message context for agent work', function () {
         'slug' => 'agent-request',
         'status' => MessageStatus::Published,
         'sender_principal_id' => $workspace->principalForUser($user)->id,
-        'recipient_principal_id' => $workspace->principalForAgent($agent)->id,
         'body' => 'Please summarize.',
     ]);
+    $topic->agents()->attach($agent);
+    $message->assignAgents([$agent->id]);
     $task = AgentTask::query()->whereBelongsTo($message)->first();
 
     $response = TopicForgeServer::actingAs($user)->tool(GetAgentTaskTool::class, [
@@ -529,7 +531,7 @@ test('get agent task returns full message context for agent work', function () {
             ->where('task.id', $task->id)
             ->where('task.message.slug', 'agent-request')
             ->where('task.message.body', 'Please summarize.')
-            ->where('task.message.recipient.name', 'Research Agent')
+            ->where('task.message.assigned_agents.0.name', 'Research Agent')
             ->etc()
         );
 });
@@ -805,8 +807,9 @@ test('agent tasks resource returns queued work by uri template', function () {
         'slug' => 'agent-request',
         'status' => MessageStatus::Published,
         'sender_principal_id' => $workspace->principalForUser($user)->id,
-        'recipient_principal_id' => $workspace->principalForAgent($agent)->id,
     ]);
+    $topic->agents()->attach($agent);
+    $message->assignAgents([$agent->id]);
     $task = AgentTask::query()->whereBelongsTo($message)->first();
 
     $resource = new class(app(TopicForgeContext::class)) extends AgentTasksResource
@@ -847,9 +850,10 @@ test('agent task resource returns queued work by uri template', function () {
         'slug' => 'agent-request',
         'status' => MessageStatus::Published,
         'sender_principal_id' => $workspace->principalForUser($user)->id,
-        'recipient_principal_id' => $workspace->principalForAgent($agent)->id,
         'body' => 'Please summarize.',
     ]);
+    $topic->agents()->attach($agent);
+    $message->assignAgents([$agent->id]);
     $task = AgentTask::query()->whereBelongsTo($message)->first();
 
     $resource = new class(app(TopicForgeContext::class), $task->id) extends AgentTaskResource
@@ -871,7 +875,7 @@ test('agent task resource returns queued work by uri template', function () {
         ->assertOk()
         ->assertSee('"id":'.$task->id)
         ->assertSee('"body":"Please summarize."')
-        ->assertSee('"recipient":{"id":')
+        ->assertSee('"assigned_agents":[{"id":')
         ->assertSee('"name":"Research Agent"');
 });
 

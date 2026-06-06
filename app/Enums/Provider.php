@@ -6,7 +6,7 @@ enum Provider: string
 {
     case Anthropic = 'anthropic';
     case OpenAI = 'openai';
-    case Google = 'google';
+    case Gemini = 'gemini';
     case Groq = 'groq';
 
     public function label(): string
@@ -14,7 +14,7 @@ enum Provider: string
         return match ($this) {
             Provider::Anthropic => 'Anthropic',
             Provider::OpenAI => 'OpenAI',
-            Provider::Google => 'Google',
+            Provider::Gemini => 'Gemini',
             Provider::Groq => 'Groq',
         };
     }
@@ -36,7 +36,7 @@ enum Provider: string
                 'o3-mini',
                 'o4-mini',
             ],
-            Provider::Google => [
+            Provider::Gemini => [
                 'gemini-2.5-pro',
                 'gemini-2.5-flash',
                 'gemini-2.0-flash',

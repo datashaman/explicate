@@ -15,6 +15,18 @@ test('teams index page can be rendered', function () {
     $response->assertOk();
 });
 
+test('teams settings page uses the workspace layout', function () {
+    $user = User::factory()->create();
+
+    $this
+        ->actingAs($user)
+        ->get(route('teams.index'))
+        ->assertOk()
+        ->assertSee('data-test="workspace-switcher-trigger"', false)
+        ->assertSee('data-test="sidebar-menu-button"', false)
+        ->assertSee('Profile, teams, and account preferences');
+});
+
 test('teams can be created', function () {
     $user = User::factory()->create();
 

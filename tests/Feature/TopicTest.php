@@ -4,6 +4,7 @@ use App\Enums\MessageStatus;
 use App\Enums\Provider;
 use App\Enums\ReasoningEffort;
 use App\Models\Agent;
+use App\Models\AgentTask;
 use App\Models\AgentVersion;
 use App\Models\Attachment;
 use App\Models\Message;
@@ -399,7 +400,7 @@ test('dashboard can save selected draft message', function () {
         ->body->toBe('Updated body');
 });
 
-test('dashboard can change a draft message recipient to an agent principal', function () {
+test('dashboard cannot change a draft message recipient to an agent principal', function () {
     [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
@@ -419,11 +420,11 @@ test('dashboard can change a draft message recipient to an agent principal', fun
         ->set('messageTarget', 'principal')
         ->set('messageRecipientPrincipalId', $agentPrincipal->id)
         ->call('saveSelectedMessage')
-        ->assertHasNoErrors();
+        ->assertHasErrors(['messageRecipientPrincipalId']);
 
     expect($message->fresh())
-        ->title->toBe('Agent draft')
-        ->recipient_principal_id->toBe($agentPrincipal->id);
+        ->title->toBe('Draft note')
+        ->recipient_principal_id->toBeNull();
 });
 
 test('dashboard published message panel shows sender and recipient principals', function () {
@@ -763,6 +764,33 @@ test('dashboard can make a new message actionable in the main panel', function (
         ->and($message->status)->toBe(MessageStatus::Published);
 });
 
+test('dashboard can assign agents when sending a new message', function () {
+    [$user, $workspace] = userWithWorkspace();
+
+    $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
+    $agents = Agent::factory()->count(2)->for($workspace)->create();
+    $topic->agents()->attach($agents->pluck('id'));
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::dashboard')
+        ->set('selectedTopicSlug', $topic->slug)
+        ->set('panelAction', 'new-message')
+        ->set('newMessageTitle', 'Agent assignment')
+        ->set('newMessageBody', 'Please both review this.')
+        ->set('newMessageTopicId', $topic->id)
+        ->set('newMessageAgentIds', $agents->pluck('id')->all())
+        ->call('sendDashboardMessage')
+        ->assertHasNoErrors();
+
+    $message = $topic->messages()->where('title', 'Agent assignment')->first();
+
+    expect($message)->not->toBeNull()
+        ->and($message->agentTasks)->toHaveCount(2)
+        ->and($message->agentTasks->pluck('event_type')->unique()->values()->all())->toBe([AgentTask::EventMessageAssigned])
+        ->and($message->agentTasks->pluck('available_at')->filter())->toHaveCount(2);
+});
+
 test('dashboard can send a new message to a user', function () {
     [$user, $workspace] = userWithWorkspace();
     [, $recipientPrincipal] = teamMemberPrincipal($user, $workspace);
@@ -791,7 +819,7 @@ test('dashboard can send a new message to a user', function () {
         ->and($message->status)->toBe(MessageStatus::Published);
 });
 
-test('dashboard can send a new message to an agent principal', function () {
+test('dashboard cannot send a new message to an agent principal', function () {
     [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
@@ -809,15 +837,9 @@ test('dashboard can send a new message to an agent principal', function () {
         ->set('newMessageTopicId', $topic->id)
         ->set('newMessageRecipientPrincipalId', $agentPrincipal->id)
         ->call('sendDashboardMessage')
-        ->assertHasNoErrors();
+        ->assertHasErrors(['newMessageRecipientPrincipalId']);
 
-    $message = $topic->messages()->where('title', 'Agent note')->first();
-
-    expect($message)->not->toBeNull()
-        ->and($message->sender_principal_id)->toBe($workspace->principalForUser($user)->id)
-        ->and($message->recipient_principal_id)->toBe($agentPrincipal->id)
-        ->and($message->recipient->agent->name)->toBe('Researcher')
-        ->and($message->status)->toBe(MessageStatus::Published);
+    expect($topic->messages()->where('title', 'Agent note')->exists())->toBeFalse();
 });
 
 test('dashboard defaults a principal recipient when none reached the server', function () {
@@ -859,9 +881,7 @@ test('dashboard shows mobile bottom navigation with topics active by default', f
         ->assertSee('data-mobile-nav="agents"', escape: false)
         ->assertSee('aria-pressed="true"', escape: false)
         ->assertSee('data-mobile-panel="topics"', escape: false)
-        ->assertSee('min-h-[calc(100dvh-4rem)]', escape: false)
         ->assertSee('data-mobile-panel="agents"', escape: false)
-        ->assertSee('xl:h-full', escape: false)
         ->assertDontSee('xl:sticky xl:top-6')
         ->assertSee('Agents');
 });

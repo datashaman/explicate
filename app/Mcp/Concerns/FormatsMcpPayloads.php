@@ -12,7 +12,7 @@ trait FormatsMcpPayloads
      */
     protected function messagePayload(Message $message, bool $includeBody = false): array
     {
-        $message->loadMissing(['topic.workspace', 'sender.user', 'sender.agent', 'recipient.user', 'recipient.agent']);
+        $message->loadMissing(['topic.workspace', 'sender.user', 'sender.agent', 'recipient.user', 'recipient.agent', 'assignedAgents']);
 
         $payload = [
             'id' => $message->id,
@@ -31,6 +31,14 @@ trait FormatsMcpPayloads
                 'type' => $message->recipient->type,
                 'name' => $message->recipient->label(),
             ] : null,
+            'assigned_agents' => $message->assignedAgents
+                ->map(fn ($agent): array => [
+                    'id' => $agent->id,
+                    'name' => $agent->name,
+                    'slug' => $agent->slug,
+                ])
+                ->values()
+                ->all(),
             'resource_uri' => $this->messageResourceUri($message),
         ];
 

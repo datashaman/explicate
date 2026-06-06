@@ -7,10 +7,11 @@ use Flux\Flux;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Computed;
+use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 
-new #[Title('Teams')] class extends Component {
+new #[Layout('layouts::workspace'), Title('Teams')] class extends Component {
     public string $name = '';
 
     public function createTeam(CreateTeam $createTeam): void
@@ -40,9 +41,7 @@ new #[Title('Teams')] class extends Component {
     }
 }; ?>
 
-<section class="w-full">
-    @include('partials.settings-heading')
-
+<section class="flex w-full flex-1">
     <flux:heading class="sr-only">{{ __('Teams') }}</flux:heading>
 
     <x-pages::settings.layout :heading="__('Teams')" :subheading="__('Manage your teams and team memberships')">

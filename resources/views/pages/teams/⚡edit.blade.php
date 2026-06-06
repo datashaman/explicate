@@ -11,9 +11,10 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Computed;
+use Livewire\Attributes\Layout;
 use Livewire\Component;
 
-new class extends Component
+new #[Layout('layouts::workspace')] class extends Component
 {
     public Team $teamModel;
 
@@ -136,9 +137,7 @@ new class extends Component
     }
 }; ?>
 
-<section class="w-full">
-    @include('partials.settings-heading')
-
+<section class="flex w-full flex-1">
     <flux:heading class="sr-only">{{ __('Teams') }}</flux:heading>
 
     <x-pages::settings.layout :heading="__('Teams')" :subheading="__('Manage your team settings')">

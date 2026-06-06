@@ -19,7 +19,7 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
 use Laravel\Passport\Contracts\OAuthenticatable;
 use Laravel\Passport\HasApiTokens;
 
-#[Fillable(['name', 'email', 'password', 'current_team_id', 'current_workspace_id'])]
+#[Fillable(['name', 'email', 'timezone', 'password', 'current_team_id', 'current_workspace_id'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
 class User extends Authenticatable implements OAuthenticatable, PasskeyUser
 {
@@ -50,6 +50,11 @@ class User extends Authenticatable implements OAuthenticatable, PasskeyUser
             ->take(2)
             ->map(fn ($word) => Str::substr($word, 0, 1))
             ->implode('');
+    }
+
+    public function displayTimezone(): string
+    {
+        return $this->timezone ?: config('app.timezone');
     }
 
     /**

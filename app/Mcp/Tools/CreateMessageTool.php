@@ -4,6 +4,7 @@ namespace App\Mcp\Tools;
 
 use App\Enums\MessageStatus;
 use App\Mcp\TopicForgeContext;
+use App\Models\AgentTask;
 use App\Models\Message;
 use App\Models\User;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
@@ -31,6 +32,8 @@ class CreateMessageTool extends Tool
             'body' => ['nullable', 'string'],
             'status' => ['nullable', 'string', 'in:'.implode(',', array_column(MessageStatus::cases(), 'value'))],
             'recipient_principal_id' => ['nullable', 'integer'],
+            'agent_ids' => ['nullable', 'array'],
+            'agent_ids.*' => ['integer'],
         ]);
 
         /** @var User $user */
@@ -57,6 +60,7 @@ class CreateMessageTool extends Tool
         ]);
 
         $topic->messages()->save($message);
+        $message->assignAgents($validated['agent_ids'] ?? []);
 
         return Response::structured([
             'workspace' => $topic->workspace->only(['id', 'name', 'slug']),
@@ -71,6 +75,10 @@ class CreateMessageTool extends Tool
                 'status' => $message->status->value,
                 'sender_principal_id' => $message->sender_principal_id,
                 'recipient_principal_id' => $message->recipient_principal_id,
+                'assigned_agent_ids' => $message->agentTasks()
+                    ->where('event_type', AgentTask::EventMessageAssigned)
+                    ->pluck('agent_id')
+                    ->all(),
                 'resource_uri' => "topic-forge://workspaces/{$topic->workspace->slug}/topics/{$topic->slug}/messages/{$message->slug}",
             ],
         ]);
@@ -99,6 +107,9 @@ class CreateMessageTool extends Tool
                 ->nullable(),
             'recipient_principal_id' => $schema->integer()
                 ->description('Optional principal id when this message is addressed to a user or agent instead of the topic.')
+                ->nullable(),
+            'agent_ids' => $schema->array()
+                ->description('Optional workspace agent ids to assign to this message, creating agent tasks.')
                 ->nullable(),
         ];
     }

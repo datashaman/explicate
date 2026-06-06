@@ -8,14 +8,17 @@ use Flux\Flux;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Session;
 use Livewire\Attributes\Computed;
+use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 
-new #[Title('Profile settings')] class extends Component {
+new #[Layout('layouts::workspace'), Title('Profile settings')] class extends Component {
     use ProfileValidationRules;
 
     public string $name = '';
     public string $email = '';
+
+    public string $timezone = '';
 
     /**
      * Mount the component.
@@ -24,6 +27,7 @@ new #[Title('Profile settings')] class extends Component {
     {
         $this->name = Auth::user()->name;
         $this->email = Auth::user()->email;
+        $this->timezone = Auth::user()->timezone ?? '';
     }
 
     /**
@@ -34,6 +38,7 @@ new #[Title('Profile settings')] class extends Component {
         $user = Auth::user();
 
         $validated = $this->validate($this->profileRules($user->id));
+        $validated['timezone'] = $validated['timezone'] ?: null;
 
         $user->fill($validated);
 
@@ -80,9 +85,7 @@ new #[Title('Profile settings')] class extends Component {
     /* @end-chisel-email-verification */
 }; ?>
 
-<section class="w-full">
-    @include('partials.settings-heading')
-
+<section class="flex w-full flex-1">
     <flux:heading class="sr-only">{{ __('Profile settings') }}</flux:heading>
 
     <x-pages::settings.layout :heading="__('Profile')" :subheading="__('Update your name and email address')">
@@ -112,6 +115,8 @@ new #[Title('Profile settings')] class extends Component {
                 @endif
                 {{-- @end-chisel-email-verification --}}
             </div>
+
+            <flux:input wire:model="timezone" :label="__('Timezone')" type="text" autocomplete="off" placeholder="Africa/Johannesburg" />
 
             <div class="flex items-center gap-4">
                 <div class="flex items-center justify-end">

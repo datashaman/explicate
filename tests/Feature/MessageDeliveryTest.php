@@ -39,17 +39,18 @@ test('sending a direct message to a user creates a database notification', funct
         ]);
 });
 
-test('sending a direct message to an agent creates agent work instead of a notification', function () {
+test('assigning a published message to an agent creates agent work instead of a notification', function () {
     Notification::fake();
 
     $agent = Agent::factory()->for($this->workspace)->create(['name' => 'Researcher']);
-    $agentPrincipal = $this->workspace->principalForAgent($agent);
 
     $message = Message::factory()->for($this->topic)->create([
         'sender_principal_id' => $this->senderPrincipal->id,
-        'recipient_principal_id' => $agentPrincipal->id,
+        'recipient_principal_id' => null,
         'status' => MessageStatus::Published,
     ]);
+    $this->topic->agents()->attach($agent);
+    $message->assignAgents([$agent->id]);
 
     Notification::assertNothingSent();
 
@@ -59,12 +60,12 @@ test('sending a direct message to an agent creates agent work instead of a notif
         ->first();
 
     expect($task)->not->toBeNull()
-        ->and($task->event_type)->toBe('message_received')
+        ->and($task->event_type)->toBe(AgentTask::EventMessageAssigned)
         ->and($task->status)->toBe(AgentTaskStatus::Pending)
         ->and($task->available_at)->not->toBeNull();
 });
 
-test('topic messages do not create direct recipient notifications or agent tasks', function () {
+test('topic messages without assignments do not create direct recipient notifications or agent tasks', function () {
     Notification::fake();
 
     Message::factory()->for($this->topic)->create([
@@ -78,25 +79,65 @@ test('topic messages do not create direct recipient notifications or agent tasks
     expect(AgentTask::query()->count())->toBe(0);
 });
 
-test('publishing a draft dispatches delivery side effects once', function () {
+test('publishing an assigned draft makes agent work available once', function () {
     Notification::fake();
 
     $agent = Agent::factory()->for($this->workspace)->create(['name' => 'Researcher']);
-    $agentPrincipal = $this->workspace->principalForAgent($agent);
 
     $message = Message::factory()->for($this->topic)->create([
         'sender_principal_id' => $this->senderPrincipal->id,
-        'recipient_principal_id' => $agentPrincipal->id,
+        'recipient_principal_id' => null,
         'status' => MessageStatus::Draft,
     ]);
+    $this->topic->agents()->attach($agent);
+    $message->assignAgents([$agent->id]);
+
+    expect($message->agentTasks()->sole()->available_at)->toBeNull();
 
     $message->update(['status' => MessageStatus::Published]);
     $message->update(['title' => 'Already sent']);
 
-    expect(AgentTask::query()
+    $task = AgentTask::query()
         ->whereBelongsTo($agent)
         ->whereBelongsTo($message)
-        ->count())->toBe(1);
+        ->sole();
+
+    expect($task->available_at)->not->toBeNull()
+        ->and(AgentTask::query()
+            ->whereBelongsTo($agent)
+            ->whereBelongsTo($message)
+            ->count())->toBe(1);
+});
+
+test('assigning multiple agents creates one task for each agent', function () {
+    $agents = Agent::factory()->count(2)->for($this->workspace)->create();
+    $message = Message::factory()->for($this->topic)->create([
+        'sender_principal_id' => $this->senderPrincipal->id,
+        'status' => MessageStatus::Published,
+    ]);
+
+    $this->topic->agents()->attach($agents->pluck('id'));
+    $message->assignAgents($agents->pluck('id'));
+
+    expect($message->agentTasks)->toHaveCount(2)
+        ->and($message->agentTasks->pluck('event_type')->unique()->values()->all())
+        ->toBe([AgentTask::EventMessageAssigned]);
+});
+
+test('message assignment only creates work for agents associated with the topic', function () {
+    $associatedAgent = Agent::factory()->for($this->workspace)->create();
+    $unassociatedAgent = Agent::factory()->for($this->workspace)->create();
+    $this->topic->agents()->attach($associatedAgent);
+
+    $message = Message::factory()->for($this->topic)->create([
+        'sender_principal_id' => $this->senderPrincipal->id,
+        'status' => MessageStatus::Published,
+    ]);
+
+    $message->assignAgents([$associatedAgent->id, $unassociatedAgent->id]);
+
+    expect($message->agentTasks)->toHaveCount(1)
+        ->and($message->agentTasks->first()->agent_id)->toBe($associatedAgent->id);
 });
 
 test('sending a message to yourself does not create a human notification', function () {

@@ -9,6 +9,18 @@ test('profile page is displayed', function () {
     $this->get(route('profile.edit'))->assertOk();
 });
 
+test('profile page uses the workspace layout', function () {
+    $user = User::factory()->create();
+
+    $this
+        ->actingAs($user)
+        ->get(route('profile.edit'))
+        ->assertOk()
+        ->assertSee('data-test="workspace-switcher-trigger"', false)
+        ->assertSee('data-test="sidebar-menu-button"', false)
+        ->assertSee('Profile, teams, and account preferences');
+});
+
 test('profile information can be updated', function () {
     $user = User::factory()->create();
 
@@ -17,6 +29,7 @@ test('profile information can be updated', function () {
     $response = Livewire::test('pages::settings.profile')
         ->set('name', 'Test User')
         ->set('email', 'test@example.com')
+        ->set('timezone', 'Africa/Johannesburg')
         ->call('updateProfileInformation');
 
     $response->assertHasNoErrors();
@@ -25,7 +38,21 @@ test('profile information can be updated', function () {
 
     expect($user->name)->toEqual('Test User');
     expect($user->email)->toEqual('test@example.com');
+    expect($user->timezone)->toEqual('Africa/Johannesburg');
     expect($user->email_verified_at)->toBeNull();
+});
+
+test('profile timezone must be valid', function () {
+    $user = User::factory()->create();
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::settings.profile')
+        ->set('name', 'Test User')
+        ->set('email', 'test@example.com')
+        ->set('timezone', 'Not/AZone')
+        ->call('updateProfileInformation')
+        ->assertHasErrors(['timezone']);
 });
 
 test('email verification status is unchanged when email address is unchanged', function () {
