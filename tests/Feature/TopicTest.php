@@ -4,6 +4,7 @@ use App\Enums\MessageStatus;
 use App\Enums\Provider;
 use App\Enums\ReasoningEffort;
 use App\Models\Agent;
+use App\Models\AgentTask;
 use App\Models\AgentVersion;
 use App\Models\Attachment;
 use App\Models\Message;
@@ -761,6 +762,33 @@ test('dashboard can make a new message actionable in the main panel', function (
         ->and($message->body)->toBe('Actionable body')
         ->and($message->sender_principal_id)->toBe($senderPrincipal->id)
         ->and($message->status)->toBe(MessageStatus::Published);
+});
+
+test('dashboard can assign agents when sending a new message', function () {
+    [$user, $workspace] = userWithWorkspace();
+
+    $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
+    $agents = Agent::factory()->count(2)->for($workspace)->create();
+    $topic->agents()->attach($agents->pluck('id'));
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::dashboard')
+        ->set('selectedTopicSlug', $topic->slug)
+        ->set('panelAction', 'new-message')
+        ->set('newMessageTitle', 'Agent assignment')
+        ->set('newMessageBody', 'Please both review this.')
+        ->set('newMessageTopicId', $topic->id)
+        ->set('newMessageAgentIds', $agents->pluck('id')->all())
+        ->call('sendDashboardMessage')
+        ->assertHasNoErrors();
+
+    $message = $topic->messages()->where('title', 'Agent assignment')->first();
+
+    expect($message)->not->toBeNull()
+        ->and($message->agentTasks)->toHaveCount(2)
+        ->and($message->agentTasks->pluck('event_type')->unique()->values()->all())->toBe([AgentTask::EventMessageAssigned])
+        ->and($message->agentTasks->pluck('available_at')->filter())->toHaveCount(2);
 });
 
 test('dashboard can send a new message to a user', function () {

@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\MessageStatus;
+use App\Models\Agent;
 use App\Models\Principal;
 use App\Models\Topic;
 use Flux\Flux;
@@ -24,6 +25,9 @@ new #[Title('New Message')] class extends Component {
     public ?int $topicId = null;
 
     public ?int $recipientPrincipalId = null;
+
+    /** @var list<int> */
+    public array $agentIds = [];
 
     /** @var array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile> */
     public array $uploads = [];
@@ -84,6 +88,27 @@ new #[Title('New Message')] class extends Component {
         return $this->availablePrincipals;
     }
 
+    /**
+     * @return \Illuminate\Database\Eloquent\Collection<int, Agent>
+     */
+    #[Computed]
+    public function availableAgents(): \Illuminate\Database\Eloquent\Collection
+    {
+        $workspace = Auth::user()->currentWorkspace;
+
+        if (! $workspace || ! $this->topicId) {
+            return Agent::query()->whereNull('id')->get();
+        }
+
+        $topic = $workspace->topics()->find($this->topicId);
+
+        if (! $topic) {
+            return Agent::query()->whereNull('id')->get();
+        }
+
+        return $topic->agents()->get();
+    }
+
     public function create(): void
     {
         $this->createMessage(MessageStatus::Draft);
@@ -113,11 +138,14 @@ new #[Title('New Message')] class extends Component {
             'target' => ['required', 'string', 'in:topic,principal'],
             'topicId' => ['required', 'integer'],
             'recipientPrincipalId' => ['nullable', 'required_if:target,principal', 'integer'],
+            'agentIds' => ['array'],
+            'agentIds.*' => ['integer'],
             'uploads.*' => ['file', 'max:51200'],
         ], [], [
             'target' => __('delivery target'),
             'topicId' => __('topic'),
             'recipientPrincipalId' => __('recipient'),
+            'agentIds' => __('requested agents'),
             'uploads.*' => __('attachment'),
         ]);
 
@@ -140,6 +168,7 @@ new #[Title('New Message')] class extends Component {
             'sender_principal_id' => $senderPrincipal->id,
             'recipient_principal_id' => $recipientPrincipalId,
         ]);
+        $message->assignAgents($validated['agentIds']);
 
         foreach ($this->uploads as $upload) {
             $filename = $upload->getClientOriginalName();
@@ -207,6 +236,18 @@ new #[Title('New Message')] class extends Component {
                         </flux:select.option>
                     @endforeach
                 </flux:select>
+            @endif
+
+            @if ($this->availableAgents->isNotEmpty())
+                <div class="flex flex-col gap-2">
+                    <flux:label>{{ __('Request agent work') }}</flux:label>
+
+                    <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        @foreach ($this->availableAgents as $agent)
+                            <flux:checkbox wire:model="agentIds" :value="$agent->id" :label="$agent->name" />
+                        @endforeach
+                    </div>
+                </div>
             @endif
 
             <flux:textarea wire:model="body" :label="__('Body')" :placeholder="__('Write something...')" rows="12" />

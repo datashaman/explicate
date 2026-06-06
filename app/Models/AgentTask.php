@@ -12,6 +12,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 #[Fillable(['agent_id', 'message_id', 'event_type', 'status', 'priority', 'available_at', 'locked_at', 'attempts', 'last_error'])]
 class AgentTask extends Model
 {
+    public const string EventMessageAssigned = 'message_assigned';
+
     /** @use HasFactory<AgentTaskFactory> */
     use HasFactory;
 

@@ -73,6 +73,9 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
     public ?int $messageRecipientPrincipalId = null;
 
+    /** @var list<int> */
+    public array $messageAgentIds = [];
+
     public string $newMessageTitle = '';
 
     public string $newMessageBody = '';
@@ -82,6 +85,9 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
     public ?int $newMessageTopicId = null;
 
     public ?int $newMessageRecipientPrincipalId = null;
+
+    /** @var list<int> */
+    public array $newMessageAgentIds = [];
 
     /** @var array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile> */
     public array $newMessageUploads = [];
@@ -238,6 +244,40 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         }
 
         return $workspace->agents()->with('latestVersion')->get();
+    }
+
+    /**
+     * @return \Illuminate\Database\Eloquent\Collection<int, Agent>
+     */
+    public function newMessageAssignableAgents(): \Illuminate\Database\Eloquent\Collection
+    {
+        $workspace = $this->workspace();
+
+        if (! $workspace || ! $this->newMessageTopicId) {
+            return Agent::query()->whereNull('id')->get();
+        }
+
+        $topic = $workspace->topics()->find($this->newMessageTopicId);
+
+        if (! $topic) {
+            return Agent::query()->whereNull('id')->get();
+        }
+
+        return $topic->agents()->with('latestVersion')->get();
+    }
+
+    /**
+     * @return \Illuminate\Database\Eloquent\Collection<int, Agent>
+     */
+    public function selectedMessageAssignableAgents(): \Illuminate\Database\Eloquent\Collection
+    {
+        $message = $this->selectedMessage();
+
+        if (! $message) {
+            return Agent::query()->whereNull('id')->get();
+        }
+
+        return $message->topic->agents()->with('latestVersion')->get();
     }
 
     /**
@@ -631,6 +671,8 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             'newMessageTarget' => ['required', 'string', 'in:topic,principal'],
             'newMessageTopicId' => ['required', 'integer'],
             'newMessageRecipientPrincipalId' => ['nullable', 'required_if:newMessageTarget,principal', 'integer'],
+            'newMessageAgentIds' => ['array'],
+            'newMessageAgentIds.*' => ['integer'],
             'newMessageUploads.*' => ['file', 'max:51200'],
         ], [], [
             'newMessageTitle' => __('title'),
@@ -638,6 +680,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             'newMessageTarget' => __('delivery target'),
             'newMessageTopicId' => __('topic'),
             'newMessageRecipientPrincipalId' => __('recipient'),
+            'newMessageAgentIds' => __('requested agents'),
             'newMessageUploads.*' => __('attachment'),
         ]);
 
@@ -660,6 +703,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             'sender_principal_id' => $senderPrincipal->id,
             'recipient_principal_id' => $recipientPrincipalId,
         ]);
+        $message->assignAgents($validated['newMessageAgentIds']);
 
         foreach ($this->newMessageUploads as $upload) {
             $filename = $upload->getClientOriginalName();
@@ -682,7 +726,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         $this->panelAction = null;
         $this->creatingMessageFromRoute = false;
         $this->mobilePanel = 'messages';
-        $this->reset('newMessageTitle', 'newMessageBody', 'newMessageUploads');
+        $this->reset('newMessageTitle', 'newMessageBody', 'newMessageAgentIds', 'newMessageUploads');
         $this->newMessageTarget = 'topic';
         $this->newMessageRecipientPrincipalId = null;
         $this->newMessageTopicId = $topic->id;
@@ -787,11 +831,14 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             'messageBody' => ['nullable', 'string'],
             'messageTarget' => ['required', 'string', 'in:topic,principal'],
             'messageRecipientPrincipalId' => ['nullable', 'required_if:messageTarget,principal', 'integer'],
+            'messageAgentIds' => ['array'],
+            'messageAgentIds.*' => ['integer'],
         ], [], [
             'messageTitle' => __('title'),
             'messageBody' => __('body'),
             'messageTarget' => __('delivery target'),
             'messageRecipientPrincipalId' => __('recipient'),
+            'messageAgentIds' => __('requested agents'),
         ]);
 
         $workspace = $this->workspace();
@@ -813,6 +860,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             'body' => $validated['messageBody'],
             'recipient_principal_id' => $recipientPrincipalId,
         ]);
+        $message->assignAgents($validated['messageAgentIds']);
 
         $this->selectedMessageSlug = $message->fresh()->slug;
 
@@ -922,6 +970,11 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         $this->messageBody = $message?->body ?? '';
         $this->messageTarget = $message?->recipient_principal_id ? 'principal' : 'topic';
         $this->messageRecipientPrincipalId = $message?->recipient_principal_id;
+        $this->messageAgentIds = $message?->agentTasks()
+            ->where('event_type', \App\Models\AgentTask::EventMessageAssigned)
+            ->pluck('agent_id')
+            ->map(fn ($id): int => (int) $id)
+            ->all() ?? [];
     }
 
     private function syncNewMessageTopic(): void
@@ -1121,6 +1174,18 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                                     </flux:select>
                                 @endif
 
+                                @if ($this->newMessageAssignableAgents()->isNotEmpty())
+                                    <div class="flex flex-col gap-2">
+                                        <flux:label>{{ __('Request agent work') }}</flux:label>
+
+                                        <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                            @foreach ($this->newMessageAssignableAgents() as $agent)
+                                                <flux:checkbox wire:model="newMessageAgentIds" :value="$agent->id" :label="$agent->name" data-test="new-message-agent-{{ $agent->slug }}" />
+                                            @endforeach
+                                        </div>
+                                    </div>
+                                @endif
+
                                 <flux:textarea wire:model="newMessageBody" :label="__('Body')" :placeholder="__('Write something...')" rows="12" data-test="new-message-body" />
                             </form>
 
@@ -1194,6 +1259,18 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                                         @endif
                                     </div>
 
+                                    @if ($this->selectedMessageAssignableAgents()->isNotEmpty())
+                                        <div class="flex flex-col gap-2">
+                                            <flux:label>{{ __('Request agent work') }}</flux:label>
+
+                                            <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                                @foreach ($this->selectedMessageAssignableAgents() as $agent)
+                                                    <flux:checkbox wire:model="messageAgentIds" :value="$agent->id" :label="$agent->name" />
+                                                @endforeach
+                                            </div>
+                                        </div>
+                                    @endif
+
                                     <flux:textarea wire:model="messageBody" :placeholder="__('Write something...')" rows="12" />
                                 </form>
 
@@ -1232,6 +1309,10 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                                         {{ __('To') }}:
                                         {{ $selectedDashboardMessage->recipient ? $selectedDashboardMessage->recipient->label() : $selectedDashboardMessage->topic->name }}
                                     </flux:badge>
+
+                                    @foreach ($selectedDashboardMessage->assignedAgents as $agent)
+                                        <flux:badge color="amber" size="sm">{{ __('Assigned') }}: {{ $agent->name }}</flux:badge>
+                                    @endforeach
                                 </div>
 
                                 <div>

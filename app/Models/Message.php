@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\AgentTaskStatus;
 use App\Enums\MessageStatus;
 use App\Events\MessageSent;
 use Database\Factories\MessageFactory;
@@ -9,8 +10,10 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
 #[Fillable(['topic_id', 'sender_principal_id', 'recipient_principal_id', 'title', 'slug', 'ulid', 'body', 'status'])]
@@ -55,6 +58,7 @@ class Message extends Model
 
         static::updated(function (Message $message) {
             if ($message->wasChanged('status') && $message->status === MessageStatus::Published) {
+                $message->makeAssignedAgentTasksAvailable();
                 MessageSent::dispatch($message);
             }
         });
@@ -98,6 +102,69 @@ class Message extends Model
     public function attachments(): HasMany
     {
         return $this->hasMany(Attachment::class)->orderBy('filename');
+    }
+
+    /**
+     * @return HasMany<AgentTask, $this>
+     */
+    public function agentTasks(): HasMany
+    {
+        return $this->hasMany(AgentTask::class);
+    }
+
+    /**
+     * @return BelongsToMany<Agent, $this>
+     */
+    public function assignedAgents(): BelongsToMany
+    {
+        return $this->belongsToMany(Agent::class, 'agent_tasks')
+            ->wherePivot('event_type', AgentTask::EventMessageAssigned)
+            ->withPivot(['id', 'status', 'available_at', 'locked_at', 'attempts', 'last_error'])
+            ->withTimestamps();
+    }
+
+    /**
+     * @param  iterable<int, int|string|Agent>  $agents
+     */
+    public function assignAgents(iterable $agents): void
+    {
+        $agentIds = Collection::make($agents)
+            ->map(fn (int|string|Agent $agent): int => $agent instanceof Agent ? $agent->id : (int) $agent)
+            ->filter(fn (int $agentId): bool => $agentId > 0)
+            ->unique()
+            ->values();
+
+        $validAgentIds = $this->topic
+            ->agents()
+            ->whereKey($agentIds->all())
+            ->pluck('id');
+
+        $tasksToRemove = $this->agentTasks()
+            ->where('event_type', AgentTask::EventMessageAssigned);
+
+        if ($validAgentIds->isNotEmpty()) {
+            $tasksToRemove->whereNotIn('agent_id', $validAgentIds);
+        }
+
+        $tasksToRemove->delete();
+
+        $validAgentIds->each(function (int $agentId): void {
+            $this->agentTasks()->firstOrCreate([
+                'agent_id' => $agentId,
+                'event_type' => AgentTask::EventMessageAssigned,
+            ], [
+                'status' => AgentTaskStatus::Pending,
+                'available_at' => $this->status === MessageStatus::Published ? now() : null,
+            ]);
+        });
+    }
+
+    public function makeAssignedAgentTasksAvailable(): void
+    {
+        $this->agentTasks()
+            ->where('event_type', AgentTask::EventMessageAssigned)
+            ->whereNull('available_at')
+            ->update(['available_at' => now()]);
     }
 
     /**

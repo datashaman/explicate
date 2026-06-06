@@ -31,11 +31,12 @@ test('it executes a pending agent task through an anonymous laravel ai agent', f
 
     $message = Message::factory()->for($this->topic)->create([
         'sender_principal_id' => $this->senderPrincipal->id,
-        'recipient_principal_id' => $this->workspace->principalForAgent($agent)->id,
         'title' => 'Research this',
         'body' => 'Find the latest internal context.',
         'status' => MessageStatus::Published,
     ]);
+    $this->topic->agents()->attach($agent);
+    $message->assignAgents([$agent->id]);
 
     $task = AgentTask::query()->whereBelongsTo($message)->sole();
 
@@ -66,9 +67,10 @@ test('it marks a task failed when the agent has no executable version', function
     $agent = Agent::factory()->for($this->workspace)->create(['name' => 'Researcher']);
     $message = Message::factory()->for($this->topic)->create([
         'sender_principal_id' => $this->senderPrincipal->id,
-        'recipient_principal_id' => $this->workspace->principalForAgent($agent)->id,
         'status' => MessageStatus::Published,
     ]);
+    $this->topic->agents()->attach($agent);
+    $message->assignAgents([$agent->id]);
 
     $task = AgentTask::query()->whereBelongsTo($message)->sole();
     $exception = null;
@@ -87,4 +89,25 @@ test('it marks a task failed when the agent has no executable version', function
         ->and($task->fresh()->attempts)->toBe(1)
         ->and($task->fresh()->locked_at)->toBeNull()
         ->and($task->fresh()->last_error)->toBe('Agent does not have a version to execute.');
+});
+
+test('it ignores assigned draft message tasks until they are available', function () {
+    Ai::fakeAgent(AnonymousAgent::class)->preventStrayPrompts();
+
+    $agent = Agent::factory()->for($this->workspace)->create(['name' => 'Researcher']);
+    AgentVersion::factory()->for($agent)->create();
+    $message = Message::factory()->for($this->topic)->create([
+        'sender_principal_id' => $this->senderPrincipal->id,
+        'status' => MessageStatus::Draft,
+    ]);
+    $this->topic->agents()->attach($agent);
+    $message->assignAgents([$agent->id]);
+
+    $task = AgentTask::query()->whereBelongsTo($message)->sole();
+
+    expect(app(ExecuteAgentTask::class)->handle($task))->toBeNull()
+        ->and($task->fresh()->status)->toBe(AgentTaskStatus::Pending)
+        ->and($task->fresh()->attempts)->toBe(0);
+
+    Ai::assertAgentNeverPrompted(AnonymousAgent::class);
 });

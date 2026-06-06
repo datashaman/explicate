@@ -23,7 +23,7 @@ class ExecuteAgentTask
             'message.topic',
         ]);
 
-        if ($task->status !== AgentTaskStatus::Pending) {
+        if ($task->status !== AgentTaskStatus::Pending || ! $task->available_at || $task->available_at->isFuture()) {
             return null;
         }
 

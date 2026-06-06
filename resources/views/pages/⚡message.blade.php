@@ -2,6 +2,7 @@
 
 use App\Enums\MessageStatus;
 use App\Models\Attachment;
+use App\Models\Agent;
 use App\Models\Message;
 use App\Models\Principal;
 use App\Models\Topic;
@@ -30,6 +31,9 @@ new #[Layout('layouts::workspace'), Title('Message')] class extends Component {
 
     public ?int $recipientPrincipalId = null;
 
+    /** @var list<int> */
+    public array $agentIds = [];
+
     /** @var array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile> */
     public array $uploads = [];
 
@@ -47,6 +51,11 @@ new #[Layout('layouts::workspace'), Title('Message')] class extends Component {
         $this->body = $message->body ?? '';
         $this->target = $message->recipient_principal_id ? 'principal' : 'topic';
         $this->recipientPrincipalId = $message->recipient_principal_id;
+        $this->agentIds = $message->agentTasks()
+            ->where('event_type', \App\Models\AgentTask::EventMessageAssigned)
+            ->pluck('agent_id')
+            ->map(fn ($id): int => (int) $id)
+            ->all();
     }
 
     /**
@@ -74,6 +83,21 @@ new #[Layout('layouts::workspace'), Title('Message')] class extends Component {
         return $this->availablePrincipals;
     }
 
+    /**
+     * @return \Illuminate\Database\Eloquent\Collection<int, Agent>
+     */
+    #[Computed]
+    public function availableAgents(): \Illuminate\Database\Eloquent\Collection
+    {
+        $workspace = Auth::user()->currentWorkspace;
+
+        if (! $workspace) {
+            return Agent::query()->whereNull('id')->get();
+        }
+
+        return $this->topic->agents()->get();
+    }
+
     public function save(): void
     {
         abort_unless($this->message->status === MessageStatus::Draft, 403);
@@ -85,9 +109,12 @@ new #[Layout('layouts::workspace'), Title('Message')] class extends Component {
             'body' => ['nullable', 'string'],
             'target' => ['required', 'string', 'in:topic,principal'],
             'recipientPrincipalId' => ['nullable', 'required_if:target,principal', 'integer'],
+            'agentIds' => ['array'],
+            'agentIds.*' => ['integer'],
         ], [], [
             'target' => __('delivery target'),
             'recipientPrincipalId' => __('recipient'),
+            'agentIds' => __('requested agents'),
         ]);
 
         $this->message->update([
@@ -95,6 +122,7 @@ new #[Layout('layouts::workspace'), Title('Message')] class extends Component {
             'body' => $validated['body'],
             'recipient_principal_id' => $this->resolvedRecipientPrincipalId($validated),
         ]);
+        $this->message->assignAgents($validated['agentIds']);
 
         Flux::toast(variant: 'success', text: __('Saved.'));
     }
@@ -115,9 +143,12 @@ new #[Layout('layouts::workspace'), Title('Message')] class extends Component {
             'body' => ['nullable', 'string'],
             'target' => ['required', 'string', 'in:topic,principal'],
             'recipientPrincipalId' => ['nullable', 'required_if:target,principal', 'integer'],
+            'agentIds' => ['array'],
+            'agentIds.*' => ['integer'],
         ], [], [
             'target' => __('delivery target'),
             'recipientPrincipalId' => __('recipient'),
+            'agentIds' => __('requested agents'),
         ]);
 
         $workspace = Auth::user()->currentWorkspace;
@@ -131,6 +162,7 @@ new #[Layout('layouts::workspace'), Title('Message')] class extends Component {
             'sender_principal_id' => $this->message->sender_principal_id ?: $workspace->principalForUser(Auth::user())->id,
             'status' => MessageStatus::Published,
         ]);
+        $this->message->assignAgents($validated['agentIds']);
     }
 
     public function unpublish(): void
@@ -141,6 +173,11 @@ new #[Layout('layouts::workspace'), Title('Message')] class extends Component {
         $this->body = $this->message->body ?? '';
         $this->target = $this->message->recipient_principal_id ? 'principal' : 'topic';
         $this->recipientPrincipalId = $this->message->recipient_principal_id;
+        $this->agentIds = $this->message->agentTasks()
+            ->where('event_type', \App\Models\AgentTask::EventMessageAssigned)
+            ->pluck('agent_id')
+            ->map(fn ($id): int => (int) $id)
+            ->all();
     }
 
     public function archive(): void
@@ -156,6 +193,11 @@ new #[Layout('layouts::workspace'), Title('Message')] class extends Component {
         $this->body = $this->message->body ?? '';
         $this->target = $this->message->recipient_principal_id ? 'principal' : 'topic';
         $this->recipientPrincipalId = $this->message->recipient_principal_id;
+        $this->agentIds = $this->message->agentTasks()
+            ->where('event_type', \App\Models\AgentTask::EventMessageAssigned)
+            ->pluck('agent_id')
+            ->map(fn ($id): int => (int) $id)
+            ->all();
     }
 
     public function uploadAttachments(): void
@@ -270,6 +312,18 @@ new #[Layout('layouts::workspace'), Title('Message')] class extends Component {
                         @endif
                     </div>
 
+                    @if ($this->availableAgents->isNotEmpty())
+                        <div class="flex flex-col gap-2">
+                            <flux:label>{{ __('Request agent work') }}</flux:label>
+
+                            <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                @foreach ($this->availableAgents as $agent)
+                                    <flux:checkbox wire:model="agentIds" :value="$agent->id" :label="$agent->name" />
+                                @endforeach
+                            </div>
+                        </div>
+                    @endif
+
                     <flux:textarea wire:model="body" :placeholder="__('Write something...')" rows="12" />
 
                     <div class="flex justify-end">
@@ -301,6 +355,10 @@ new #[Layout('layouts::workspace'), Title('Message')] class extends Component {
                         {{ __('To') }}:
                         {{ $message->recipient ? $message->recipient->label() : $topic->name }}
                     </flux:badge>
+
+                    @foreach ($message->assignedAgents as $agent)
+                        <flux:badge color="amber" size="sm">{{ __('Assigned') }}: {{ $agent->name }}</flux:badge>
+                    @endforeach
                 </div>
 
                 <div>
