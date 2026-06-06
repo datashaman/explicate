@@ -198,9 +198,9 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
         return [
             [
-                'slug' => 'inbox',
-                'name' => __('Inbox'),
-                'icon' => 'inbox',
+                'slug' => 'feed',
+                'name' => __('Feed'),
+                'icon' => 'rss',
                 'count' => (int) ($counts[PostStatus::Published->value] ?? 0),
             ],
             [
@@ -350,7 +350,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             ->withCount('attachments')
             ->whereHas('topic', fn ($query) => $query->where('workspace_id', $workspace->id))
             ->when($folder['slug'] === 'drafts', fn ($query) => $query->where('status', PostStatus::Draft))
-            ->when($folder['slug'] === 'inbox', fn ($query) => $query->where('status', PostStatus::Published))
+            ->when($folder['slug'] === 'feed', fn ($query) => $query->where('status', PostStatus::Published))
             ->when($folder['slug'] === 'archived', fn ($query) => $query->where('status', PostStatus::Archived))
             ->when($folder['slug'] !== 'archived' && ! $this->showArchived, fn ($query) => $query->where('status', '!=', PostStatus::Archived))
             ->orderByDesc('updated_at')
@@ -363,7 +363,6 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                 $meta = $isDraftsFolder
                     ? [
                         ['label' => __('Topic'), 'value' => $post->topic->name],
-                        ...($post->recipient ? [['label' => __('Recipient'), 'value' => $post->recipient->label()]] : []),
                         [
                             'label' => __('Saved'),
                             'value' => $post->updated_at->diffForHumans(),
@@ -373,7 +372,6 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                     : [
                         ...($post->sender ? [['label' => __('Sender'), 'value' => $post->sender->label()]] : []),
                         ['label' => __('Topic'), 'value' => $post->topic->name],
-                        ...($post->recipient ? [['label' => __('Recipient'), 'value' => $post->recipient->label()]] : []),
                         [
                             'label' => __('Sent'),
                             'value' => $post->updated_at->diffForHumans(),
@@ -385,7 +383,6 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                     ? [
                         ...$post->listSortValues(dateKey: 'saved'),
                         'topic' => Str::lower($post->topic->name),
-                        'recipient' => Str::lower($post->recipient?->label() ?? ''),
                     ]
                     : $post->listSortValues(
                         recipientFallback: $post->topic->name,
@@ -423,11 +420,9 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
         if ($folder && $folder['slug'] === 'drafts') {
             $columns[] = ['key' => 'topic', 'label' => __('Topic'), 'class' => 'w-28 shrink-0'];
-            $columns[] = ['key' => 'recipient', 'label' => __('Recipient'), 'class' => 'w-28 shrink-0'];
         } else {
             $columns[] = ['key' => 'sender', 'label' => __('Sender'), 'class' => 'w-28 shrink-0'];
             $columns[] = ['key' => 'topic', 'label' => __('Topic'), 'class' => 'w-28 shrink-0'];
-            $columns[] = ['key' => 'recipient', 'label' => __('Recipient'), 'class' => 'w-28 shrink-0'];
         }
 
         $columns[] = ['key' => $folder && $folder['slug'] === 'drafts' ? 'saved' : 'sent', 'label' => $dateLabel, 'class' => 'w-28 shrink-0'];
@@ -1040,7 +1035,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                                 </div>
                                 <div class="flex shrink-0 items-center gap-1">
                                     @if ($topic->published_count > 0)
-                                        <flux:badge color="green" size="sm" title="{{ __('Inbox') }}" data-test="topic-{{ $topic->slug }}-published-count" data-count="{{ $topic->published_count }}">{{ $topic->published_count }}</flux:badge>
+                                        <flux:badge color="green" size="sm" title="{{ __('Feed') }}" data-test="topic-{{ $topic->slug }}-published-count" data-count="{{ $topic->published_count }}">{{ $topic->published_count }}</flux:badge>
                                     @endif
                                     @if ($showArchived && $selectedTopicSlug === $topic->slug && $topic->archived_count > 0)
                                         <flux:badge color="yellow" size="sm" title="{{ __('Archived posts') }}" data-test="topic-{{ $topic->slug }}-archived-count" data-count="{{ $topic->archived_count }}">{{ $topic->archived_count }}</flux:badge>
@@ -1216,11 +1211,11 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                                 ['label' => $this->workspace()->name, 'href' => route('dashboard')],
                                 ['label' => $selectedDashboardFolder['name'] ?? $this->selectedTopic()?->name ?? __('New post')],
                             ],
-                            'titleLabel' => __('Inbox'),
+                            'titleLabel' => __('Feed'),
                             'items' => collect($selectedDashboardFolder ? $this->selectedSystemFolderItems() : $this->selectedTopicItems()),
                             'icon' => 'document-text',
                             'iconClass' => 'size-12 text-neutral-400 group-hover:text-neutral-300',
-                            'emptyText' => __('No inbox'),
+                            'emptyText' => __('No posts'),
                             'createHref' => $this->selectedTopic() ? route('posts.create', ['topic' => $this->selectedTopic()->slug]) : route('posts.create'),
                             'createLabel' => __('New post'),
                             'createTest' => 'dashboard-new-post-button',
@@ -1244,7 +1239,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                     ])
                 >
                     <div class="flex items-center justify-between gap-3 border-b border-neutral-300 bg-emerald-50 px-4 py-3 dark:border-white/10 dark:bg-emerald-500/10">
-                        <flux:heading size="sm">{{ __('Inbox') }}</flux:heading>
+                        <flux:heading size="sm">{{ __('Feed') }}</flux:heading>
                         <flux:button :href="route('posts.create')" wire:navigate size="xs" icon="plus" data-test="dashboard-new-post-button">
                             {{ __('New post') }}
                         </flux:button>
@@ -1254,7 +1249,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                         <div class="space-y-2">
                             <flux:heading size="sm">{{ __('Select a topic') }}</flux:heading>
                             <flux:text class="text-sm text-neutral-400 dark:text-neutral-600">
-                                {{ __('Choose a topic to view its inbox.') }}
+                                {{ __('Choose a topic to view its feed.') }}
                             </flux:text>
                         </div>
                     </div>
@@ -1425,7 +1420,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                     ])
                 >
                     <flux:icon name="document-text" class="size-4" />
-                    <span>{{ __('Inbox') }}</span>
+                    <span>{{ __('Feed') }}</span>
                 </button>
                 <button
                     type="button"

@@ -88,13 +88,13 @@ test('dashboard shows topics as folders for current workspace', function () {
         ->get(route('dashboard'))
         ->assertOk()
         ->assertSee('Topics')
-        ->assertSee('Inbox')
+        ->assertSee('Feed')
         ->assertSee('Drafts')
         ->assertSee('Archived')
         ->assertSee($topic->name)
         ->assertDontSee($post->title)
         ->assertSee('Select a topic')
-        ->assertSee('Choose a topic to view its inbox.');
+        ->assertSee('Choose a topic to view its feed.');
 });
 
 test('dashboard shows system folders with workspace post counts', function () {
@@ -116,10 +116,10 @@ test('dashboard shows system folders with workspace post counts', function () {
     $this->actingAs($user)
         ->get(route('dashboard'))
         ->assertOk()
-        ->assertSee(e(route('dashboard', ['folder' => 'inbox', 'panel' => 'posts'])), escape: false)
+        ->assertSee(e(route('dashboard', ['folder' => 'feed', 'panel' => 'posts'])), escape: false)
         ->assertSee(e(route('dashboard', ['folder' => 'drafts', 'panel' => 'posts'])), escape: false)
         ->assertSee(e(route('dashboard', ['folder' => 'archived', 'panel' => 'posts'])), escape: false)
-        ->assertSee('data-test="system-folder-inbox-count"', escape: false)
+        ->assertSee('data-test="system-folder-feed-count"', escape: false)
         ->assertSee('data-test="system-folder-drafts-count"', escape: false);
 });
 
@@ -129,13 +129,11 @@ test('dashboard system draft folder shows draft posts across topics', function (
     $design = Topic::factory()->for($workspace)->create(['name' => 'Design', 'slug' => 'design']);
     $engineering = Topic::factory()->for($workspace)->create(['slug' => 'engineering']);
     $userPrincipal = $workspace->principalForUser($user);
-    [$recipient, $recipientPrincipal] = teamMemberPrincipal($user, $workspace);
 
     $designDraft = Post::factory()->for($design)->create([
         'title' => 'Working draft',
         'updated_at' => now()->subMinutes(7),
         'status' => PostStatus::Draft,
-        'recipient_principal_id' => $recipientPrincipal->id,
     ]);
 
     Post::factory()->for($engineering)->create([
@@ -161,10 +159,8 @@ test('dashboard system draft folder shows draft posts across topics', function (
         ->assertSee('data-sort-topic=', escape: false)
         ->assertSeeText('Topic:')
         ->assertSeeText('Design')
-        ->assertSee('data-test="folder-list-sort-recipient"', escape: false)
-        ->assertSee('data-sort-recipient=', escape: false)
-        ->assertSeeText('Recipient')
-        ->assertSeeText($recipient->name)
+        ->assertDontSee('data-test="folder-list-sort-recipient"', escape: false)
+        ->assertDontSeeText('Recipient')
         ->assertSeeText('Saved:')
         ->assertSeeText('7 minutes ago')
         ->assertSee('data-test="folder-list-sort-saved"', escape: false)
@@ -175,7 +171,7 @@ test('dashboard system draft folder shows draft posts across topics', function (
     $response->assertDontSee('data-test="folder-item-badge"', escape: false);
 });
 
-test('dashboard inbox folder does not show draft posts', function () {
+test('dashboard feed folder does not show draft posts', function () {
     [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['name' => 'Design', 'slug' => 'design']);
@@ -194,13 +190,13 @@ test('dashboard inbox folder does not show draft posts', function () {
     ]);
 
     $this->actingAs($user)
-        ->get(route('dashboard', ['folder' => 'inbox', 'panel' => 'posts']))
+        ->get(route('dashboard', ['folder' => 'feed', 'panel' => 'posts']))
         ->assertOk()
         ->assertSee('Visible post')
         ->assertDontSee('Hidden draft');
 });
 
-test('dashboard inbox folder shows all published topic inbox', function () {
+test('dashboard feed folder shows all published topic posts', function () {
     [$user, $workspace] = userWithWorkspace();
     [$recipient, $recipientPrincipal] = teamMemberPrincipal($user, $workspace);
 
@@ -229,7 +225,7 @@ test('dashboard inbox folder shows all published topic inbox', function () {
     ]);
 
     $this->actingAs($user)
-        ->get(route('dashboard', ['folder' => 'inbox', 'panel' => 'posts']))
+        ->get(route('dashboard', ['folder' => 'feed', 'panel' => 'posts']))
         ->assertOk()
         ->assertSee('For me')
         ->assertSee('For someone else')
@@ -241,9 +237,9 @@ test('dashboard inbox folder shows all published topic inbox', function () {
         ->assertSee('data-test="folder-list-sort-topic"', escape: false)
         ->assertSeeText('Topic:')
         ->assertSeeText('Design')
-        ->assertSee('data-test="folder-list-sort-recipient"', escape: false)
-        ->assertSeeText('Recipient:')
         ->assertSeeText($user->name)
+        ->assertDontSee('data-test="folder-list-sort-recipient"', escape: false)
+        ->assertDontSeeText('Recipient:')
         ->assertSeeText('Sent:')
         ->assertSeeText('9 minutes ago');
 });
@@ -253,7 +249,7 @@ test('dashboard post panel returns to the selected folder before the post topic'
 
     $topic = Topic::factory()->for($workspace)->create(['name' => 'Design', 'slug' => 'design']);
     $post = Post::factory()->for($topic)->create([
-        'title' => 'Inbox post',
+        'title' => 'Feed post',
         'status' => PostStatus::Published,
         'sender_principal_id' => $workspace->principalForUser($user)->id,
     ]);
@@ -261,14 +257,14 @@ test('dashboard post panel returns to the selected folder before the post topic'
     $this->actingAs($user);
 
     $component = Livewire::test('pages::dashboard');
-    $component->instance()->selectedSystemFolderSlug = 'inbox';
+    $component->instance()->selectedSystemFolderSlug = 'feed';
     $component->instance()->selectedTopicSlug = $topic->slug;
     $component->instance()->selectedPostSlug = $post->slug;
 
     expect($component->instance()->postsPanelReturnRoute())
-        ->toBe(route('dashboard', ['folder' => 'inbox', 'panel' => 'posts']))
+        ->toBe(route('dashboard', ['folder' => 'feed', 'panel' => 'posts']))
         ->and($component->instance()->postsPanelReturnLabel())
-        ->toBe('Inbox');
+        ->toBe('Feed');
 });
 
 test('dashboard post panel return label matches selected topic context', function () {
@@ -288,19 +284,17 @@ test('dashboard post panel return label matches selected topic context', functio
         ->assertSeeText('Design');
 });
 
-test('dashboard archived folder shows archived inbox', function () {
+test('dashboard archived folder shows archived feed', function () {
     [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['name' => 'Design', 'slug' => 'design']);
     $userPrincipal = $workspace->principalForUser($user);
-    [$recipient, $recipientPrincipal] = teamMemberPrincipal($user, $workspace);
 
     Post::factory()->for($topic)->create([
         'title' => 'Archived post',
         'updated_at' => now()->subMinutes(11),
         'status' => PostStatus::Archived,
         'sender_principal_id' => $userPrincipal->id,
-        'recipient_principal_id' => $recipientPrincipal->id,
     ]);
 
     $response = $this->actingAs($user)
@@ -314,9 +308,8 @@ test('dashboard archived folder shows archived inbox', function () {
         ->assertSee('data-test="folder-list-sort-topic"', escape: false)
         ->assertSeeText('Topic:')
         ->assertSeeText('Design')
-        ->assertSee('data-test="folder-list-sort-recipient"', escape: false)
-        ->assertSeeText('Recipient:')
-        ->assertSeeText($recipient->name)
+        ->assertDontSee('data-test="folder-list-sort-recipient"', escape: false)
+        ->assertDontSeeText('Recipient:')
         ->assertSeeText('Sent:')
         ->assertSeeText('11 minutes ago');
 
@@ -362,7 +355,7 @@ test('dashboard archived toggle only filters the selected posts list', function 
         ->assertDontSee('data-test="topic-design-draft-count"', escape: false)
         ->assertDontSee('title="Draft posts"', escape: false)
         ->assertSee('data-test="topic-design-published-count"', escape: false)
-        ->assertSee('title="Inbox"', escape: false)
+        ->assertSee('title="Feed"', escape: false)
         ->assertDontSee('Design archived')
         ->assertDontSee('data-test="topic-design-archived-count"', escape: false)
         ->assertDontSee('data-test="topic-engineering-archived-count"', escape: false);
@@ -1028,7 +1021,7 @@ test('topic page left aligns post icons in icon view', function () {
     $this->actingAs($user)
         ->get(route('topics.show', ['topic' => $topic->slug]))
         ->assertOk()
-        ->assertSee('Inbox')
+        ->assertSee('Feed')
         ->assertSee('Agents')
         ->assertSee('flex w-full min-w-0 items-center justify-between gap-3', escape: false)
         ->assertSee('hidden shrink-0 items-center gap-3 md:flex', escape: false)

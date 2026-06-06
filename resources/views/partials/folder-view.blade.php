@@ -328,7 +328,6 @@
                                 'from' => __('From'),
                                 'sender' => __('Sender'),
                                 'topic' => __('Topic'),
-                                'recipient' => __('Recipient'),
                                 'sent' => __('Sent'),
                                 'saved' => __('Saved'),
                                 'status' => __('Status'),
