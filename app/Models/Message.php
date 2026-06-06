@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
-#[Fillable(['topic_id', 'sender_user_id', 'recipient_user_id', 'title', 'slug', 'body', 'status'])]
+#[Fillable(['topic_id', 'sender_principal_id', 'recipient_principal_id', 'title', 'slug', 'body', 'status'])]
 class Message extends Model
 {
     /** @use HasFactory<MessageFactory> */
@@ -92,19 +92,19 @@ class Message extends Model
     }
 
     /**
-     * @return BelongsTo<User, $this>
+     * @return BelongsTo<Principal, $this>
      */
     public function recipient(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'recipient_user_id');
+        return $this->belongsTo(Principal::class, 'recipient_principal_id');
     }
 
     /**
-     * @return BelongsTo<User, $this>
+     * @return BelongsTo<Principal, $this>
      */
     public function sender(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'sender_user_id');
+        return $this->belongsTo(Principal::class, 'sender_principal_id');
     }
 
     public function getRouteKeyName(): string

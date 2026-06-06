@@ -5,6 +5,7 @@ use App\Enums\Provider;
 use App\Enums\ReasoningEffort;
 use App\Models\Agent;
 use App\Models\Message;
+use App\Models\Principal;
 use App\Models\Topic;
 use Flux\Flux;
 use Illuminate\Support\Facades\Auth;
@@ -73,7 +74,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
     public ?int $newMessageTopicId = null;
 
-    public ?int $newMessageRecipientUserId = null;
+    public ?int $newMessageRecipientPrincipalId = null;
 
     /** @var array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile> */
     public array $newMessageUploads = [];
@@ -89,6 +90,13 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
     public function workspace(): ?\App\Models\Workspace
     {
         return Auth::user()->currentWorkspace;
+    }
+
+    public function currentPrincipal(): ?Principal
+    {
+        $workspace = $this->workspace();
+
+        return $workspace?->principalForUser(Auth::user());
     }
 
     public function selectedTopic(): ?Topic
@@ -151,6 +159,8 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             return [];
         }
 
+        $currentPrincipal = $this->currentPrincipal();
+
         $counts = Message::query()
             ->whereHas('topic', fn ($query) => $query->where('workspace_id', $workspace->id))
             ->selectRaw('status, count(*) as total')
@@ -162,11 +172,11 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                 'slug' => 'inbox',
                 'name' => __('Inbox'),
                 'icon' => 'inbox',
-                'count' => (int) Message::query()
-                    ->where('recipient_user_id', Auth::id())
+                'count' => $currentPrincipal ? (int) Message::query()
+                    ->where('recipient_principal_id', $currentPrincipal->id)
                     ->where('status', MessageStatus::Published)
                     ->whereHas('topic', fn ($query) => $query->where('workspace_id', $workspace->id))
-                    ->count(),
+                    ->count() : 0,
             ],
             [
                 'slug' => 'draft',
@@ -178,11 +188,11 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                 'slug' => 'sent',
                 'name' => __('Sent'),
                 'icon' => 'paper-airplane',
-                'count' => (int) Message::query()
-                    ->where('sender_user_id', Auth::id())
+                'count' => $currentPrincipal ? (int) Message::query()
+                    ->where('sender_principal_id', $currentPrincipal->id)
                     ->where('status', MessageStatus::Published)
                     ->whereHas('topic', fn ($query) => $query->where('workspace_id', $workspace->id))
-                    ->count(),
+                    ->count() : 0,
             ],
         ];
     }
@@ -228,9 +238,9 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
         return $workspace->topics()
             ->withCount([
-                'messages as draft_count' => fn ($q) => $q->whereNull('recipient_user_id')->where('status', MessageStatus::Draft),
-                'messages as published_count' => fn ($q) => $q->whereNull('recipient_user_id')->where('status', MessageStatus::Published),
-                'messages as archived_count' => fn ($q) => $q->whereNull('recipient_user_id')->where('status', MessageStatus::Archived),
+                'messages as draft_count' => fn ($q) => $q->whereNull('recipient_principal_id')->where('status', MessageStatus::Draft),
+                'messages as published_count' => fn ($q) => $q->whereNull('recipient_principal_id')->where('status', MessageStatus::Published),
+                'messages as archived_count' => fn ($q) => $q->whereNull('recipient_principal_id')->where('status', MessageStatus::Archived),
             ])
             ->get();
     }
@@ -249,7 +259,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         return $topic->messages()
             ->when(! $this->showArchived, fn ($query) => $query->where('status', '!=', MessageStatus::Archived))
             ->where('status', '!=', MessageStatus::Draft)
-            ->whereNull('recipient_user_id')
+            ->whereNull('recipient_principal_id')
             ->get()
             ->map(fn (Message $message) => [
                 'href' => route('dashboard', ['topic' => $topic->slug, 'message' => $message->slug, 'panel' => 'messages']),
@@ -269,6 +279,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
     {
         $workspace = $this->workspace();
         $folder = $this->selectedSystemFolder();
+        $currentPrincipal = $this->currentPrincipal();
 
         if (! $workspace || ! $folder) {
             return [];
@@ -278,8 +289,8 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             ->with('topic')
             ->whereHas('topic', fn ($query) => $query->where('workspace_id', $workspace->id))
             ->when($folder['slug'] === 'draft', fn ($query) => $query->where('status', MessageStatus::Draft))
-            ->when($folder['slug'] === 'sent', fn ($query) => $query->where('status', MessageStatus::Published)->where('sender_user_id', Auth::id()))
-            ->when($folder['slug'] === 'inbox', fn ($query) => $query->where('status', MessageStatus::Published)->where('recipient_user_id', Auth::id()))
+            ->when($folder['slug'] === 'sent', fn ($query) => $query->where('status', MessageStatus::Published)->where('sender_principal_id', $currentPrincipal?->id ?? 0))
+            ->when($folder['slug'] === 'inbox', fn ($query) => $query->where('status', MessageStatus::Published)->where('recipient_principal_id', $currentPrincipal?->id ?? 0))
             ->when(! $this->showArchived, fn ($query) => $query->where('status', '!=', MessageStatus::Archived))
             ->latest()
             ->get()
@@ -315,18 +326,29 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
     }
 
     /**
-     * @return \Illuminate\Database\Eloquent\Collection<int, \App\Models\User>
+     * @return \Illuminate\Support\Collection<int, Principal>
      */
     #[Computed]
-    public function availableRecipients(): \Illuminate\Database\Eloquent\Collection
+    public function availableRecipients(): \Illuminate\Support\Collection
     {
+        $workspace = $this->workspace();
         $team = Auth::user()->currentTeam;
 
-        if (! $team) {
-            return new \Illuminate\Database\Eloquent\Collection();
+        if (! $workspace || ! $team) {
+            return collect();
         }
 
-        return $team->members()->orderBy('name')->get();
+        $users = $team->members()
+            ->orderBy('name')
+            ->get()
+            ->map(fn ($user) => $workspace->principalForUser($user)->load('user'));
+
+        $agents = $workspace->agents()
+            ->orderBy('name')
+            ->get()
+            ->map(fn (Agent $agent) => $workspace->principalForAgent($agent)->load('agent'));
+
+        return $users->merge($agents)->values();
     }
 
     /** @return list<string> */
@@ -532,33 +554,30 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         $validated = $this->validate([
             'newMessageTitle' => ['required', 'string', 'max:255'],
             'newMessageBody' => ['nullable', 'string'],
-            'newMessageTarget' => ['required', 'string', 'in:topic,user'],
+            'newMessageTarget' => ['required', 'string', 'in:topic,principal'],
             'newMessageTopicId' => ['required', 'integer'],
-            'newMessageRecipientUserId' => ['nullable', 'required_if:newMessageTarget,user', 'integer'],
+            'newMessageRecipientPrincipalId' => ['nullable', 'required_if:newMessageTarget,principal', 'integer'],
             'newMessageUploads.*' => ['file', 'max:51200'],
         ]);
 
         $topic = $workspace->topics()->findOrFail($validated['newMessageTopicId']);
-        $recipientUserId = null;
+        $senderPrincipal = $workspace->principalForUser(Auth::user());
+        $recipientPrincipalId = null;
 
-        if ($validated['newMessageTarget'] === 'user') {
-            $team = Auth::user()->currentTeam;
+        if ($validated['newMessageTarget'] === 'principal') {
+            $recipient = $workspace->principals()
+                ->whereKey($validated['newMessageRecipientPrincipalId'])
+                ->firstOrFail();
 
-            abort_unless($team, 403);
-
-            $recipient = $team
-                ->members()
-                ->findOrFail($validated['newMessageRecipientUserId']);
-
-            $recipientUserId = $recipient->id;
+            $recipientPrincipalId = $recipient->id;
         }
 
         $message = $topic->messages()->create([
             'title' => $validated['newMessageTitle'],
             'body' => $validated['newMessageBody'] ?: null,
             'status' => $status,
-            'sender_user_id' => Auth::id(),
-            'recipient_user_id' => $recipientUserId,
+            'sender_principal_id' => $senderPrincipal->id,
+            'recipient_principal_id' => $recipientPrincipalId,
         ]);
 
         foreach ($this->newMessageUploads as $upload) {
@@ -583,7 +602,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         $this->mobilePanel = 'messages';
         $this->reset('newMessageTitle', 'newMessageBody', 'newMessageUploads');
         $this->newMessageTarget = 'topic';
-        $this->newMessageRecipientUserId = null;
+        $this->newMessageRecipientPrincipalId = null;
         $this->newMessageTopicId = $topic->id;
         $this->syncSelectedMessageFields();
 
@@ -878,7 +897,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
                                     <flux:select wire:model.live="newMessageTarget" :label="__('To')" required>
                                         <flux:select.option value="topic">{{ __('Topic') }}</flux:select.option>
-                                        <flux:select.option value="user">{{ __('User') }}</flux:select.option>
+                                        <flux:select.option value="principal">{{ __('Principal') }}</flux:select.option>
                                     </flux:select>
 
                                     <flux:select wire:model="newMessageTopicId" :label="__('Topic')" placeholder="{{ __('Select a topic…') }}" required>
@@ -888,10 +907,12 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                                     </flux:select>
                                 </div>
 
-                                @if ($newMessageTarget === 'user')
-                                    <flux:select wire:model="newMessageRecipientUserId" :label="__('Recipient')" placeholder="{{ __('Select a user…') }}" required>
+                                @if ($newMessageTarget === 'principal')
+                                    <flux:select wire:model="newMessageRecipientPrincipalId" :label="__('Recipient')" placeholder="{{ __('Select a principal…') }}" required>
                                         @foreach ($this->availableRecipients as $recipient)
-                                            <flux:select.option :value="$recipient->id">{{ $recipient->name }}</flux:select.option>
+                                            <flux:select.option :value="$recipient->id">
+                                                {{ $recipient->label() }} · {{ $recipient->type === \App\Models\Principal::TypeAgent ? __('Agent') : __('User') }}
+                                            </flux:select.option>
                                         @endforeach
                                     </flux:select>
                                 @endif

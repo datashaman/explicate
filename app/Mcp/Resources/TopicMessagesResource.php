@@ -36,7 +36,7 @@ class TopicMessagesResource extends Resource implements HasUriTemplate
             );
 
             $messages = $topic->messages()
-                ->whereNull('recipient_user_id')
+                ->whereNull('recipient_principal_id')
                 ->orderBy('title')
                 ->get()
                 ->map(fn ($message) => [

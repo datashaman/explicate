@@ -125,34 +125,37 @@ test('message can be made actionable from dedicated create page', function () {
         ->assertHasNoErrors();
 
     $message = $this->topic->messages()->where('title', 'Ready to send')->first();
+    $senderPrincipal = $this->workspace->principalForUser($this->user);
 
     expect($message)->not->toBeNull()
         ->and($message->body)->toBe('Actionable body')
-        ->and($message->sender_user_id)->toBe($this->user->id)
+        ->and($message->sender_principal_id)->toBe($senderPrincipal->id)
         ->and($message->status)->toBe(MessageStatus::Published);
 });
 
 test('message can be sent to a user from dedicated create page', function () {
     $recipient = User::factory()->create();
     $this->user->currentTeam->memberships()->create(['user_id' => $recipient->id, 'role' => TeamRole::Member]);
+    $recipientPrincipal = $this->workspace->principalForUser($recipient);
 
     $this->actingAs($this->user);
 
     Livewire::test('pages::message-create')
         ->set('title', 'User message')
         ->set('body', 'Direct body')
-        ->set('target', 'user')
+        ->set('target', 'principal')
         ->set('topicId', $this->topic->id)
-        ->set('recipientUserId', $recipient->id)
+        ->set('recipientPrincipalId', $recipientPrincipal->id)
         ->call('send')
         ->assertHasNoErrors();
 
     $message = $this->topic->messages()->where('title', 'User message')->first();
+    $senderPrincipal = $this->workspace->principalForUser($this->user);
 
     expect($message)->not->toBeNull()
         ->and($message->body)->toBe('Direct body')
-        ->and($message->sender_user_id)->toBe($this->user->id)
-        ->and($message->recipient_user_id)->toBe($recipient->id)
+        ->and($message->sender_principal_id)->toBe($senderPrincipal->id)
+        ->and($message->recipient_principal_id)->toBe($recipientPrincipal->id)
         ->and($message->status)->toBe(MessageStatus::Published);
 });
 

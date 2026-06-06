@@ -100,6 +100,14 @@ class Agent extends Model
         return $this->hasOne(AgentVersion::class)->latestOfMany('version');
     }
 
+    /**
+     * @return HasOne<Principal, $this>
+     */
+    public function principal(): HasOne
+    {
+        return $this->hasOne(Principal::class);
+    }
+
     public function getRouteKeyName(): string
     {
         return 'slug';

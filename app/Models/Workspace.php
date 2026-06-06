@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use LogicException;
 
 #[Fillable(['team_id', 'name', 'slug'])]
 class Workspace extends Model
@@ -51,6 +52,34 @@ class Workspace extends Model
     public function agents(): HasMany
     {
         return $this->hasMany(Agent::class)->orderBy('name');
+    }
+
+    /**
+     * @return HasMany<Principal, $this>
+     */
+    public function principals(): HasMany
+    {
+        return $this->hasMany(Principal::class);
+    }
+
+    public function principalForUser(User $user): Principal
+    {
+        return $this->principals()->firstOrCreate([
+            'type' => Principal::TypeUser,
+            'user_id' => $user->id,
+        ]);
+    }
+
+    public function principalForAgent(Agent $agent): Principal
+    {
+        if ($agent->workspace_id !== $this->id) {
+            throw new LogicException('Agent does not belong to this workspace.');
+        }
+
+        return $this->principals()->firstOrCreate([
+            'type' => Principal::TypeAgent,
+            'agent_id' => $agent->id,
+        ]);
     }
 
     /**

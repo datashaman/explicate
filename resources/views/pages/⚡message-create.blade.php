@@ -1,6 +1,8 @@
 <?php
 
 use App\Enums\MessageStatus;
+use App\Models\Agent;
+use App\Models\Principal;
 use App\Models\Topic;
 use Flux\Flux;
 use Illuminate\Support\Facades\Auth;
@@ -22,7 +24,7 @@ new #[Title('New Message')] class extends Component {
 
     public ?int $topicId = null;
 
-    public ?int $recipientUserId = null;
+    public ?int $recipientPrincipalId = null;
 
     /** @var array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile> */
     public array $uploads = [];
@@ -60,18 +62,29 @@ new #[Title('New Message')] class extends Component {
     }
 
     /**
-     * @return \Illuminate\Database\Eloquent\Collection<int, \App\Models\User>
+     * @return \Illuminate\Support\Collection<int, Principal>
      */
     #[Computed]
-    public function availableRecipients(): \Illuminate\Database\Eloquent\Collection
+    public function availableRecipients(): \Illuminate\Support\Collection
     {
+        $workspace = Auth::user()->currentWorkspace;
         $team = Auth::user()->currentTeam;
 
-        if (! $team) {
-            return new \Illuminate\Database\Eloquent\Collection();
+        if (! $workspace || ! $team) {
+            return collect();
         }
 
-        return $team->members()->orderBy('name')->get();
+        $users = $team->members()
+            ->orderBy('name')
+            ->get()
+            ->map(fn ($user) => $workspace->principalForUser($user)->load('user'));
+
+        $agents = $workspace->agents()
+            ->orderBy('name')
+            ->get()
+            ->map(fn (Agent $agent) => $workspace->principalForAgent($agent)->load('agent'));
+
+        return $users->merge($agents)->values();
     }
 
     public function create(): void
@@ -93,33 +106,30 @@ new #[Title('New Message')] class extends Component {
         $validated = $this->validate([
             'title' => ['required', 'string', 'max:255'],
             'body' => ['nullable', 'string'],
-            'target' => ['required', 'string', 'in:topic,user'],
+            'target' => ['required', 'string', 'in:topic,principal'],
             'topicId' => ['required', 'integer'],
-            'recipientUserId' => ['nullable', 'required_if:target,user', 'integer'],
+            'recipientPrincipalId' => ['nullable', 'required_if:target,principal', 'integer'],
             'uploads.*' => ['file', 'max:51200'],
         ]);
 
         $topic = $workspace->topics()->findOrFail($validated['topicId']);
-        $recipientUserId = null;
+        $senderPrincipal = $workspace->principalForUser(Auth::user());
+        $recipientPrincipalId = null;
 
-        if ($validated['target'] === 'user') {
-            $team = Auth::user()->currentTeam;
+        if ($validated['target'] === 'principal') {
+            $recipient = $workspace->principals()
+                ->whereKey($validated['recipientPrincipalId'])
+                ->firstOrFail();
 
-            abort_unless($team, 403);
-
-            $recipient = $team
-                ->members()
-                ->findOrFail($validated['recipientUserId']);
-
-            $recipientUserId = $recipient->id;
+            $recipientPrincipalId = $recipient->id;
         }
 
         $message = $topic->messages()->create([
             'title' => $validated['title'],
             'body' => $validated['body'] ?: null,
             'status' => $status,
-            'sender_user_id' => Auth::id(),
-            'recipient_user_id' => $recipientUserId,
+            'sender_principal_id' => $senderPrincipal->id,
+            'recipient_principal_id' => $recipientPrincipalId,
         ]);
 
         foreach ($this->uploads as $upload) {
@@ -158,7 +168,7 @@ new #[Title('New Message')] class extends Component {
 
             <flux:select wire:model.live="target" :label="__('To')" required>
                 <flux:select.option value="topic">{{ __('Topic') }}</flux:select.option>
-                <flux:select.option value="user">{{ __('User') }}</flux:select.option>
+                <flux:select.option value="principal">{{ __('Principal') }}</flux:select.option>
             </flux:select>
 
             <flux:select wire:model="topicId" :label="__('Topic')" placeholder="{{ __('Select a topic…') }}" required>
@@ -168,10 +178,12 @@ new #[Title('New Message')] class extends Component {
             </flux:select>
         </div>
 
-        @if ($target === 'user')
-            <flux:select wire:model="recipientUserId" :label="__('Recipient')" placeholder="{{ __('Select a user…') }}" required>
+        @if ($target === 'principal')
+            <flux:select wire:model="recipientPrincipalId" :label="__('Recipient')" placeholder="{{ __('Select a principal…') }}" required>
                 @foreach ($this->availableRecipients as $recipient)
-                    <flux:select.option :value="$recipient->id">{{ $recipient->name }}</flux:select.option>
+                    <flux:select.option :value="$recipient->id">
+                        {{ $recipient->label() }} · {{ $recipient->type === \App\Models\Principal::TypeAgent ? __('Agent') : __('User') }}
+                    </flux:select.option>
                 @endforeach
             </flux:select>
         @endif

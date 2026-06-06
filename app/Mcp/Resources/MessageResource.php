@@ -35,7 +35,7 @@ class MessageResource extends Resource implements HasUriTemplate
                 (string) $request->get('message'),
                 (string) $request->get('workspace'),
             );
-            $message->load(['topic.workspace', 'attachments']);
+            $message->load(['topic.workspace', 'attachments', 'sender.user', 'sender.agent', 'recipient.user', 'recipient.agent']);
 
             return Response::json([
                 'workspace' => $message->topic->workspace->only(['id', 'name', 'slug']),
@@ -48,8 +48,18 @@ class MessageResource extends Resource implements HasUriTemplate
                     'title' => $message->title,
                     'slug' => $message->slug,
                     'status' => $message->status->value,
-                    'sender_user_id' => $message->sender_user_id,
-                    'recipient_user_id' => $message->recipient_user_id,
+                    'sender_principal_id' => $message->sender_principal_id,
+                    'sender' => $message->sender ? [
+                        'id' => $message->sender->id,
+                        'type' => $message->sender->type,
+                        'name' => $message->sender->label(),
+                    ] : null,
+                    'recipient_principal_id' => $message->recipient_principal_id,
+                    'recipient' => $message->recipient ? [
+                        'id' => $message->recipient->id,
+                        'type' => $message->recipient->type,
+                        'name' => $message->recipient->label(),
+                    ] : null,
                     'body' => $message->body,
                     'resource_uri' => "topic-forge://workspaces/{$message->topic->workspace->slug}/topics/{$message->topic->slug}/messages/{$message->slug}",
                 ],

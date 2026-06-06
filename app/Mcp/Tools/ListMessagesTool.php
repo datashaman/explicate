@@ -36,7 +36,7 @@ class ListMessagesTool extends Tool
         $topic = $this->context->topicFor($user, $validated['topic_slug']);
 
         $messages = $topic->messages()
-            ->whereNull('recipient_user_id')
+            ->whereNull('recipient_principal_id')
             ->orderBy('title')
             ->get()
             ->map(fn ($message) => [

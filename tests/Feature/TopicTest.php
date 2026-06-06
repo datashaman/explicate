@@ -85,15 +85,16 @@ test('dashboard shows system folders with workspace message counts', function ()
     $user->switchWorkspace($workspace);
 
     $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
+    $userPrincipal = $workspace->principalForUser($user);
     Message::factory()->for($topic)->create(['status' => MessageStatus::Draft]);
     Message::factory()->for($topic)->create([
         'status' => MessageStatus::Published,
-        'sender_user_id' => $user->id,
+        'sender_principal_id' => $userPrincipal->id,
     ]);
     Message::factory()->for($topic)->create([
         'status' => MessageStatus::Published,
-        'sender_user_id' => $user->id,
-        'recipient_user_id' => $user->id,
+        'sender_principal_id' => $userPrincipal->id,
+        'recipient_principal_id' => $userPrincipal->id,
     ]);
 
     $this->actingAs($user)
@@ -114,6 +115,7 @@ test('dashboard system draft folder shows draft messages across topics', functio
 
     $design = Topic::factory()->for($workspace)->create(['slug' => 'design']);
     $engineering = Topic::factory()->for($workspace)->create(['slug' => 'engineering']);
+    $userPrincipal = $workspace->principalForUser($user);
 
     $designDraft = Message::factory()->for($design)->create([
         'title' => 'Design draft',
@@ -123,7 +125,7 @@ test('dashboard system draft folder shows draft messages across topics', functio
     Message::factory()->for($engineering)->create([
         'title' => 'Engineering sent',
         'status' => MessageStatus::Published,
-        'sender_user_id' => $user->id,
+        'sender_principal_id' => $userPrincipal->id,
     ]);
 
     $this->actingAs($user)
@@ -146,6 +148,7 @@ test('dashboard inbox does not show draft messages', function () {
     $user->switchWorkspace($workspace);
 
     $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
+    $userPrincipal = $workspace->principalForUser($user);
 
     Message::factory()->for($topic)->create([
         'title' => 'Hidden draft',
@@ -155,8 +158,8 @@ test('dashboard inbox does not show draft messages', function () {
     Message::factory()->for($topic)->create([
         'title' => 'Visible message',
         'status' => MessageStatus::Published,
-        'sender_user_id' => $user->id,
-        'recipient_user_id' => $user->id,
+        'sender_principal_id' => $userPrincipal->id,
+        'recipient_principal_id' => $userPrincipal->id,
     ]);
 
     $this->actingAs($user)
@@ -174,25 +177,27 @@ test('dashboard inbox only shows messages addressed to the current user', functi
     $user->currentTeam->memberships()->create(['user_id' => $recipient->id, 'role' => TeamRole::Member]);
 
     $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
+    $userPrincipal = $workspace->principalForUser($user);
+    $recipientPrincipal = $workspace->principalForUser($recipient);
 
     Message::factory()->for($topic)->create([
         'title' => 'For me',
         'status' => MessageStatus::Published,
-        'sender_user_id' => $recipient->id,
-        'recipient_user_id' => $user->id,
+        'sender_principal_id' => $recipientPrincipal->id,
+        'recipient_principal_id' => $userPrincipal->id,
     ]);
 
     Message::factory()->for($topic)->create([
         'title' => 'For someone else',
         'status' => MessageStatus::Published,
-        'sender_user_id' => $user->id,
-        'recipient_user_id' => $recipient->id,
+        'sender_principal_id' => $userPrincipal->id,
+        'recipient_principal_id' => $recipientPrincipal->id,
     ]);
 
     Message::factory()->for($topic)->create([
         'title' => 'For the topic',
         'status' => MessageStatus::Published,
-        'sender_user_id' => $user->id,
+        'sender_principal_id' => $userPrincipal->id,
     ]);
 
     $this->actingAs($user)
@@ -312,7 +317,7 @@ test('dashboard shows selected topic in the main panel', function () {
     Message::factory()->for($selectedTopic)->create([
         'title' => 'Direct message',
         'status' => MessageStatus::Published,
-        'recipient_user_id' => $user->id,
+        'recipient_principal_id' => $workspace->principalForUser($user)->id,
     ]);
 
     $this->actingAs($user)
@@ -592,10 +597,11 @@ test('dashboard can make a new message actionable in the main panel', function (
         ->assertSet('selectedMessageSlug', 'ready-to-send');
 
     $message = $topic->messages()->where('title', 'Ready to send')->first();
+    $senderPrincipal = $workspace->principalForUser($user);
 
     expect($message)->not->toBeNull()
         ->and($message->body)->toBe('Actionable body')
-        ->and($message->sender_user_id)->toBe($user->id)
+        ->and($message->sender_principal_id)->toBe($senderPrincipal->id)
         ->and($message->status)->toBe(MessageStatus::Published);
 });
 
@@ -605,6 +611,7 @@ test('dashboard can send a new message to a user', function () {
     $workspace = Workspace::factory()->for($user->currentTeam)->create();
     $user->switchWorkspace($workspace);
     $user->currentTeam->memberships()->create(['user_id' => $recipient->id, 'role' => TeamRole::Member]);
+    $recipientPrincipal = $workspace->principalForUser($recipient);
 
     $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
 
@@ -615,17 +622,49 @@ test('dashboard can send a new message to a user', function () {
         ->set('panelAction', 'new-message')
         ->set('newMessageTitle', 'User note')
         ->set('newMessageBody', 'For a person')
-        ->set('newMessageTarget', 'user')
+        ->set('newMessageTarget', 'principal')
         ->set('newMessageTopicId', $topic->id)
-        ->set('newMessageRecipientUserId', $recipient->id)
+        ->set('newMessageRecipientPrincipalId', $recipientPrincipal->id)
         ->call('sendDashboardMessage')
         ->assertHasNoErrors();
 
     $message = $topic->messages()->where('title', 'User note')->first();
+    $senderPrincipal = $workspace->principalForUser($user);
 
     expect($message)->not->toBeNull()
-        ->and($message->sender_user_id)->toBe($user->id)
-        ->and($message->recipient_user_id)->toBe($recipient->id)
+        ->and($message->sender_principal_id)->toBe($senderPrincipal->id)
+        ->and($message->recipient_principal_id)->toBe($recipientPrincipal->id)
+        ->and($message->status)->toBe(MessageStatus::Published);
+});
+
+test('dashboard can send a new message to an agent principal', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->for($user->currentTeam)->create();
+    $user->switchWorkspace($workspace);
+
+    $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
+    $agent = Agent::factory()->for($workspace)->create(['name' => 'Researcher']);
+    $agentPrincipal = $workspace->principalForAgent($agent);
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::dashboard')
+        ->set('selectedTopicSlug', $topic->slug)
+        ->set('panelAction', 'new-message')
+        ->set('newMessageTitle', 'Agent note')
+        ->set('newMessageBody', 'For an agent')
+        ->set('newMessageTarget', 'principal')
+        ->set('newMessageTopicId', $topic->id)
+        ->set('newMessageRecipientPrincipalId', $agentPrincipal->id)
+        ->call('sendDashboardMessage')
+        ->assertHasNoErrors();
+
+    $message = $topic->messages()->where('title', 'Agent note')->first();
+
+    expect($message)->not->toBeNull()
+        ->and($message->sender_principal_id)->toBe($workspace->principalForUser($user)->id)
+        ->and($message->recipient_principal_id)->toBe($agentPrincipal->id)
+        ->and($message->recipient->agent->name)->toBe('Researcher')
         ->and($message->status)->toBe(MessageStatus::Published);
 });
 

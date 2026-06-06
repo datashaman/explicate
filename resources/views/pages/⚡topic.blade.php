@@ -63,7 +63,7 @@ new #[Layout('layouts::workspace'), Title('Topic')] class extends Component {
         return $this->topic->messages()
             ->when(! $this->showArchived, fn ($q) => $q->where('status', '!=', MessageStatus::Archived))
             ->where('status', '!=', MessageStatus::Draft)
-            ->whereNull('recipient_user_id')
+            ->whereNull('recipient_principal_id')
             ->get()
             ->map(fn (Message $message) => [
                 'href' => route('messages.show', ['topic' => $this->topic->slug, 'message' => $message->slug]),
