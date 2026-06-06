@@ -149,6 +149,19 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         return route('dashboard');
     }
 
+    public function postsPanelReturnLabel(): string
+    {
+        if ($folder = $this->selectedSystemFolder()) {
+            return $folder['name'];
+        }
+
+        if ($topic = $this->selectedTopic()) {
+            return $topic->name;
+        }
+
+        return __('Dashboard');
+    }
+
     public function selectedAgent(): ?Agent
     {
         $workspace = $this->workspace();
@@ -1023,8 +1036,8 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                         <div class="flex items-center justify-between gap-3 border-b border-neutral-300 bg-emerald-50 px-4 py-3 dark:border-white/10 dark:bg-emerald-500/10">
                             <flux:heading size="sm" class="min-w-0 flex-1 truncate">{{ __('New post') }}</flux:heading>
 
-                            <flux:button :href="$this->postsPanelReturnRoute()" wire:navigate size="xs" variant="filled" icon="arrow-left">
-                                {{ __('Inbox') }}
+                            <flux:button :href="$this->postsPanelReturnRoute()" wire:navigate size="xs" variant="filled" icon="arrow-left" data-test="posts-panel-return">
+                                {{ $this->postsPanelReturnLabel() }}
                             </flux:button>
                         </div>
 
@@ -1077,8 +1090,8 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                         <div class="flex items-center justify-between gap-3 border-b border-neutral-300 bg-emerald-50 px-4 py-3 dark:border-white/10 dark:bg-emerald-500/10">
                             <flux:heading size="sm" class="min-w-0 flex-1 truncate">{{ $selectedDashboardPost->title }}</flux:heading>
 
-                            <flux:button :href="$this->postsPanelReturnRoute()" wire:navigate size="xs" variant="filled" icon="arrow-left">
-                                {{ __('Inbox') }}
+                            <flux:button :href="$this->postsPanelReturnRoute()" wire:navigate size="xs" variant="filled" icon="arrow-left" data-test="posts-panel-return">
+                                {{ $this->postsPanelReturnLabel() }}
                             </flux:button>
                         </div>
 

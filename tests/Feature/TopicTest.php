@@ -248,7 +248,26 @@ test('dashboard post panel returns to the selected folder before the post topic'
     $component->instance()->selectedPostSlug = $post->slug;
 
     expect($component->instance()->postsPanelReturnRoute())
-        ->toBe(route('dashboard', ['folder' => 'inbox', 'panel' => 'posts']));
+        ->toBe(route('dashboard', ['folder' => 'inbox', 'panel' => 'posts']))
+        ->and($component->instance()->postsPanelReturnLabel())
+        ->toBe('Inbox');
+});
+
+test('dashboard post panel return label matches selected topic context', function () {
+    [$user, $workspace] = userWithWorkspace();
+
+    $topic = Topic::factory()->for($workspace)->create(['name' => 'Design', 'slug' => 'design']);
+    $post = Post::factory()->for($topic)->create([
+        'title' => 'Design draft',
+        'status' => PostStatus::Draft,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('dashboard', ['topic' => $topic->slug, 'post' => $post->slug, 'panel' => 'posts']))
+        ->assertOk()
+        ->assertSee('data-test="posts-panel-return"', escape: false)
+        ->assertSee(e(route('dashboard', ['topic' => $topic->slug, 'panel' => 'posts'])), escape: false)
+        ->assertSeeText('Design');
 });
 
 test('dashboard archived folder shows archived inbox', function () {
