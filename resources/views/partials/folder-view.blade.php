@@ -316,7 +316,17 @@
 
                     <div class="divide-y divide-neutral-100 dark:divide-white/5" x-ref="listRows">
                     @foreach ($items as $item)
-                        @php $itemKey = md5($item['href']); @endphp
+                        @php
+                            $itemKey = md5($item['href']);
+                            $metaByLabel = collect($item['meta'] ?? [])->mapWithKeys(fn ($meta) => [$meta['label'] => $meta['value']]);
+                            $columnLabels = [
+                                'from' => __('From'),
+                                'to' => __('To'),
+                                'sent' => __('Sent'),
+                                'saved' => __('Saved'),
+                                'status' => __('Status'),
+                            ];
+                        @endphp
                         <a href="{{ $item['href'] }}" wire:navigate
                            wire:key="folder-list-{{ $itemKey }}"
                            data-sort-index="{{ $loop->index }}"
@@ -327,43 +337,91 @@
                             <span class="flex size-10 shrink-0 items-center justify-center">
                                 <flux:icon :name="$icon" class="{{ $listIconClass }} shrink-0" />
                             </span>
-                            <span class="min-w-0 flex-1">
-                                <span class="block truncate text-sm text-neutral-700 dark:text-neutral-300">{{ $item['name'] }}</span>
+                            @if (!empty($listColumns))
+                                @foreach ($listColumns as $column)
+                                    @if ($column['key'] === 'name')
+                                        <span @class(['min-w-0', $column['class'] ?? 'flex-1'])>
+                                            <span class="block truncate text-sm text-neutral-700 dark:text-neutral-300">{{ $item['name'] }}</span>
+                                            @if (!empty($item['meta']))
+                                                <span class="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-neutral-500 sm:hidden dark:text-neutral-400">
+                                                    @foreach ($item['meta'] as $meta)
+                                                        <span class="max-w-full truncate">
+                                                            <span class="text-neutral-400 dark:text-neutral-500">{{ $meta['label'] }}:</span>
+                                                            {{ $meta['value'] }}
+                                                        </span>
+                                                    @endforeach
+                                                </span>
+                                            @endif
+                                        </span>
+                                    @elseif ($column['key'] === 'attachments')
+                                        <span @class(['hidden text-xs text-neutral-500 sm:flex sm:items-center dark:text-neutral-400', $column['class'] ?? 'w-24 shrink-0'])>
+                                            @if (!empty($item['attachments_count']))
+                                                <span class="flex size-6 items-center justify-center text-neutral-400 dark:text-neutral-500" title="{{ trans_choice(':count attachment|:count attachments', $item['attachments_count'], ['count' => $item['attachments_count']]) }}" data-test="folder-item-attachments">
+                                                    <flux:icon name="paper-clip" variant="mini" class="size-4" />
+                                                </span>
+                                            @endif
+                                        </span>
+                                    @else
+                                        @php
+                                            $columnLabel = $columnLabels[$column['key']] ?? $column['label'];
+                                            $columnValue = $metaByLabel[$columnLabel] ?? null;
+                                        @endphp
+                                        <span
+                                            @class(['hidden truncate text-xs text-neutral-500 sm:block dark:text-neutral-400', $column['class'] ?? null])
+                                            @if ($columnValue) title="{{ $columnLabel }}: {{ $columnValue }}" @endif
+                                        >
+                                            @if ($columnValue)
+                                                <span class="text-neutral-400 dark:text-neutral-500">{{ $columnLabel }}:</span>
+                                                {{ $columnValue }}
+                                            @endif
+                                        </span>
+                                    @endif
+                                @endforeach
+
+                                <span class="flex size-6 shrink-0 items-center justify-center">
+                                    @if (!empty($item['badge']))
+                                        <flux:badge :color="$item['badge']['color']" size="sm">{{ $item['badge']['label'] }}</flux:badge>
+                                    @endif
+                                </span>
+                            @else
+                                <span class="min-w-0 flex-1">
+                                    <span class="block truncate text-sm text-neutral-700 dark:text-neutral-300">{{ $item['name'] }}</span>
+                                    @if (!empty($item['meta']))
+                                        <span class="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-neutral-500 sm:hidden dark:text-neutral-400">
+                                            @foreach ($item['meta'] as $meta)
+                                                <span class="max-w-full truncate">
+                                                    <span class="text-neutral-400 dark:text-neutral-500">{{ $meta['label'] }}:</span>
+                                                    {{ $meta['value'] }}
+                                                </span>
+                                            @endforeach
+                                        </span>
+                                    @endif
+                                </span>
                                 @if (!empty($item['meta']))
-                                    <span class="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-neutral-500 sm:hidden dark:text-neutral-400">
+                                    <div class="hidden shrink-0 items-center gap-3 sm:flex">
                                         @foreach ($item['meta'] as $meta)
-                                            <span class="max-w-full truncate">
+                                            <span class="w-28 truncate text-xs text-neutral-500 dark:text-neutral-400" title="{{ $meta['label'] }}: {{ $meta['value'] }}">
                                                 <span class="text-neutral-400 dark:text-neutral-500">{{ $meta['label'] }}:</span>
                                                 {{ $meta['value'] }}
                                             </span>
                                         @endforeach
+                                    </div>
+                                @endif
+                                @if (!empty($item['attachments_count']))
+                                    <span class="flex size-6 shrink-0 items-center justify-center text-neutral-400 dark:text-neutral-500" title="{{ trans_choice(':count attachment|:count attachments', $item['attachments_count'], ['count' => $item['attachments_count']]) }}" data-test="folder-item-attachments">
+                                        <flux:icon name="paper-clip" variant="mini" class="size-4" />
                                     </span>
                                 @endif
-                            </span>
-                            @if (!empty($item['meta']))
-                                <div class="hidden shrink-0 items-center gap-3 sm:flex">
-                                    @foreach ($item['meta'] as $meta)
-                                        <span class="w-28 truncate text-xs text-neutral-500 dark:text-neutral-400" title="{{ $meta['label'] }}: {{ $meta['value'] }}">
-                                            <span class="text-neutral-400 dark:text-neutral-500">{{ $meta['label'] }}:</span>
-                                            {{ $meta['value'] }}
-                                        </span>
-                                    @endforeach
-                                </div>
-                            @endif
-                            @if (!empty($item['attachments_count']))
-                                <span class="flex size-6 shrink-0 items-center justify-center text-neutral-400 dark:text-neutral-500" title="{{ trans_choice(':count attachment|:count attachments', $item['attachments_count'], ['count' => $item['attachments_count']]) }}" data-test="folder-item-attachments">
-                                    <flux:icon name="paper-clip" variant="mini" class="size-4" />
-                                </span>
-                            @endif
-                            @if (!empty($item['counts']))
-                                <div class="flex shrink-0 items-center gap-1">
-                                    @foreach ($item['counts'] as $count)
-                                        <flux:badge :color="$count['color']" size="sm" :title="$count['label']">{{ $count['value'] }}</flux:badge>
-                                    @endforeach
-                                </div>
-                            @endif
-                            @if (!empty($item['badge']))
-                                <flux:badge :color="$item['badge']['color']" size="sm">{{ $item['badge']['label'] }}</flux:badge>
+                                @if (!empty($item['counts']))
+                                    <div class="flex shrink-0 items-center gap-1">
+                                        @foreach ($item['counts'] as $count)
+                                            <flux:badge :color="$count['color']" size="sm" :title="$count['label']">{{ $count['value'] }}</flux:badge>
+                                        @endforeach
+                                    </div>
+                                @endif
+                                @if (!empty($item['badge']))
+                                    <flux:badge :color="$item['badge']['color']" size="sm">{{ $item['badge']['label'] }}</flux:badge>
+                                @endif
                             @endif
                         </a>
                     @endforeach
