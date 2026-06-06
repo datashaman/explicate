@@ -30,16 +30,32 @@ class CreateMessageTool extends Tool
             'title' => ['required', 'string', 'max:255'],
             'body' => ['nullable', 'string'],
             'status' => ['nullable', 'string', 'in:'.implode(',', array_column(MessageStatus::cases(), 'value'))],
+            'recipient_user_id' => ['nullable', 'integer'],
         ]);
 
         /** @var User $user */
         $user = $this->context->requireUser($request->user());
         $topic = $this->context->topicFor($user, $validated['topic_slug']);
+        $recipientUserId = null;
+
+        if (isset($validated['recipient_user_id'])) {
+            $team = $user->currentTeam;
+
+            abort_unless($team, 403);
+
+            $recipient = $team
+                ->members()
+                ->findOrFail($validated['recipient_user_id']);
+
+            $recipientUserId = $recipient->id;
+        }
 
         $message = new Message([
             'title' => $validated['title'],
             'body' => $validated['body'] ?? null,
             'status' => $validated['status'] ?? MessageStatus::Draft->value,
+            'sender_user_id' => $user->id,
+            'recipient_user_id' => $recipientUserId,
         ]);
 
         $topic->messages()->save($message);
@@ -55,6 +71,8 @@ class CreateMessageTool extends Tool
                 'title' => $message->title,
                 'slug' => $message->slug,
                 'status' => $message->status->value,
+                'sender_user_id' => $message->sender_user_id,
+                'recipient_user_id' => $message->recipient_user_id,
                 'resource_uri' => "topic-forge://workspaces/{$topic->workspace->slug}/topics/{$topic->slug}/messages/{$message->slug}",
             ],
         ]);
@@ -80,6 +98,9 @@ class CreateMessageTool extends Tool
             'status' => $schema->string()
                 ->description('Optional message status.')
                 ->enum(MessageStatus::class)
+                ->nullable(),
+            'recipient_user_id' => $schema->integer()
+                ->description('Optional user id when this message is addressed to a user instead of the topic.')
                 ->nullable(),
         ];
     }

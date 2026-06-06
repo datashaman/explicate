@@ -22,6 +22,8 @@ class MessageFactory extends Factory
 
         return [
             'topic_id' => Topic::factory(),
+            'sender_user_id' => null,
+            'recipient_user_id' => null,
             'title' => $name,
             'slug' => Str::slug($name),
             'body' => fake()->optional()->paragraphs(3, true),

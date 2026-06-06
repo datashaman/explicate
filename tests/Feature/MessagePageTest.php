@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\MessageStatus;
+use App\Enums\TeamRole;
 use App\Models\Attachment;
 use App\Models\Message;
 use App\Models\Topic;
@@ -127,6 +128,31 @@ test('message can be made actionable from dedicated create page', function () {
 
     expect($message)->not->toBeNull()
         ->and($message->body)->toBe('Actionable body')
+        ->and($message->sender_user_id)->toBe($this->user->id)
+        ->and($message->status)->toBe(MessageStatus::Published);
+});
+
+test('message can be sent to a user from dedicated create page', function () {
+    $recipient = User::factory()->create();
+    $this->user->currentTeam->memberships()->create(['user_id' => $recipient->id, 'role' => TeamRole::Member]);
+
+    $this->actingAs($this->user);
+
+    Livewire::test('pages::message-create')
+        ->set('title', 'User message')
+        ->set('body', 'Direct body')
+        ->set('target', 'user')
+        ->set('topicId', $this->topic->id)
+        ->set('recipientUserId', $recipient->id)
+        ->call('send')
+        ->assertHasNoErrors();
+
+    $message = $this->topic->messages()->where('title', 'User message')->first();
+
+    expect($message)->not->toBeNull()
+        ->and($message->body)->toBe('Direct body')
+        ->and($message->sender_user_id)->toBe($this->user->id)
+        ->and($message->recipient_user_id)->toBe($recipient->id)
         ->and($message->status)->toBe(MessageStatus::Published);
 });
 

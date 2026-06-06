@@ -18,7 +18,11 @@ new #[Title('New Message')] class extends Component {
 
     public string $body = '';
 
+    public string $target = 'topic';
+
     public ?int $topicId = null;
+
+    public ?int $recipientUserId = null;
 
     /** @var array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile> */
     public array $uploads = [];
@@ -55,6 +59,21 @@ new #[Title('New Message')] class extends Component {
         return $workspace->topics()->get();
     }
 
+    /**
+     * @return \Illuminate\Database\Eloquent\Collection<int, \App\Models\User>
+     */
+    #[Computed]
+    public function availableRecipients(): \Illuminate\Database\Eloquent\Collection
+    {
+        $team = Auth::user()->currentTeam;
+
+        if (! $team) {
+            return new \Illuminate\Database\Eloquent\Collection();
+        }
+
+        return $team->members()->orderBy('name')->get();
+    }
+
     public function create(): void
     {
         $this->createMessage(MessageStatus::Draft);
@@ -74,16 +93,33 @@ new #[Title('New Message')] class extends Component {
         $validated = $this->validate([
             'title' => ['required', 'string', 'max:255'],
             'body' => ['nullable', 'string'],
+            'target' => ['required', 'string', 'in:topic,user'],
             'topicId' => ['required', 'integer'],
+            'recipientUserId' => ['nullable', 'required_if:target,user', 'integer'],
             'uploads.*' => ['file', 'max:51200'],
         ]);
 
         $topic = $workspace->topics()->findOrFail($validated['topicId']);
+        $recipientUserId = null;
+
+        if ($validated['target'] === 'user') {
+            $team = Auth::user()->currentTeam;
+
+            abort_unless($team, 403);
+
+            $recipient = $team
+                ->members()
+                ->findOrFail($validated['recipientUserId']);
+
+            $recipientUserId = $recipient->id;
+        }
 
         $message = $topic->messages()->create([
             'title' => $validated['title'],
             'body' => $validated['body'] ?: null,
             'status' => $status,
+            'sender_user_id' => Auth::id(),
+            'recipient_user_id' => $recipientUserId,
         ]);
 
         foreach ($this->uploads as $upload) {
@@ -117,8 +153,13 @@ new #[Title('New Message')] class extends Component {
     </flux:breadcrumbs>
 
     <form wire:submit="create" class="flex flex-col gap-6">
-        <div class="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_16rem]">
+        <div class="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_10rem_16rem]">
             <flux:input wire:model="title" :label="__('Title')" required autofocus />
+
+            <flux:select wire:model.live="target" :label="__('To')" required>
+                <flux:select.option value="topic">{{ __('Topic') }}</flux:select.option>
+                <flux:select.option value="user">{{ __('User') }}</flux:select.option>
+            </flux:select>
 
             <flux:select wire:model="topicId" :label="__('Topic')" placeholder="{{ __('Select a topic…') }}" required>
                 @foreach ($this->availableTopics as $topic)
@@ -126,6 +167,14 @@ new #[Title('New Message')] class extends Component {
                 @endforeach
             </flux:select>
         </div>
+
+        @if ($target === 'user')
+            <flux:select wire:model="recipientUserId" :label="__('Recipient')" placeholder="{{ __('Select a user…') }}" required>
+                @foreach ($this->availableRecipients as $recipient)
+                    <flux:select.option :value="$recipient->id">{{ $recipient->name }}</flux:select.option>
+                @endforeach
+            </flux:select>
+        @endif
 
         <flux:textarea wire:model="body" :label="__('Body')" :placeholder="__('Write something...')" rows="12" />
 

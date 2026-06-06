@@ -52,6 +52,8 @@ class GetMessageTool extends Tool
                 'title' => $message->title,
                 'slug' => $message->slug,
                 'status' => $message->status->value,
+                'sender_user_id' => $message->sender_user_id,
+                'recipient_user_id' => $message->recipient_user_id,
                 'body' => $message->body,
                 'resource_uri' => "topic-forge://workspaces/{$message->topic->workspace->slug}/topics/{$message->topic->slug}/messages/{$message->slug}",
             ],

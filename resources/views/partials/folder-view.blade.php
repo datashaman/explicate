@@ -266,7 +266,7 @@
                 </div>
             </template>
         @else
-            <div class="flex h-full items-start justify-start pt-16">
+            <div class="flex h-full items-start justify-start pt-4">
                 <flux:text class="text-sm text-neutral-400 dark:text-neutral-600">{{ $emptyText }}</flux:text>
             </div>
         @endif

@@ -3,6 +3,7 @@
 use App\Enums\MessageStatus;
 use App\Enums\Provider;
 use App\Enums\ReasoningEffort;
+use App\Enums\TeamRole;
 use App\Models\Agent;
 use App\Models\AgentVersion;
 use App\Models\Message;
@@ -85,7 +86,15 @@ test('dashboard shows system folders with workspace message counts', function ()
 
     $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
     Message::factory()->for($topic)->create(['status' => MessageStatus::Draft]);
-    Message::factory()->for($topic)->create(['status' => MessageStatus::Published]);
+    Message::factory()->for($topic)->create([
+        'status' => MessageStatus::Published,
+        'sender_user_id' => $user->id,
+    ]);
+    Message::factory()->for($topic)->create([
+        'status' => MessageStatus::Published,
+        'sender_user_id' => $user->id,
+        'recipient_user_id' => $user->id,
+    ]);
 
     $this->actingAs($user)
         ->get(route('dashboard'))
@@ -114,6 +123,7 @@ test('dashboard system draft folder shows draft messages across topics', functio
     Message::factory()->for($engineering)->create([
         'title' => 'Engineering sent',
         'status' => MessageStatus::Published,
+        'sender_user_id' => $user->id,
     ]);
 
     $this->actingAs($user)
@@ -145,6 +155,8 @@ test('dashboard inbox does not show draft messages', function () {
     Message::factory()->for($topic)->create([
         'title' => 'Visible message',
         'status' => MessageStatus::Published,
+        'sender_user_id' => $user->id,
+        'recipient_user_id' => $user->id,
     ]);
 
     $this->actingAs($user)
@@ -152,6 +164,43 @@ test('dashboard inbox does not show draft messages', function () {
         ->assertOk()
         ->assertSee('Visible message')
         ->assertDontSee('Hidden draft');
+});
+
+test('dashboard inbox only shows messages addressed to the current user', function () {
+    $user = User::factory()->create();
+    $recipient = User::factory()->create();
+    $workspace = Workspace::factory()->for($user->currentTeam)->create();
+    $user->switchWorkspace($workspace);
+    $user->currentTeam->memberships()->create(['user_id' => $recipient->id, 'role' => TeamRole::Member]);
+
+    $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
+
+    Message::factory()->for($topic)->create([
+        'title' => 'For me',
+        'status' => MessageStatus::Published,
+        'sender_user_id' => $recipient->id,
+        'recipient_user_id' => $user->id,
+    ]);
+
+    Message::factory()->for($topic)->create([
+        'title' => 'For someone else',
+        'status' => MessageStatus::Published,
+        'sender_user_id' => $user->id,
+        'recipient_user_id' => $recipient->id,
+    ]);
+
+    Message::factory()->for($topic)->create([
+        'title' => 'For the topic',
+        'status' => MessageStatus::Published,
+        'sender_user_id' => $user->id,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('dashboard', ['folder' => 'inbox', 'panel' => 'messages']))
+        ->assertOk()
+        ->assertSee('For me')
+        ->assertDontSee('For someone else')
+        ->assertDontSee('For the topic');
 });
 
 test('dashboard archived toggle only filters the selected messages list', function () {
@@ -260,6 +309,11 @@ test('dashboard shows selected topic in the main panel', function () {
         'status' => MessageStatus::Published,
     ]);
     Message::factory()->for($otherTopic)->create(['title' => 'Other message']);
+    Message::factory()->for($selectedTopic)->create([
+        'title' => 'Direct message',
+        'status' => MessageStatus::Published,
+        'recipient_user_id' => $user->id,
+    ]);
 
     $this->actingAs($user)
         ->get(route('dashboard', ['topic' => $selectedTopic->slug]))
@@ -268,6 +322,7 @@ test('dashboard shows selected topic in the main panel', function () {
         ->assertSee($selectedMessage->title)
         ->assertSee(e(route('dashboard', ['topic' => $selectedTopic->slug, 'message' => $selectedMessage->slug, 'panel' => 'messages'])), escape: false)
         ->assertDontSee(route('messages.show', ['topic' => $selectedTopic->slug, 'message' => $selectedMessage->slug]), escape: false)
+        ->assertDontSee('Direct message')
         ->assertDontSee('Other message');
 });
 
@@ -540,6 +595,37 @@ test('dashboard can make a new message actionable in the main panel', function (
 
     expect($message)->not->toBeNull()
         ->and($message->body)->toBe('Actionable body')
+        ->and($message->sender_user_id)->toBe($user->id)
+        ->and($message->status)->toBe(MessageStatus::Published);
+});
+
+test('dashboard can send a new message to a user', function () {
+    $user = User::factory()->create();
+    $recipient = User::factory()->create();
+    $workspace = Workspace::factory()->for($user->currentTeam)->create();
+    $user->switchWorkspace($workspace);
+    $user->currentTeam->memberships()->create(['user_id' => $recipient->id, 'role' => TeamRole::Member]);
+
+    $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::dashboard')
+        ->set('selectedTopicSlug', $topic->slug)
+        ->set('panelAction', 'new-message')
+        ->set('newMessageTitle', 'User note')
+        ->set('newMessageBody', 'For a person')
+        ->set('newMessageTarget', 'user')
+        ->set('newMessageTopicId', $topic->id)
+        ->set('newMessageRecipientUserId', $recipient->id)
+        ->call('sendDashboardMessage')
+        ->assertHasNoErrors();
+
+    $message = $topic->messages()->where('title', 'User note')->first();
+
+    expect($message)->not->toBeNull()
+        ->and($message->sender_user_id)->toBe($user->id)
+        ->and($message->recipient_user_id)->toBe($recipient->id)
         ->and($message->status)->toBe(MessageStatus::Published);
 });
 
