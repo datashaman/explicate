@@ -13,7 +13,7 @@ use Laravel\Mcp\Server\Contracts\HasUriTemplate;
 use Laravel\Mcp\Server\Resource;
 use Laravel\Mcp\Support\UriTemplate;
 
-#[Description('List message-derived work queued for an agent inside an accessible workspace.')]
+#[Description('List post-derived work queued for an agent inside an accessible workspace.')]
 class AgentTasksResource extends Resource implements HasUriTemplate
 {
     use FormatsMcpPayloads;
@@ -38,7 +38,7 @@ class AgentTasksResource extends Resource implements HasUriTemplate
             );
 
             $tasks = $agent->tasks()
-                ->with(['agent.workspace', 'message.topic.workspace', 'message.sender.user', 'message.sender.agent', 'message.recipient.user', 'message.recipient.agent'])
+                ->with(['agent.workspace', 'post.topic.workspace', 'post.sender.user', 'post.sender.agent', 'post.recipient.user', 'post.recipient.agent'])
                 ->orderByDesc('priority')
                 ->orderBy('available_at')
                 ->orderBy('id')

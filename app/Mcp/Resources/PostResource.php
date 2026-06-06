@@ -13,8 +13,8 @@ use Laravel\Mcp\Server\Contracts\HasUriTemplate;
 use Laravel\Mcp\Server\Resource;
 use Laravel\Mcp\Support\UriTemplate;
 
-#[Description('Read a message with its attachments from an accessible workspace topic.')]
-class MessageResource extends Resource implements HasUriTemplate
+#[Description('Read a post with its attachments from an accessible workspace topic.')]
+class PostResource extends Resource implements HasUriTemplate
 {
     use FormatsMcpPayloads;
     use HandlesResourceExceptions;
@@ -23,7 +23,7 @@ class MessageResource extends Resource implements HasUriTemplate
 
     public function uriTemplate(): UriTemplate
     {
-        return new UriTemplate('topic-forge://workspaces/{workspace}/topics/{topic}/messages/{message}');
+        return new UriTemplate('topic-forge://workspaces/{workspace}/topics/{topic}/posts/{post}');
     }
 
     public function handle(Request $request): Response
@@ -31,22 +31,22 @@ class MessageResource extends Resource implements HasUriTemplate
         return $this->guardResource(function () use ($request): Response {
             /** @var User $user */
             $user = $this->context->requireUser($request->user());
-            $message = $this->context->messageFor(
+            $post = $this->context->postFor(
                 $user,
                 (string) $request->get('topic'),
-                (string) $request->get('message'),
+                (string) $request->get('post'),
                 (string) $request->get('workspace'),
             );
-            $message->load(['topic.workspace', 'attachments', 'sender.user', 'sender.agent', 'recipient.user', 'recipient.agent']);
+            $post->load(['topic.workspace', 'attachments', 'sender.user', 'sender.agent', 'recipient.user', 'recipient.agent']);
 
             return Response::json([
-                'workspace' => $message->topic->workspace->only(['id', 'name', 'slug']),
+                'workspace' => $post->topic->workspace->only(['id', 'name', 'slug']),
                 'topic' => [
-                    ...$message->topic->only(['id', 'name', 'slug']),
-                    'resource_uri' => "topic-forge://workspaces/{$message->topic->workspace->slug}/topics/{$message->topic->slug}",
+                    ...$post->topic->only(['id', 'name', 'slug']),
+                    'resource_uri' => "topic-forge://workspaces/{$post->topic->workspace->slug}/topics/{$post->topic->slug}",
                 ],
-                'message' => $this->messagePayload($message, includeBody: true),
-                'attachments' => $message->attachments
+                'post' => $this->postPayload($post, includeBody: true),
+                'attachments' => $post->attachments
                     ->map(fn ($attachment) => [
                         'id' => $attachment->id,
                         'filename' => $attachment->filename,

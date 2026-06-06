@@ -13,7 +13,7 @@ use Laravel\Mcp\Server\Contracts\HasUriTemplate;
 use Laravel\Mcp\Server\Resource;
 use Laravel\Mcp\Support\UriTemplate;
 
-#[Description('Read one message-derived task queued for an agent inside an accessible workspace.')]
+#[Description('Read one post-derived task queued for an agent inside an accessible workspace.')]
 class AgentTaskResource extends Resource implements HasUriTemplate
 {
     use FormatsMcpPayloads;
@@ -37,7 +37,7 @@ class AgentTaskResource extends Resource implements HasUriTemplate
                 (int) $request->get('task'),
                 (string) $request->get('workspace'),
             );
-            $task->load(['agent.workspace', 'message.topic.workspace', 'message.sender.user', 'message.sender.agent', 'message.recipient.user', 'message.recipient.agent']);
+            $task->load(['agent.workspace', 'post.topic.workspace', 'post.sender.user', 'post.sender.agent', 'post.recipient.user', 'post.recipient.agent']);
 
             return Response::json([
                 'workspace' => $task->agent->workspace->only(['id', 'name', 'slug']),
@@ -48,7 +48,7 @@ class AgentTaskResource extends Resource implements HasUriTemplate
                     'resource_uri' => "topic-forge://workspaces/{$task->agent->workspace->slug}/agents/{$task->agent->slug}",
                     'tasks_resource_uri' => "topic-forge://workspaces/{$task->agent->workspace->slug}/agents/{$task->agent->slug}/tasks",
                 ],
-                'task' => $this->agentTaskPayload($task, includeMessageBody: true),
+                'task' => $this->agentTaskPayload($task, includePostBody: true),
             ]);
         });
     }

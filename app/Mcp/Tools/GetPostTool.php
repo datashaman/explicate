@@ -15,11 +15,11 @@ use Laravel\Mcp\Server\Tool;
 use Laravel\Mcp\Server\Tools\Annotations\IsIdempotent;
 use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 
-#[Name('get-message')]
-#[Description('Get a message and its attachments for a topic inside the current workspace.')]
+#[Name('get-post')]
+#[Description('Get a post and its attachments for a topic inside the current workspace.')]
 #[IsReadOnly]
 #[IsIdempotent]
-class GetMessageTool extends Tool
+class GetPostTool extends Tool
 {
     use FormatsMcpPayloads;
 
@@ -32,26 +32,26 @@ class GetMessageTool extends Tool
     {
         $validated = $request->validate([
             'topic_slug' => ['required', 'string'],
-            'message_slug' => ['required', 'string'],
+            'post_slug' => ['required', 'string'],
         ]);
 
         /** @var User $user */
         $user = $this->context->requireUser($request->user());
-        $message = $this->context->messageFor(
+        $post = $this->context->postFor(
             $user,
             $validated['topic_slug'],
-            $validated['message_slug'],
+            $validated['post_slug'],
         );
-        $message->load(['topic.workspace', 'attachments', 'sender.user', 'sender.agent', 'recipient.user', 'recipient.agent']);
+        $post->load(['topic.workspace', 'attachments', 'sender.user', 'sender.agent', 'recipient.user', 'recipient.agent']);
 
         return Response::structured([
-            'workspace' => $message->topic->workspace->only(['id', 'name', 'slug']),
+            'workspace' => $post->topic->workspace->only(['id', 'name', 'slug']),
             'topic' => [
-                ...$message->topic->only(['id', 'name', 'slug']),
-                'resource_uri' => "topic-forge://workspaces/{$message->topic->workspace->slug}/topics/{$message->topic->slug}",
+                ...$post->topic->only(['id', 'name', 'slug']),
+                'resource_uri' => "topic-forge://workspaces/{$post->topic->workspace->slug}/topics/{$post->topic->slug}",
             ],
-            'message' => $this->messagePayload($message, includeBody: true),
-            'attachments' => $message->attachments
+            'post' => $this->postPayload($post, includeBody: true),
+            'attachments' => $post->attachments
                 ->map(fn ($attachment) => [
                     'id' => $attachment->id,
                     'filename' => $attachment->filename,
@@ -72,10 +72,10 @@ class GetMessageTool extends Tool
     {
         return [
             'topic_slug' => $schema->string()
-                ->description('The topic slug that owns the message.')
+                ->description('The topic slug that owns the post.')
                 ->required(),
-            'message_slug' => $schema->string()
-                ->description('The message slug to fetch.')
+            'post_slug' => $schema->string()
+                ->description('The post slug to fetch.')
                 ->required(),
         ];
     }

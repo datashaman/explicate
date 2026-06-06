@@ -10,18 +10,18 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Storage;
 
-#[Fillable(['message_id', 'filename', 'path', 'mime_type', 'size'])]
+#[Fillable(['post_id', 'filename', 'path', 'mime_type', 'size'])]
 class Attachment extends Model
 {
     /** @use HasFactory<AttachmentFactory> */
     use HasFactory, SoftDeletes;
 
     /**
-     * @return BelongsTo<Message, $this>
+     * @return BelongsTo<Post, $this>
      */
-    public function message(): BelongsTo
+    public function post(): BelongsTo
     {
-        return $this->belongsTo(Message::class);
+        return $this->belongsTo(Post::class);
     }
 
     public function url(): string

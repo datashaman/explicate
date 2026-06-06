@@ -1,16 +1,16 @@
 @php
-    /** @var \App\Models\Message $message */
-    $canManageAttachments = $message->status === \App\Enums\MessageStatus::Draft;
+    /** @var \App\Models\Post $post */
+    $canManageAttachments = $post->status === \App\Enums\PostStatus::Draft;
 @endphp
 
-@if ($message->attachments->isNotEmpty() || $canManageAttachments)
+@if ($post->attachments->isNotEmpty() || $canManageAttachments)
     <div class="flex flex-col gap-3">
         <flux:heading size="sm">{{ __('Attachments') }}</flux:heading>
 
-        @if ($message->attachments->isNotEmpty())
+        @if ($post->attachments->isNotEmpty())
             <div class="divide-y divide-neutral-100 rounded-lg border border-neutral-200 dark:divide-white/5 dark:border-white/10">
-                @foreach ($message->attachments as $attachment)
-                    <div class="flex items-center gap-3 px-3 py-2" wire:key="message-attachment-{{ $attachment->id }}">
+                @foreach ($post->attachments as $attachment)
+                    <div class="flex items-center gap-3 px-3 py-2" wire:key="post-attachment-{{ $attachment->id }}">
                         <flux:icon name="paper-clip" class="size-4 shrink-0 text-neutral-400" />
                         <a href="{{ $attachment->url() }}" target="_blank"
                            class="flex-1 truncate text-sm text-neutral-700 hover:underline dark:text-neutral-300">

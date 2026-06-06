@@ -3,7 +3,7 @@
 namespace Database\Factories;
 
 use App\Models\Attachment;
-use App\Models\Message;
+use App\Models\Post;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
@@ -20,7 +20,7 @@ class AttachmentFactory extends Factory
         $filename = fake()->word().'.txt';
 
         return [
-            'message_id' => Message::factory(),
+            'post_id' => Post::factory(),
             'filename' => $filename,
             'path' => 'attachments/'.Str::uuid().'/'.$filename,
             'mime_type' => 'text/plain',

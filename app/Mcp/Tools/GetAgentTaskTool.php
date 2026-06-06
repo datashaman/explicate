@@ -16,7 +16,7 @@ use Laravel\Mcp\Server\Tools\Annotations\IsIdempotent;
 use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 
 #[Name('get-agent-task')]
-#[Description('Get one message-derived task queued for an agent inside the current workspace.')]
+#[Description('Get one post-derived task queued for an agent inside the current workspace.')]
 #[IsReadOnly]
 #[IsIdempotent]
 class GetAgentTaskTool extends Tool
@@ -42,7 +42,7 @@ class GetAgentTaskTool extends Tool
             $validated['agent_slug'],
             (int) $validated['task_id'],
         );
-        $task->load(['agent.workspace', 'message.topic.workspace', 'message.sender.user', 'message.sender.agent', 'message.recipient.user', 'message.recipient.agent']);
+        $task->load(['agent.workspace', 'post.topic.workspace', 'post.sender.user', 'post.sender.agent', 'post.recipient.user', 'post.recipient.agent']);
 
         return Response::structured([
             'workspace' => $task->agent->workspace->only(['id', 'name', 'slug']),
@@ -53,7 +53,7 @@ class GetAgentTaskTool extends Tool
                 'resource_uri' => "topic-forge://workspaces/{$task->agent->workspace->slug}/agents/{$task->agent->slug}",
                 'tasks_resource_uri' => "topic-forge://workspaces/{$task->agent->workspace->slug}/agents/{$task->agent->slug}/tasks",
             ],
-            'task' => $this->agentTaskPayload($task, includeMessageBody: true),
+            'task' => $this->agentTaskPayload($task, includePostBody: true),
         ]);
     }
 

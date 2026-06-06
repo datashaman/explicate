@@ -32,13 +32,13 @@ class WorkspaceTopicsResource extends Resource implements HasUriTemplate
             $workspace = $this->context->workspaceFor($user, (string) $request->get('workspace'));
 
             $topics = $workspace->topics()
-                ->withCount('messages')
+                ->withCount('posts')
                 ->get()
                 ->map(fn ($topic) => [
                     'id' => $topic->id,
                     'name' => $topic->name,
                     'slug' => $topic->slug,
-                    'messages_count' => $topic->messages_count,
+                    'posts_count' => $topic->posts_count,
                     'resource_uri' => "topic-forge://workspaces/{$workspace->slug}/topics/{$topic->slug}",
                 ])
                 ->values()

@@ -12,7 +12,7 @@ use Laravel\Mcp\Server\Contracts\HasUriTemplate;
 use Laravel\Mcp\Server\Resource;
 use Laravel\Mcp\Support\UriTemplate;
 
-#[Description('Read a topic with its messages and attached agents from an accessible workspace.')]
+#[Description('Read a topic with its posts and attached agents from an accessible workspace.')]
 class TopicResource extends Resource implements HasUriTemplate
 {
     use HandlesResourceExceptions;
@@ -57,17 +57,17 @@ class TopicResource extends Resource implements HasUriTemplate
                     ])
                     ->values()
                     ->all(),
-                'messages' => $topic->messages()
+                'posts' => $topic->posts()
                     ->whereNull('recipient_principal_id')
                     ->orderBy('title')
                     ->get()
-                    ->map(fn ($message) => [
-                        'id' => $message->id,
-                        'title' => $message->title,
-                        'slug' => $message->slug,
-                        'status' => $message->status->value,
-                        'body' => $message->body,
-                        'resource_uri' => "topic-forge://workspaces/{$topic->workspace->slug}/topics/{$topic->slug}/messages/{$message->slug}",
+                    ->map(fn ($post) => [
+                        'id' => $post->id,
+                        'title' => $post->title,
+                        'slug' => $post->slug,
+                        'status' => $post->status->value,
+                        'body' => $post->body,
+                        'resource_uri' => "topic-forge://workspaces/{$topic->workspace->slug}/topics/{$topic->slug}/posts/{$post->slug}",
                     ])
                     ->values()
                     ->all(),

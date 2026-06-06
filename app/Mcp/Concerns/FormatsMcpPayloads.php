@@ -3,35 +3,35 @@
 namespace App\Mcp\Concerns;
 
 use App\Models\AgentTask;
-use App\Models\Message;
+use App\Models\Post;
 
 trait FormatsMcpPayloads
 {
     /**
      * @return array<string, mixed>
      */
-    protected function messagePayload(Message $message, bool $includeBody = false): array
+    protected function postPayload(Post $post, bool $includeBody = false): array
     {
-        $message->loadMissing(['topic.workspace', 'sender.user', 'sender.agent', 'recipient.user', 'recipient.agent', 'assignedAgents']);
+        $post->loadMissing(['topic.workspace', 'sender.user', 'sender.agent', 'recipient.user', 'recipient.agent', 'assignedAgents']);
 
         $payload = [
-            'id' => $message->id,
-            'title' => $message->title,
-            'slug' => $message->slug,
-            'status' => $message->status->value,
-            'sender_principal_id' => $message->sender_principal_id,
-            'sender' => $message->sender ? [
-                'id' => $message->sender->id,
-                'type' => $message->sender->type,
-                'name' => $message->sender->label(),
+            'id' => $post->id,
+            'title' => $post->title,
+            'slug' => $post->slug,
+            'status' => $post->status->value,
+            'sender_principal_id' => $post->sender_principal_id,
+            'sender' => $post->sender ? [
+                'id' => $post->sender->id,
+                'type' => $post->sender->type,
+                'name' => $post->sender->label(),
             ] : null,
-            'recipient_principal_id' => $message->recipient_principal_id,
-            'recipient' => $message->recipient ? [
-                'id' => $message->recipient->id,
-                'type' => $message->recipient->type,
-                'name' => $message->recipient->label(),
+            'recipient_principal_id' => $post->recipient_principal_id,
+            'recipient' => $post->recipient ? [
+                'id' => $post->recipient->id,
+                'type' => $post->recipient->type,
+                'name' => $post->recipient->label(),
             ] : null,
-            'assigned_agents' => $message->assignedAgents
+            'assigned_agents' => $post->assignedAgents
                 ->map(fn ($agent): array => [
                     'id' => $agent->id,
                     'name' => $agent->name,
@@ -39,13 +39,13 @@ trait FormatsMcpPayloads
                 ])
                 ->values()
                 ->all(),
-            'resource_uri' => $this->messageResourceUri($message),
+            'resource_uri' => $this->postResourceUri($post),
         ];
 
         if ($includeBody) {
-            $payload['body'] = $message->body;
+            $payload['body'] = $post->body;
         } else {
-            $payload['has_body'] = filled($message->body);
+            $payload['has_body'] = filled($post->body);
         }
 
         return $payload;
@@ -54,9 +54,9 @@ trait FormatsMcpPayloads
     /**
      * @return array<string, mixed>
      */
-    protected function agentTaskPayload(AgentTask $task, bool $includeMessageBody = false): array
+    protected function agentTaskPayload(AgentTask $task, bool $includePostBody = false): array
     {
-        $task->loadMissing(['agent.workspace', 'message.topic.workspace', 'message.sender.user', 'message.sender.agent', 'message.recipient.user', 'message.recipient.agent']);
+        $task->loadMissing(['agent.workspace', 'post.topic.workspace', 'post.sender.user', 'post.sender.agent', 'post.recipient.user', 'post.recipient.agent']);
 
         return [
             'id' => $task->id,
@@ -68,15 +68,15 @@ trait FormatsMcpPayloads
             'attempts' => $task->attempts,
             'last_error' => $task->last_error,
             'resource_uri' => $this->agentTaskResourceUri($task),
-            'message' => $this->messagePayload($task->message, includeBody: $includeMessageBody),
+            'post' => $this->postPayload($task->post, includeBody: $includePostBody),
         ];
     }
 
-    protected function messageResourceUri(Message $message): string
+    protected function postResourceUri(Post $post): string
     {
-        $message->loadMissing('topic.workspace');
+        $post->loadMissing('topic.workspace');
 
-        return "topic-forge://workspaces/{$message->topic->workspace->slug}/topics/{$message->topic->slug}/messages/{$message->slug}";
+        return "topic-forge://workspaces/{$post->topic->workspace->slug}/topics/{$post->topic->slug}/posts/{$post->slug}";
     }
 
     protected function agentTaskResourceUri(AgentTask $task): string

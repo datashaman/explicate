@@ -16,7 +16,7 @@ use Laravel\Mcp\Server\Tools\Annotations\IsIdempotent;
 use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 
 #[Name('list-agent-tasks')]
-#[Description('List message-derived work queued for an agent inside the current workspace.')]
+#[Description('List post-derived work queued for an agent inside the current workspace.')]
 #[IsReadOnly]
 #[IsIdempotent]
 class ListAgentTasksTool extends Tool
@@ -39,7 +39,7 @@ class ListAgentTasksTool extends Tool
         $agent = $this->context->agentFor($user, $validated['agent_slug']);
 
         $tasks = $agent->tasks()
-            ->with(['agent.workspace', 'message.topic.workspace', 'message.sender.user', 'message.sender.agent', 'message.recipient.user', 'message.recipient.agent'])
+            ->with(['agent.workspace', 'post.topic.workspace', 'post.sender.user', 'post.sender.agent', 'post.recipient.user', 'post.recipient.agent'])
             ->orderByDesc('priority')
             ->orderBy('available_at')
             ->orderBy('id')

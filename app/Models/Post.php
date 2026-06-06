@@ -3,9 +3,9 @@
 namespace App\Models;
 
 use App\Enums\AgentTaskStatus;
-use App\Enums\MessageStatus;
-use App\Events\MessageSent;
-use Database\Factories\MessageFactory;
+use App\Enums\PostStatus;
+use App\Events\PostSent;
+use Database\Factories\PostFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -17,16 +17,16 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
 #[Fillable(['topic_id', 'thread_id', 'sender_principal_id', 'recipient_principal_id', 'title', 'slug', 'ulid', 'body', 'status'])]
-class Message extends Model
+class Post extends Model
 {
-    /** @use HasFactory<MessageFactory> */
+    /** @use HasFactory<PostFactory> */
     use HasFactory, SoftDeletes;
 
     /** @return array<string, string> */
     protected function casts(): array
     {
         return [
-            'status' => MessageStatus::class,
+            'status' => PostStatus::class,
         ];
     }
 
@@ -34,32 +34,32 @@ class Message extends Model
     {
         parent::boot();
 
-        static::creating(function (Message $message) {
-            if (empty($message->ulid)) {
-                $message->ulid = (string) Str::ulid();
+        static::creating(function (Post $post) {
+            if (empty($post->ulid)) {
+                $post->ulid = (string) Str::ulid();
             }
 
-            if (empty($message->slug)) {
-                $message->slug = static::generateUniqueSlug($message->topic_id, $message->title);
-            }
-        });
-
-        static::updating(function (Message $message) {
-            if ($message->isDirty('title')) {
-                $message->slug = static::generateUniqueSlug($message->topic_id, $message->title, $message->id);
+            if (empty($post->slug)) {
+                $post->slug = static::generateUniqueSlug($post->topic_id, $post->title);
             }
         });
 
-        static::created(function (Message $message) {
-            if ($message->status === MessageStatus::Published) {
-                MessageSent::dispatch($message);
+        static::updating(function (Post $post) {
+            if ($post->isDirty('title')) {
+                $post->slug = static::generateUniqueSlug($post->topic_id, $post->title, $post->id);
             }
         });
 
-        static::updated(function (Message $message) {
-            if ($message->wasChanged('status') && $message->status === MessageStatus::Published) {
-                $message->makeAssignedAgentTasksAvailable();
-                MessageSent::dispatch($message);
+        static::created(function (Post $post) {
+            if ($post->status === PostStatus::Published) {
+                PostSent::dispatch($post);
+            }
+        });
+
+        static::updated(function (Post $post) {
+            if ($post->wasChanged('status') && $post->status === PostStatus::Published) {
+                $post->makeAssignedAgentTasksAvailable();
+                PostSent::dispatch($post);
             }
         });
     }
@@ -118,7 +118,7 @@ class Message extends Model
     public function assignedAgents(): BelongsToMany
     {
         return $this->belongsToMany(Agent::class, 'agent_tasks')
-            ->wherePivot('event_type', AgentTask::EventMessageAssigned)
+            ->wherePivot('event_type', AgentTask::EventPostAssigned)
             ->withPivot(['id', 'status', 'available_at', 'locked_at', 'attempts', 'last_error'])
             ->withTimestamps();
     }
@@ -140,7 +140,7 @@ class Message extends Model
             ->pluck('id');
 
         $tasksToRemove = $this->agentTasks()
-            ->where('event_type', AgentTask::EventMessageAssigned);
+            ->where('event_type', AgentTask::EventPostAssigned);
 
         if ($validAgentIds->isNotEmpty()) {
             $tasksToRemove->whereNotIn('agent_id', $validAgentIds);
@@ -151,10 +151,10 @@ class Message extends Model
         $validAgentIds->each(function (int $agentId): void {
             $this->agentTasks()->firstOrCreate([
                 'agent_id' => $agentId,
-                'event_type' => AgentTask::EventMessageAssigned,
+                'event_type' => AgentTask::EventPostAssigned,
             ], [
                 'status' => AgentTaskStatus::Pending,
-                'available_at' => $this->status === MessageStatus::Published ? now() : null,
+                'available_at' => $this->status === PostStatus::Published ? now() : null,
             ]);
         });
     }
@@ -162,7 +162,7 @@ class Message extends Model
     public function makeAssignedAgentTasksAvailable(): void
     {
         $this->agentTasks()
-            ->where('event_type', AgentTask::EventMessageAssigned)
+            ->where('event_type', AgentTask::EventPostAssigned)
             ->whereNull('available_at')
             ->update(['available_at' => now()]);
     }
@@ -219,7 +219,7 @@ class Message extends Model
         }
 
         $meta[] = [
-            'label' => $this->status === MessageStatus::Draft ? __('Saved') : __('Sent'),
+            'label' => $this->status === PostStatus::Draft ? __('Saved') : __('Sent'),
             'value' => $this->updated_at->diffForHumans(),
             'title' => $this->updated_at->timezone($timezone ?: config('app.timezone'))->isoFormat('LLLL'),
         ];
@@ -233,7 +233,7 @@ class Message extends Model
     public function listSortValues(?string $recipientFallback = null, ?string $dateKey = null): array
     {
         $attachmentsCount = (int) ($this->attachments_count ?? $this->attachments()->count());
-        $dateKey ??= $this->status === MessageStatus::Draft ? 'saved' : 'sent';
+        $dateKey ??= $this->status === PostStatus::Draft ? 'saved' : 'sent';
 
         $values = [
             'name' => Str::lower($this->title),

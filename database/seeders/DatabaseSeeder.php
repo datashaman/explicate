@@ -2,12 +2,12 @@
 
 namespace Database\Seeders;
 
-use App\Enums\MessageStatus;
+use App\Enums\PostStatus;
 use App\Enums\Provider;
 use App\Enums\ReasoningEffort;
 use App\Models\Agent;
 use App\Models\Attachment;
-use App\Models\Message;
+use App\Models\Post;
 use App\Models\Topic;
 use App\Models\User;
 use App\Models\Workspace;
@@ -109,55 +109,55 @@ class DatabaseSeeder extends Seeder
             $agents[1]->id => ['agent_version_id' => $agents[1]->latestVersion->id],
         ]);
 
-        $designDraft = Message::factory()->for($topicsByName['Design'])->create([
+        $designDraft = Post::factory()->for($topicsByName['Design'])->create([
             'title' => 'Homepage hero directions',
             'slug' => 'homepage-hero-directions',
             'body' => "Explore three tonal directions for the homepage hero.\n\n1. Product-led\n2. Proof-led\n3. Narrative-led",
-            'status' => MessageStatus::Draft,
+            'status' => PostStatus::Draft,
         ]);
 
         Attachment::factory()->count(2)->for($designDraft)->create();
 
-        Message::factory()->for($topicsByName['Design'])->create([
+        Post::factory()->for($topicsByName['Design'])->create([
             'title' => 'Brand voice notes',
             'slug' => 'brand-voice-notes',
             'body' => 'Capture phrases to avoid and preferred tone examples.',
-            'status' => MessageStatus::Published,
+            'status' => PostStatus::Published,
         ]);
 
-        Message::factory()->for($topicsByName['Engineering'])->create([
+        Post::factory()->for($topicsByName['Engineering'])->create([
             'title' => 'Agent orchestration outline',
             'slug' => 'agent-orchestration-outline',
-            'body' => "Document the message lifecycle and queue boundaries.\n\nInclude failure handling and retry policy.",
-            'status' => MessageStatus::Draft,
+            'body' => "Document the post lifecycle and queue boundaries.\n\nInclude failure handling and retry policy.",
+            'status' => PostStatus::Draft,
         ]);
 
-        Message::factory()->for($topicsByName['Engineering'])->create([
+        Post::factory()->for($topicsByName['Engineering'])->create([
             'title' => 'Model fallback strategy',
             'slug' => 'model-fallback-strategy',
             'body' => 'Compare provider fallback order and expected quality tradeoffs.',
-            'status' => MessageStatus::Archived,
+            'status' => PostStatus::Archived,
         ]);
 
-        Message::factory()->for($topicsByName['Marketing'])->create([
+        Post::factory()->for($topicsByName['Marketing'])->create([
             'title' => 'Q3 campaign angles',
             'slug' => 'q3-campaign-angles',
             'body' => 'List campaign themes tied to the strongest product outcomes.',
-            'status' => MessageStatus::Published,
+            'status' => PostStatus::Published,
         ]);
 
-        Message::factory()->for($topicsByName['Marketing'])->create([
+        Post::factory()->for($topicsByName['Marketing'])->create([
             'title' => 'Landing page test ideas',
             'slug' => 'landing-page-test-ideas',
             'body' => 'Propose headline, CTA, and proof-module experiments.',
-            'status' => MessageStatus::Draft,
+            'status' => PostStatus::Draft,
         ]);
 
-        Message::factory()->for($topicsByName['Research'])->create([
+        Post::factory()->for($topicsByName['Research'])->create([
             'title' => 'Competitor workflow notes',
             'slug' => 'competitor-workflow-notes',
             'body' => 'Track workflow patterns from adjacent tools and notable gaps.',
-            'status' => MessageStatus::Draft,
+            'status' => PostStatus::Draft,
         ]);
     }
 }

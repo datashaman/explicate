@@ -2,16 +2,16 @@
 
 namespace Database\Factories;
 
-use App\Enums\MessageStatus;
-use App\Models\Message;
+use App\Enums\PostStatus;
+use App\Models\Post;
 use App\Models\Topic;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
 /**
- * @extends Factory<Message>
+ * @extends Factory<Post>
  */
-class MessageFactory extends Factory
+class PostFactory extends Factory
 {
     /**
      * @return array<string, mixed>
@@ -29,7 +29,7 @@ class MessageFactory extends Factory
             'slug' => fn (array $attributes): string => Str::slug($attributes['title']),
             'ulid' => fn (): string => (string) Str::ulid(),
             'body' => fake()->optional()->paragraphs(3, true),
-            'status' => MessageStatus::Draft,
+            'status' => PostStatus::Draft,
         ];
     }
 

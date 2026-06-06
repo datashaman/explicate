@@ -1,7 +1,7 @@
 <?php
 
 use App\Models\Agent;
-use App\Models\Message;
+use App\Models\Post;
 use App\Models\Team;
 use App\Models\Topic;
 use App\Models\User;
@@ -24,14 +24,14 @@ test('database seeder creates demo workspace content', function () {
 
     expect($designTopic)->not->toBeNull();
     expect($designTopic->slug)->toBe('design');
-    expect($designTopic->messages()->count())->toBeGreaterThanOrEqual(2);
-    expect($designTopic->messages()->whereNotNull('ulid')->count())->toBe($designTopic->messages()->count());
+    expect($designTopic->posts()->count())->toBeGreaterThanOrEqual(2);
+    expect($designTopic->posts()->whereNotNull('ulid')->count())->toBe($designTopic->posts()->count());
     expect($designTopic->agents()->count())->toBeGreaterThanOrEqual(2);
 
     expect($engineeringTopic)->not->toBeNull();
     expect($engineeringTopic->slug)->toBe('engineering');
-    expect($engineeringTopic->messages()->count())->toBeGreaterThanOrEqual(2);
-    expect($engineeringTopic->messages()->whereNotNull('ulid')->count())->toBe($engineeringTopic->messages()->count());
+    expect($engineeringTopic->posts()->count())->toBeGreaterThanOrEqual(2);
+    expect($engineeringTopic->posts()->whereNotNull('ulid')->count())->toBe($engineeringTopic->posts()->count());
 
     $writerAgent = $user->currentWorkspace->agents()->where('name', 'Writer')->first();
 
@@ -46,12 +46,12 @@ test('factories derive slugs from overridden names and titles', function () {
     $workspace = Workspace::factory()->create(['name' => 'Context Proof']);
     $topic = Topic::factory()->for($workspace)->create(['name' => 'Product Strategy']);
     $agent = Agent::factory()->for($workspace)->create(['name' => 'SEO Analyst']);
-    $message = Message::factory()->for($topic)->create(['title' => 'Launch Plan']);
+    $post = Post::factory()->for($topic)->create(['title' => 'Launch Plan']);
 
     expect($team->slug)->toBe('demo-team')
         ->and($workspace->slug)->toBe('context-proof')
         ->and($topic->slug)->toBe('product-strategy')
         ->and($agent->slug)->toBe('seo-analyst')
-        ->and($message->slug)->toBe('launch-plan')
-        ->and($message->ulid)->not->toBeNull();
+        ->and($post->slug)->toBe('launch-plan')
+        ->and($post->ulid)->not->toBeNull();
 });

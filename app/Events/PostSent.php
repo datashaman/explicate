@@ -2,17 +2,17 @@
 
 namespace App\Events;
 
-use App\Models\Message;
+use App\Models\Post;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
-class MessageSent
+class PostSent
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
     /**
      * Create a new event instance.
      */
-    public function __construct(public Message $message) {}
+    public function __construct(public Post $post) {}
 }

@@ -5,7 +5,7 @@ namespace Database\Factories;
 use App\Enums\AgentTaskStatus;
 use App\Models\Agent;
 use App\Models\AgentTask;
-use App\Models\Message;
+use App\Models\Post;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -22,8 +22,8 @@ class AgentTaskFactory extends Factory
     {
         return [
             'agent_id' => Agent::factory(),
-            'message_id' => Message::factory(),
-            'event_type' => AgentTask::EventMessageAssigned,
+            'post_id' => Post::factory(),
+            'event_type' => AgentTask::EventPostAssigned,
             'status' => AgentTaskStatus::Pending,
             'priority' => 0,
             'available_at' => now(),

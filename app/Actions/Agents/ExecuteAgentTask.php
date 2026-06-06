@@ -3,9 +3,9 @@
 namespace App\Actions\Agents;
 
 use App\Enums\AgentTaskStatus;
-use App\Enums\MessageStatus;
+use App\Enums\PostStatus;
 use App\Models\AgentTask;
-use App\Models\Message;
+use App\Models\Post;
 use Laravel\Ai\Enums\Lab;
 use RuntimeException;
 use Throwable;
@@ -14,13 +14,13 @@ use function Laravel\Ai\agent as laravelAiAgent;
 
 class ExecuteAgentTask
 {
-    public function handle(AgentTask $task): ?Message
+    public function handle(AgentTask $task): ?Post
     {
         $task->loadMissing([
             'agent.latestVersion',
             'agent.workspace',
-            'message.sender',
-            'message.topic',
+            'post.sender',
+            'post.topic',
         ]);
 
         if ($task->status !== AgentTaskStatus::Pending || ! $task->available_at || $task->available_at->isFuture()) {
@@ -43,17 +43,17 @@ class ExecuteAgentTask
 
             $response = laravelAiAgent(instructions: $version->prompt)
                 ->prompt(
-                    $this->promptFor($task->message),
+                    $this->promptFor($task->post),
                     provider: Lab::from($version->provider->value),
                     model: $version->model,
                 );
 
-            $reply = $task->message->topic->messages()->create([
+            $reply = $task->post->topic->posts()->create([
                 'sender_principal_id' => $task->agent->workspace->principalForAgent($task->agent)->id,
-                'recipient_principal_id' => $task->message->sender_principal_id,
-                'title' => __('Re: :title', ['title' => $task->message->title]),
+                'recipient_principal_id' => $task->post->sender_principal_id,
+                'title' => __('Re: :title', ['title' => $task->post->title]),
                 'body' => $response->text,
-                'status' => MessageStatus::Published,
+                'status' => PostStatus::Published,
             ]);
 
             $task->forceFill([
@@ -74,11 +74,11 @@ class ExecuteAgentTask
         }
     }
 
-    protected function promptFor(Message $message): string
+    protected function promptFor(Post $post): string
     {
         return trim(implode("\n\n", array_filter([
-            '# '.$message->title,
-            $message->body,
+            '# '.$post->title,
+            $post->body,
         ])));
     }
 }

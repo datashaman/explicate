@@ -42,7 +42,7 @@ class GetTopicTool extends Tool
                 'id' => $topic->id,
                 'name' => $topic->name,
                 'slug' => $topic->slug,
-                'messages_count' => $topic->messages()->count(),
+                'posts_count' => $topic->posts()->count(),
                 'resource_uri' => "topic-forge://workspaces/{$topic->workspace->slug}/topics/{$topic->slug}",
             ],
             'agents' => $topic->agents

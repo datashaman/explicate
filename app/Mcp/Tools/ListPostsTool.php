@@ -15,11 +15,11 @@ use Laravel\Mcp\Server\Tool;
 use Laravel\Mcp\Server\Tools\Annotations\IsIdempotent;
 use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 
-#[Name('list-messages')]
-#[Description('List messages for a topic inside the current workspace.')]
+#[Name('list-posts')]
+#[Description('List posts for a topic inside the current workspace.')]
 #[IsReadOnly]
 #[IsIdempotent]
-class ListMessagesTool extends Tool
+class ListPostsTool extends Tool
 {
     use FormatsMcpPayloads;
 
@@ -38,11 +38,11 @@ class ListMessagesTool extends Tool
         $user = $this->context->requireUser($request->user());
         $topic = $this->context->topicFor($user, $validated['topic_slug']);
 
-        $messages = $topic->messages()
+        $posts = $topic->posts()
             ->with(['topic.workspace', 'sender.user', 'sender.agent', 'recipient.user', 'recipient.agent'])
             ->orderBy('title')
             ->get()
-            ->map(fn ($message) => $this->messagePayload($message))
+            ->map(fn ($post) => $this->postPayload($post))
             ->values()
             ->all();
 
@@ -52,7 +52,7 @@ class ListMessagesTool extends Tool
                 ...$topic->only(['id', 'name', 'slug']),
                 'resource_uri' => "topic-forge://workspaces/{$topic->workspace->slug}/topics/{$topic->slug}",
             ],
-            'messages' => $messages,
+            'posts' => $posts,
         ]);
     }
 
@@ -65,7 +65,7 @@ class ListMessagesTool extends Tool
     {
         return [
             'topic_slug' => $schema->string()
-                ->description('The topic slug whose messages should be listed.')
+                ->description('The topic slug whose posts should be listed.')
                 ->required(),
         ];
     }

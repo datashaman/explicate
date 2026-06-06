@@ -2,10 +2,10 @@
 
 namespace App\Mcp\Tools;
 
-use App\Enums\MessageStatus;
+use App\Enums\PostStatus;
 use App\Mcp\TopicForgeContext;
 use App\Models\AgentTask;
-use App\Models\Message;
+use App\Models\Post;
 use App\Models\User;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
@@ -15,9 +15,9 @@ use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Attributes\Name;
 use Laravel\Mcp\Server\Tool;
 
-#[Name('create-message')]
-#[Description('Create a message inside a topic in the current workspace.')]
-class CreateMessageTool extends Tool
+#[Name('create-post')]
+#[Description('Create a post inside a topic in the current workspace.')]
+class CreatePostTool extends Tool
 {
     public function __construct(protected TopicForgeContext $context) {}
 
@@ -30,7 +30,7 @@ class CreateMessageTool extends Tool
             'topic_slug' => ['required', 'string'],
             'title' => ['required', 'string', 'max:255'],
             'body' => ['nullable', 'string'],
-            'status' => ['nullable', 'string', 'in:'.implode(',', array_column(MessageStatus::cases(), 'value'))],
+            'status' => ['nullable', 'string', 'in:'.implode(',', array_column(PostStatus::cases(), 'value'))],
             'recipient_principal_id' => ['nullable', 'integer'],
             'agent_ids' => ['nullable', 'array'],
             'agent_ids.*' => ['integer'],
@@ -51,16 +51,16 @@ class CreateMessageTool extends Tool
             $recipientPrincipalId = $recipient->id;
         }
 
-        $message = new Message([
+        $post = new Post([
             'title' => $validated['title'],
             'body' => $validated['body'] ?? null,
-            'status' => $validated['status'] ?? MessageStatus::Draft->value,
+            'status' => $validated['status'] ?? PostStatus::Draft->value,
             'sender_principal_id' => $senderPrincipal->id,
             'recipient_principal_id' => $recipientPrincipalId,
         ]);
 
-        $topic->messages()->save($message);
-        $message->assignAgents($validated['agent_ids'] ?? []);
+        $topic->posts()->save($post);
+        $post->assignAgents($validated['agent_ids'] ?? []);
 
         return Response::structured([
             'workspace' => $topic->workspace->only(['id', 'name', 'slug']),
@@ -68,18 +68,18 @@ class CreateMessageTool extends Tool
                 ...$topic->only(['id', 'name', 'slug']),
                 'resource_uri' => "topic-forge://workspaces/{$topic->workspace->slug}/topics/{$topic->slug}",
             ],
-            'message' => [
-                'id' => $message->id,
-                'title' => $message->title,
-                'slug' => $message->slug,
-                'status' => $message->status->value,
-                'sender_principal_id' => $message->sender_principal_id,
-                'recipient_principal_id' => $message->recipient_principal_id,
-                'assigned_agent_ids' => $message->agentTasks()
-                    ->where('event_type', AgentTask::EventMessageAssigned)
+            'post' => [
+                'id' => $post->id,
+                'title' => $post->title,
+                'slug' => $post->slug,
+                'status' => $post->status->value,
+                'sender_principal_id' => $post->sender_principal_id,
+                'recipient_principal_id' => $post->recipient_principal_id,
+                'assigned_agent_ids' => $post->agentTasks()
+                    ->where('event_type', AgentTask::EventPostAssigned)
                     ->pluck('agent_id')
                     ->all(),
-                'resource_uri' => "topic-forge://workspaces/{$topic->workspace->slug}/topics/{$topic->slug}/messages/{$message->slug}",
+                'resource_uri' => "topic-forge://workspaces/{$topic->workspace->slug}/topics/{$topic->slug}/posts/{$post->slug}",
             ],
         ]);
     }
@@ -93,23 +93,23 @@ class CreateMessageTool extends Tool
     {
         return [
             'topic_slug' => $schema->string()
-                ->description('The topic slug the message should be created in.')
+                ->description('The topic slug the post should be created in.')
                 ->required(),
             'title' => $schema->string()
-                ->description('The message title.')
+                ->description('The post title.')
                 ->required(),
             'body' => $schema->string()
-                ->description('Optional message body.')
+                ->description('Optional post body.')
                 ->nullable(),
             'status' => $schema->string()
-                ->description('Optional message status.')
-                ->enum(MessageStatus::class)
+                ->description('Optional post status.')
+                ->enum(PostStatus::class)
                 ->nullable(),
             'recipient_principal_id' => $schema->integer()
-                ->description('Optional principal id when this message is addressed to a user or agent instead of the topic.')
+                ->description('Optional principal id when this post is addressed to a user or agent instead of the topic.')
                 ->nullable(),
             'agent_ids' => $schema->array()
-                ->description('Optional workspace agent ids to assign to this message, creating agent tasks.')
+                ->description('Optional workspace agent ids to assign to this post, creating agent tasks.')
                 ->nullable(),
         ];
     }

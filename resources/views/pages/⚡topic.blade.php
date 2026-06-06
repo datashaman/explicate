@@ -1,10 +1,10 @@
 <?php
 
-use App\Enums\MessageStatus;
+use App\Enums\PostStatus;
 use App\Enums\Provider;
 use App\Enums\ReasoningEffort;
 use App\Models\Agent;
-use App\Models\Message;
+use App\Models\Post;
 use App\Models\Topic;
 use Flux\Flux;
 use Illuminate\Support\Facades\Auth;
@@ -60,23 +60,23 @@ new #[Layout('layouts::workspace'), Title('Topic')] class extends Component {
      */
     public function items(): array
     {
-        return $this->topic->messages()
+        return $this->topic->posts()
             ->with(['sender.user', 'sender.agent'])
             ->withCount('attachments')
-            ->when(! $this->showArchived, fn ($q) => $q->where('status', '!=', MessageStatus::Archived))
-            ->where('status', '!=', MessageStatus::Draft)
+            ->when(! $this->showArchived, fn ($q) => $q->where('status', '!=', PostStatus::Archived))
+            ->where('status', '!=', PostStatus::Draft)
             ->orderByDesc('updated_at')
             ->orderByDesc('id')
             ->get()
-            ->map(fn (Message $message) => [
-                'href' => route('messages.show', ['message' => $message]),
-                'name' => $message->title,
-                'meta' => $message->listMeta(showSender: true, showRecipient: false, timezone: Auth::user()->displayTimezone()),
-                'attachments_count' => $message->attachments_count,
-                'sort' => $message->listSortValues(dateKey: 'sent'),
-                'badge' => $message->status === MessageStatus::Published ? null : [
-                    'label' => $message->status->label(),
-                    'color' => $message->status->color(),
+            ->map(fn (Post $post) => [
+                'href' => route('posts.show', ['post' => $post]),
+                'name' => $post->title,
+                'meta' => $post->listMeta(showSender: true, showRecipient: false, timezone: Auth::user()->displayTimezone()),
+                'attachments_count' => $post->attachments_count,
+                'sort' => $post->listSortValues(dateKey: 'sent'),
+                'badge' => $post->status === PostStatus::Published ? null : [
+                    'label' => $post->status->label(),
+                    'color' => $post->status->color(),
                 ],
             ])
             ->all();
@@ -211,17 +211,17 @@ new #[Layout('layouts::workspace'), Title('Topic')] class extends Component {
                     ['label' => Auth::user()->currentWorkspace?->name, 'href' => route('dashboard')],
                     ['label' => $topic->name],
                 ],
-                'titleLabel' => __('Updates'),
+                'titleLabel' => __('Inbox'),
                 'items' => collect($this->items()),
                 'icon' => 'document-text',
                 'iconClass' => 'size-12 text-neutral-400 group-hover:text-neutral-300',
-                'emptyText' => __('No updates'),
-                'createHref' => route('messages.create', ['topic' => $topic->slug]),
-                'createLabel' => __('New update'),
-                'createTest' => 'topic-new-message-button',
+                'emptyText' => __('No inbox'),
+                'createHref' => route('posts.create', ['topic' => $topic->slug]),
+                'createLabel' => __('New post'),
+                'createTest' => 'topic-new-post-button',
                 'showArchivedModel' => 'showArchived',
                 'listColumns' => [
-                    ['key' => 'name', 'label' => __('Update'), 'class' => 'min-w-0 flex-1'],
+                    ['key' => 'name', 'label' => __('Post'), 'class' => 'min-w-0 flex-1'],
                     ['key' => 'from', 'label' => __('From'), 'class' => 'w-28 shrink-0'],
                     ['key' => 'sent', 'label' => __('Sent'), 'class' => 'w-28 shrink-0'],
                     ['key' => 'attachments', 'label' => __('Attachments'), 'class' => 'w-24 shrink-0'],
