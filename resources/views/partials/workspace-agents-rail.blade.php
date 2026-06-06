@@ -4,6 +4,7 @@
     'assignedAgentIds' => [],
     'assignAction' => null,
     'unassignAction' => null,
+    'selectAction' => null,
     'panelId' => null,
     'asideClass' => null,
     'containerClass' => null,
@@ -66,7 +67,11 @@
                                     'border-l-2 border-amber-400 bg-amber-50/80 hover:bg-amber-100/70 dark:bg-amber-500/10 dark:hover:bg-amber-500/15' => $isAssigned,
                                 ])
                             >
-                                <a href="{{ route('agents.show', ['agent' => $agent->slug]) }}" wire:navigate class="flex min-w-0 flex-1 items-center gap-3">
+                                @if ($selectAction)
+                                    <button type="button" wire:click="{{ $selectAction }}('{{ $agent->slug }}')" class="flex min-w-0 flex-1 items-center gap-3 text-left">
+                                @else
+                                    <a href="{{ route('agents.show', ['agent' => $agent->slug]) }}" wire:navigate class="flex min-w-0 flex-1 items-center gap-3">
+                                @endif
                                     <div @class([
                                         'workspace-agent-icon mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full',
                                         'bg-amber-100 text-amber-700 ring-1 ring-amber-300 dark:bg-amber-400/15 dark:text-amber-200 dark:ring-amber-300/30' => $isAssigned,
@@ -81,7 +86,11 @@
                                             'text-neutral-700 dark:text-neutral-300' => ! $isAssigned,
                                         ])>{{ $agent->name }}</div>
                                     </div>
-                                </a>
+                                @if ($selectAction)
+                                    </button>
+                                @else
+                                    </a>
+                                @endif
 
                                 @if ($assignAction && $unassignAction)
                                     <div class="shrink-0">

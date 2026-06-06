@@ -4,6 +4,7 @@ use App\Enums\MessageStatus;
 use App\Enums\Provider;
 use App\Enums\ReasoningEffort;
 use App\Models\Agent;
+use App\Models\AgentVersion;
 use App\Models\Message;
 use App\Models\Topic;
 use App\Models\User;
@@ -250,7 +251,9 @@ test('dashboard shows workspace agents in the right rail', function () {
         ->assertOk()
         ->assertSee('Agents')
         ->assertSee('New agent')
-        ->assertSee($agent->name);
+        ->assertSee($agent->name)
+        ->assertSee("wire:click=\"openAgent('{$agent->slug}')\"", escape: false)
+        ->assertDontSee(route('agents.show', ['agent' => $agent->slug]), escape: false);
 });
 
 test('dashboard gives assigned agents prominence in the right rail', function () {
@@ -272,6 +275,80 @@ test('dashboard gives assigned agents prominence in the right rail', function ()
         ->assertSee('border-l-2 border-amber-400', escape: false)
         ->assertSee('data-test="workspace-agent-row-'.$assigned->slug.'"', escape: false)
         ->assertSee('data-test="workspace-agent-row-'.$available->slug.'"', escape: false);
+});
+
+test('dashboard shows selected agent details in the right panel', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->for($user->currentTeam)->create();
+    $user->switchWorkspace($workspace);
+
+    $agent = Agent::factory()->for($workspace)->create([
+        'name' => 'Research Agent',
+        'slug' => 'research-agent',
+    ]);
+
+    AgentVersion::factory()->for($agent)->create([
+        'provider' => Provider::OpenAI,
+        'model' => 'o4-mini',
+        'prompt' => 'Research carefully.',
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('dashboard', ['panel' => 'agents', 'agent' => $agent->slug]))
+        ->assertOk()
+        ->assertSee('data-test="dashboard-agent-panel"', escape: false)
+        ->assertSee('Research Agent')
+        ->assertSee('Agent details')
+        ->assertSee('New version')
+        ->assertSee('Version history')
+        ->assertSee('o4-mini')
+        ->assertSee('Research carefully.')
+        ->assertSee('xl:grid-cols-[16rem_minmax(0,1fr)_32rem]', escape: false);
+});
+
+test('dashboard can save selected agent details', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->for($user->currentTeam)->create();
+    $user->switchWorkspace($workspace);
+
+    $agent = Agent::factory()->for($workspace)->create(['slug' => 'research-agent']);
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::dashboard')
+        ->set('selectedAgentSlug', $agent->slug)
+        ->set('selectedAgentName', 'Updated Agent')
+        ->call('saveSelectedAgentDetails')
+        ->assertHasNoErrors();
+
+    expect($agent->fresh()->name)->toBe('Updated Agent');
+});
+
+test('dashboard can save selected agent version', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->for($user->currentTeam)->create();
+    $user->switchWorkspace($workspace);
+
+    $agent = Agent::factory()->for($workspace)->create(['slug' => 'research-agent']);
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::dashboard')
+        ->set('selectedAgentSlug', $agent->slug)
+        ->set('selectedAgentProvider', Provider::OpenAI->value)
+        ->set('selectedAgentModel', 'o4-mini')
+        ->set('selectedAgentReasoningEffort', ReasoningEffort::Low->value)
+        ->set('selectedAgentPrompt', 'New panel prompt.')
+        ->call('saveSelectedAgentVersion')
+        ->assertHasNoErrors();
+
+    $version = $agent->versions()->latest('version')->first();
+
+    expect($version)->not->toBeNull()
+        ->and($version->provider)->toBe(Provider::OpenAI)
+        ->and($version->model)->toBe('o4-mini')
+        ->and($version->reasoning_effort)->toBe(ReasoningEffort::Low)
+        ->and($version->prompt)->toBe('New panel prompt.');
 });
 
 test('dashboard can create an agent from the right rail', function () {

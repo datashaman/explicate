@@ -28,6 +28,9 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
     #[Url(as: 'action')]
     public ?string $panelAction = null;
 
+    #[Url(as: 'agent')]
+    public ?string $selectedAgentSlug = null;
+
     #[Url(as: 'panel')]
     public string $mobilePanel = 'topics';
 
@@ -42,6 +45,16 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
     public string $reasoningEffort = '';
 
     public string $prompt = '';
+
+    public string $selectedAgentName = '';
+
+    public string $selectedAgentProvider = '';
+
+    public string $selectedAgentModel = '';
+
+    public string $selectedAgentReasoningEffort = '';
+
+    public string $selectedAgentPrompt = '';
 
     public bool $showArchived = false;
 
@@ -63,6 +76,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         $this->normalizeMobilePanel();
         $this->syncSelectedMessageFields();
         $this->syncNewMessageTopic();
+        $this->syncSelectedAgentFields();
     }
 
     public function workspace(): ?\App\Models\Workspace
@@ -90,6 +104,20 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         }
 
         return $topic->messages()->where('slug', $this->selectedMessageSlug)->first();
+    }
+
+    public function selectedAgent(): ?Agent
+    {
+        $workspace = $this->workspace();
+
+        if (! $workspace || ! $this->selectedAgentSlug) {
+            return null;
+        }
+
+        return $workspace->agents()
+            ->with(['latestVersion', 'versions' => fn ($query) => $query->orderByDesc('version')])
+            ->where('slug', $this->selectedAgentSlug)
+            ->first();
     }
 
     public function isCreatingMessage(): bool
@@ -210,10 +238,41 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         return $provider?->supportsReasoningEffort() ?? false;
     }
 
+    /** @return list<string> */
+    #[Computed]
+    public function selectedAgentAvailableModels(): array
+    {
+        if (! $this->selectedAgentProvider) {
+            return [];
+        }
+
+        $provider = Provider::tryFrom($this->selectedAgentProvider);
+
+        return $provider ? $provider->models() : [];
+    }
+
+    #[Computed]
+    public function selectedAgentShowReasoningEffort(): bool
+    {
+        if (! $this->selectedAgentProvider) {
+            return false;
+        }
+
+        $provider = Provider::tryFrom($this->selectedAgentProvider);
+
+        return $provider?->supportsReasoningEffort() ?? false;
+    }
+
     public function updatedProvider(): void
     {
         $this->model = '';
         $this->reasoningEffort = '';
+    }
+
+    public function updatedSelectedAgentProvider(): void
+    {
+        $this->selectedAgentModel = '';
+        $this->selectedAgentReasoningEffort = '';
     }
 
     public function updatedMobilePanel(): void
@@ -237,6 +296,15 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         }
 
         $this->syncSelectedMessageFields();
+    }
+
+    public function updatedSelectedAgentSlug(): void
+    {
+        if ($this->selectedAgentSlug) {
+            $this->mobilePanel = 'agents';
+        }
+
+        $this->syncSelectedAgentFields();
     }
 
     public function updatedPanelAction(): void
@@ -397,6 +465,65 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         Flux::toast(variant: 'success', text: __('Agent removed.'));
     }
 
+    public function openAgent(string $agentSlug): void
+    {
+        $workspace = $this->workspace();
+
+        abort_unless($workspace, 403);
+
+        $agent = $workspace->agents()->where('slug', $agentSlug)->firstOrFail();
+
+        $this->selectedAgentSlug = $agent->slug;
+        $this->mobilePanel = 'agents';
+        $this->syncSelectedAgentFields();
+    }
+
+    public function closeAgent(): void
+    {
+        $this->selectedAgentSlug = null;
+        $this->syncSelectedAgentFields();
+    }
+
+    public function saveSelectedAgentDetails(): void
+    {
+        $agent = $this->selectedAgent();
+
+        abort_unless($agent, 404);
+
+        $validated = $this->validate([
+            'selectedAgentName' => ['required', 'string', 'max:255'],
+        ]);
+
+        $agent->update(['name' => $validated['selectedAgentName']]);
+
+        $this->selectedAgentSlug = $agent->fresh()->slug;
+
+        Flux::toast(variant: 'success', text: __('Agent saved.'));
+    }
+
+    public function saveSelectedAgentVersion(): void
+    {
+        $agent = $this->selectedAgent();
+
+        abort_unless($agent, 404);
+
+        $validated = $this->validate([
+            'selectedAgentProvider' => ['required', 'string', 'in:'.implode(',', array_column(Provider::cases(), 'value'))],
+            'selectedAgentModel' => ['required', 'string', 'max:255'],
+            'selectedAgentReasoningEffort' => ['nullable', 'string', 'in:'.implode(',', array_column(ReasoningEffort::cases(), 'value'))],
+            'selectedAgentPrompt' => ['nullable', 'string'],
+        ]);
+
+        $agent->versions()->create([
+            'provider' => $validated['selectedAgentProvider'],
+            'model' => $validated['selectedAgentModel'],
+            'reasoning_effort' => $validated['selectedAgentReasoningEffort'] ?: null,
+            'prompt' => $validated['selectedAgentPrompt'] ?: null,
+        ]);
+
+        Flux::toast(variant: 'success', text: __('Version saved.'));
+    }
+
     public function saveSelectedMessage(): void
     {
         $message = $this->selectedMessage();
@@ -476,6 +603,18 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             $this->newMessageTopicId = $topic->id;
         }
     }
+
+    private function syncSelectedAgentFields(): void
+    {
+        $agent = $this->selectedAgent();
+        $latest = $agent?->latestVersion;
+
+        $this->selectedAgentName = $agent?->name ?? '';
+        $this->selectedAgentProvider = $latest?->provider->value ?? '';
+        $this->selectedAgentModel = $latest?->model ?? '';
+        $this->selectedAgentReasoningEffort = $latest?->reasoning_effort?->value ?? '';
+        $this->selectedAgentPrompt = $latest?->prompt ?? '';
+    }
 }; ?>
 
 @php
@@ -488,7 +627,11 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             $hasSelectedTopic = (bool) $this->selectedTopic();
         @endphp
 
-        <div class="grid grid-cols-1 items-stretch gap-3 xl:flex-1 xl:auto-rows-fr xl:grid-cols-[16rem_minmax(0,1fr)_19rem]">
+        <div @class([
+            'grid grid-cols-1 items-stretch gap-3 xl:flex-1 xl:auto-rows-fr',
+            'xl:grid-cols-[16rem_minmax(0,1fr)_32rem]' => $this->selectedAgent(),
+            'xl:grid-cols-[16rem_minmax(0,1fr)_19rem]' => ! $this->selectedAgent(),
+        ])>
             <section
                 id="topics-panel"
                 data-mobile-panel="topics"
@@ -706,17 +849,130 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                     'hidden xl:block' => $this->mobilePanel !== 'agents',
                 ])
             >
-                @include('partials.workspace-agents-rail', [
-                    'agents' => $this->agents(),
-                    'createModal' => 'new-dashboard-agent',
-                    'panelId' => 'agents-panel',
-                    'asideClass' => 'xl:h-full',
-                    'containerClass' => $mobilePanelMinHeight,
-                    'sticky' => false,
-                    'assignedAgentIds' => $this->selectedTopic() ? $this->assignedAgentIds() : [],
-                    'assignAction' => $this->selectedTopic() ? 'assignAgent' : null,
-                    'unassignAction' => $this->selectedTopic() ? 'unassignAgent' : null,
-                ])
+                @if ($selectedDashboardAgent = $this->selectedAgent())
+                    <aside id="agents-panel" class="xl:h-full">
+                        <div class="{{ $mobilePanelMinHeight }} flex flex-col overflow-hidden rounded-xl border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] xl:h-full xl:min-h-[24rem] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none" data-test="dashboard-agent-panel">
+                            <div class="flex items-center justify-between gap-3 border-b border-neutral-300 bg-amber-50 px-4 py-3 dark:border-white/10 dark:bg-amber-500/10">
+                                <flux:heading size="sm" class="min-w-0 flex-1 truncate">{{ $selectedDashboardAgent->name }}</flux:heading>
+
+                                <flux:button wire:click="closeAgent" size="xs" variant="filled" icon="arrow-left">
+                                    {{ __('Agents') }}
+                                </flux:button>
+                            </div>
+
+                            <div class="flex flex-1 flex-col gap-4 overflow-auto px-4 py-4 xl:min-h-0">
+                                @if ($selectedDashboardAgent->latestVersion)
+                                    <div class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm dark:border-amber-300/20 dark:bg-amber-500/10">
+                                        <div class="font-medium text-amber-950 dark:text-amber-100">{{ __('Current') }}: v{{ $selectedDashboardAgent->latestVersion->version }}</div>
+                                        <div class="text-amber-700 dark:text-amber-200">
+                                            {{ $selectedDashboardAgent->latestVersion->provider->label() }} / {{ $selectedDashboardAgent->latestVersion->model }}
+                                        </div>
+                                    </div>
+                                @endif
+
+                                <div class="rounded-lg border border-neutral-200 dark:border-white/10">
+                                    <div class="border-b border-neutral-100 px-4 py-3 dark:border-white/5">
+                                        <flux:heading size="sm">{{ __('Agent details') }}</flux:heading>
+                                    </div>
+
+                                    <form wire:submit="saveSelectedAgentDetails" class="space-y-4 p-4">
+                                        <flux:input wire:model="selectedAgentName" :label="__('Name')" type="text" required />
+
+                                        <div class="flex justify-end">
+                                            <flux:button type="submit" variant="filled">{{ __('Save agent') }}</flux:button>
+                                        </div>
+                                    </form>
+                                </div>
+
+                                <div class="rounded-lg border border-neutral-200 dark:border-white/10">
+                                    <div class="border-b border-neutral-100 px-4 py-3 dark:border-white/5">
+                                        <flux:heading size="sm">{{ __('New version') }}</flux:heading>
+                                    </div>
+
+                                    <form wire:submit="saveSelectedAgentVersion" class="space-y-4 p-4">
+                                        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                            <flux:select wire:model.live="selectedAgentProvider" :label="__('Provider')" placeholder="{{ __('Select provider…') }}" required>
+                                                @foreach (Provider::cases() as $providerOption)
+                                                    <flux:select.option :value="$providerOption->value">{{ $providerOption->label() }}</flux:select.option>
+                                                @endforeach
+                                            </flux:select>
+
+                                            <flux:select wire:model="selectedAgentModel" :label="__('Model')" placeholder="{{ __('Select model…') }}" :disabled="!$selectedAgentProvider" required>
+                                                @foreach ($this->selectedAgentAvailableModels as $availableModel)
+                                                    <flux:select.option :value="$availableModel">{{ $availableModel }}</flux:select.option>
+                                                @endforeach
+                                            </flux:select>
+                                        </div>
+
+                                        @if ($this->selectedAgentShowReasoningEffort)
+                                            <flux:select wire:model="selectedAgentReasoningEffort" :label="__('Reasoning effort')" placeholder="{{ __('Select effort…') }}">
+                                                <flux:select.option value="">{{ __('None') }}</flux:select.option>
+                                                @foreach (ReasoningEffort::cases() as $effort)
+                                                    <flux:select.option :value="$effort->value">{{ $effort->label() }}</flux:select.option>
+                                                @endforeach
+                                            </flux:select>
+                                        @endif
+
+                                        <flux:textarea wire:model="selectedAgentPrompt" :label="__('Prompt')" rows="7" :placeholder="__('System prompt…')" />
+
+                                        <div class="flex justify-end">
+                                            <flux:button type="submit" variant="primary">{{ __('Save version') }}</flux:button>
+                                        </div>
+                                    </form>
+                                </div>
+
+                                <div class="rounded-lg border border-neutral-200 dark:border-white/10">
+                                    <div class="border-b border-neutral-100 px-4 py-3 dark:border-white/5">
+                                        <flux:heading size="sm">{{ __('Version history') }}</flux:heading>
+                                    </div>
+
+                                    @if ($selectedDashboardAgent->versions->isEmpty())
+                                        <div class="px-4 py-6 text-center">
+                                            <flux:text class="text-sm text-neutral-400 dark:text-neutral-600">{{ __('No versions yet.') }}</flux:text>
+                                        </div>
+                                    @else
+                                        <div class="divide-y divide-neutral-100 dark:divide-white/5">
+                                            @foreach ($selectedDashboardAgent->versions as $version)
+                                                <div class="px-4 py-3">
+                                                    <div class="flex items-center justify-between gap-3">
+                                                        <flux:badge color="zinc" size="sm">v{{ $version->version }}</flux:badge>
+                                                        <flux:text class="text-xs text-neutral-400">{{ $version->created_at->diffForHumans() }}</flux:text>
+                                                    </div>
+                                                    <div class="mt-1.5 space-y-0.5">
+                                                        <flux:text class="text-xs text-neutral-600 dark:text-neutral-400">
+                                                            {{ $version->provider->label() }} / {{ $version->model }}
+                                                        </flux:text>
+                                                        @if ($version->reasoning_effort)
+                                                            <flux:text class="text-xs text-neutral-500">
+                                                                {{ __('Reasoning:') }} {{ $version->reasoning_effort->label() }}
+                                                            </flux:text>
+                                                        @endif
+                                                        @if ($version->prompt)
+                                                            <flux:text class="line-clamp-2 text-xs text-neutral-400">{{ $version->prompt }}</flux:text>
+                                                        @endif
+                                                    </div>
+                                                </div>
+                                            @endforeach
+                                        </div>
+                                    @endif
+                                </div>
+                            </div>
+                        </div>
+                    </aside>
+                @else
+                    @include('partials.workspace-agents-rail', [
+                        'agents' => $this->agents(),
+                        'createModal' => 'new-dashboard-agent',
+                        'panelId' => 'agents-panel',
+                        'asideClass' => 'xl:h-full',
+                        'containerClass' => $mobilePanelMinHeight,
+                        'sticky' => false,
+                        'assignedAgentIds' => $this->selectedTopic() ? $this->assignedAgentIds() : [],
+                        'assignAction' => $this->selectedTopic() ? 'assignAgent' : null,
+                        'unassignAction' => $this->selectedTopic() ? 'unassignAgent' : null,
+                        'selectAction' => 'openAgent',
+                    ])
+                @endif
             </div>
         </div>
 
