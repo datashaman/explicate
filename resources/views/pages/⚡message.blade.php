@@ -10,6 +10,7 @@ use Flux\Flux;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
@@ -80,7 +81,9 @@ new #[Layout('layouts::workspace'), Title('Message')] class extends Component {
     #[Computed]
     public function availableRecipients(): \Illuminate\Support\Collection
     {
-        return $this->availablePrincipals;
+        return $this->availablePrincipals
+            ->where('type', Principal::TypeUser)
+            ->values();
     }
 
     /**
@@ -102,13 +105,17 @@ new #[Layout('layouts::workspace'), Title('Message')] class extends Component {
     {
         abort_unless($this->message->status === MessageStatus::Draft, 403);
 
+        $workspace = Auth::user()->currentWorkspace;
+
+        abort_unless($workspace, 403);
+
         $this->normalizeRecipient();
 
         $validated = $this->validate([
             'title' => ['required', 'string', 'max:255'],
             'body' => ['nullable', 'string'],
             'target' => ['required', 'string', 'in:topic,principal'],
-            'recipientPrincipalId' => ['nullable', 'required_if:target,principal', 'integer'],
+            'recipientPrincipalId' => ['nullable', 'required_if:target,principal', 'integer', $this->userRecipientRule($workspace->id)],
             'agentIds' => ['array'],
             'agentIds.*' => ['integer'],
         ], [], [
@@ -136,13 +143,17 @@ new #[Layout('layouts::workspace'), Title('Message')] class extends Component {
     {
         abort_unless($this->message->status === MessageStatus::Draft, 403);
 
+        $workspace = Auth::user()->currentWorkspace;
+
+        abort_unless($workspace, 403);
+
         $this->normalizeRecipient();
 
         $validated = $this->validate([
             'title' => ['required', 'string', 'max:255'],
             'body' => ['nullable', 'string'],
             'target' => ['required', 'string', 'in:topic,principal'],
-            'recipientPrincipalId' => ['nullable', 'required_if:target,principal', 'integer'],
+            'recipientPrincipalId' => ['nullable', 'required_if:target,principal', 'integer', $this->userRecipientRule($workspace->id)],
             'agentIds' => ['array'],
             'agentIds.*' => ['integer'],
         ], [], [
@@ -150,10 +161,6 @@ new #[Layout('layouts::workspace'), Title('Message')] class extends Component {
             'recipientPrincipalId' => __('recipient'),
             'agentIds' => __('requested agents'),
         ]);
-
-        $workspace = Auth::user()->currentWorkspace;
-
-        abort_unless($workspace, 403);
 
         $this->message->update([
             'title' => $validated['title'],
@@ -256,6 +263,7 @@ new #[Layout('layouts::workspace'), Title('Message')] class extends Component {
         abort_unless($workspace, 403);
 
         return $workspace->principals()
+            ->where('type', Principal::TypeUser)
             ->whereKey($validated['recipientPrincipalId'])
             ->firstOrFail()
             ->id;
@@ -269,7 +277,14 @@ new #[Layout('layouts::workspace'), Title('Message')] class extends Component {
             return;
         }
 
-        $this->recipientPrincipalId = $this->recipientPrincipalId ?: $this->availablePrincipals->first()?->id;
+        $this->recipientPrincipalId = $this->recipientPrincipalId ?: $this->availableRecipients->first()?->id;
+    }
+
+    private function userRecipientRule(int $workspaceId): \Illuminate\Validation\Rules\Exists
+    {
+        return Rule::exists('principals', 'id')
+            ->where('workspace_id', $workspaceId)
+            ->where('type', Principal::TypeUser);
     }
 }; ?>
 
@@ -293,36 +308,17 @@ new #[Layout('layouts::workspace'), Title('Message')] class extends Component {
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-[10rem_minmax(0,1fr)]">
-                        <flux:select wire:model.live="target" :label="__('To')" required>
-                            <flux:select.option value="topic">{{ __('Topic') }}</flux:select.option>
-                            <flux:select.option value="principal">{{ __('Principal') }}</flux:select.option>
-                        </flux:select>
-
-                        @if ($target === 'principal')
-                            <flux:select wire:model="recipientPrincipalId" :label="__('Recipient')" placeholder="{{ __('Select a principal…') }}" required>
-                                @foreach ($this->availableRecipients as $recipient)
-                                    <flux:select.option :value="$recipient->id">
-                                        {{ $recipient->label() }} · {{ $recipient->type === \App\Models\Principal::TypeAgent ? __('Agent') : __('User') }}
-                                    </flux:select.option>
-                                @endforeach
-                            </flux:select>
-                        @else
-                            <flux:input :label="__('Recipient')" :value="$topic->name" readonly />
-                        @endif
-                    </div>
-
-                    @if ($this->availableAgents->isNotEmpty())
-                        <div class="flex flex-col gap-2">
-                            <flux:label>{{ __('Request agent work') }}</flux:label>
-
-                            <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                                @foreach ($this->availableAgents as $agent)
-                                    <flux:checkbox wire:model="agentIds" :value="$agent->id" :label="$agent->name" />
-                                @endforeach
-                            </div>
-                        </div>
-                    @endif
+                    @include('partials.message-routing-fields', [
+                        'targetModel' => 'target',
+                        'targetValue' => $target,
+                        'topicName' => $topic->name,
+                        'recipientModel' => 'recipientPrincipalId',
+                        'agentIdsModel' => 'agentIds',
+                        'availableRecipients' => $this->availableRecipients,
+                        'availableAgents' => $this->availableAgents,
+                        'canChangeTopic' => false,
+                        'testPrefix' => 'message',
+                    ])
 
                     <flux:textarea wire:model="body" :placeholder="__('Write something...')" rows="12" />
 

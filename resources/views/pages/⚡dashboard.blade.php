@@ -11,6 +11,7 @@ use Flux\Flux;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
@@ -448,7 +449,9 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
     #[Computed]
     public function availableRecipients(): \Illuminate\Support\Collection
     {
-        return $this->availablePrincipals;
+        return $this->availablePrincipals
+            ->where('type', Principal::TypeUser)
+            ->values();
     }
 
     /** @return list<string> */
@@ -671,7 +674,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             'newMessageBody' => ['nullable', 'string'],
             'newMessageTarget' => ['required', 'string', 'in:topic,principal'],
             'newMessageTopicId' => ['required', 'integer'],
-            'newMessageRecipientPrincipalId' => ['nullable', 'required_if:newMessageTarget,principal', 'integer'],
+            'newMessageRecipientPrincipalId' => ['nullable', 'required_if:newMessageTarget,principal', 'integer', $this->userRecipientRule($workspace->id)],
             'newMessageAgentIds' => ['array'],
             'newMessageAgentIds.*' => ['integer'],
             'newMessageUploads.*' => ['file', 'max:51200'],
@@ -691,6 +694,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
         if ($validated['newMessageTarget'] === 'principal') {
             $recipient = $workspace->principals()
+                ->where('type', Principal::TypeUser)
                 ->whereKey($validated['newMessageRecipientPrincipalId'])
                 ->firstOrFail();
 
@@ -827,11 +831,15 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
         abort_unless($message && $message->status === MessageStatus::Draft, 403);
 
+        $workspace = $this->workspace();
+
+        abort_unless($workspace, 403);
+
         $validated = $this->validate([
             'messageTitle' => ['required', 'string', 'max:255'],
             'messageBody' => ['nullable', 'string'],
             'messageTarget' => ['required', 'string', 'in:topic,principal'],
-            'messageRecipientPrincipalId' => ['nullable', 'required_if:messageTarget,principal', 'integer'],
+            'messageRecipientPrincipalId' => ['nullable', 'required_if:messageTarget,principal', 'integer', $this->userRecipientRule($workspace->id)],
             'messageAgentIds' => ['array'],
             'messageAgentIds.*' => ['integer'],
         ], [], [
@@ -842,14 +850,11 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             'messageAgentIds' => __('requested agents'),
         ]);
 
-        $workspace = $this->workspace();
-
-        abort_unless($workspace, 403);
-
         $recipientPrincipalId = null;
 
         if ($validated['messageTarget'] === 'principal') {
             $recipient = $workspace->principals()
+                ->where('type', Principal::TypeUser)
                 ->whereKey($validated['messageRecipientPrincipalId'])
                 ->firstOrFail();
 
@@ -1029,7 +1034,14 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             return null;
         }
 
-        return $currentPrincipalId ?: $this->availablePrincipals->first()?->id;
+        return $currentPrincipalId ?: $this->availableRecipients->first()?->id;
+    }
+
+    private function userRecipientRule(int $workspaceId): \Illuminate\Validation\Rules\Exists
+    {
+        return Rule::exists('principals', 'id')
+            ->where('workspace_id', $workspaceId)
+            ->where('type', Principal::TypeUser);
     }
 
     private function syncSelectedAgentFields(): void
@@ -1146,42 +1158,20 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
                         <div class="flex flex-1 flex-col gap-6 overflow-auto px-4 py-4 xl:min-h-0" data-test="dashboard-message-create-panel">
                             <form id="dashboard-new-message-form" wire:submit="createDashboardMessage" class="flex flex-col gap-6">
-                                <div class="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_10rem_16rem]">
-                                    <flux:input wire:model="newMessageTitle" :label="__('Title')" required autofocus data-test="new-message-title" />
+                                <flux:input wire:model="newMessageTitle" :label="__('Title')" required autofocus data-test="new-message-title" />
 
-                                    <flux:select wire:model.live="newMessageTarget" :label="__('To')" required data-test="new-message-target">
-                                        <flux:select.option value="topic">{{ __('Topic') }}</flux:select.option>
-                                        <flux:select.option value="principal">{{ __('Principal') }}</flux:select.option>
-                                    </flux:select>
-
-                                    <flux:select wire:model="newMessageTopicId" :label="__('Topic')" placeholder="{{ __('Select a topic…') }}" required data-test="new-message-topic">
-                                        @foreach ($this->availableTopics as $topic)
-                                            <flux:select.option :value="$topic->id">{{ $topic->name }}</flux:select.option>
-                                        @endforeach
-                                    </flux:select>
-                                </div>
-
-                                @if ($newMessageTarget === 'principal')
-                                    <flux:select wire:model="newMessageRecipientPrincipalId" :label="__('Recipient')" placeholder="{{ __('Select a principal…') }}" required data-test="new-message-recipient">
-                                        @foreach ($this->availableRecipients as $recipient)
-                                            <flux:select.option :value="$recipient->id">
-                                                {{ $recipient->label() }} · {{ $recipient->type === \App\Models\Principal::TypeAgent ? __('Agent') : __('User') }}
-                                            </flux:select.option>
-                                        @endforeach
-                                    </flux:select>
-                                @endif
-
-                                @if ($this->newMessageAssignableAgents()->isNotEmpty())
-                                    <div class="flex flex-col gap-2">
-                                        <flux:label>{{ __('Request agent work') }}</flux:label>
-
-                                        <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                                            @foreach ($this->newMessageAssignableAgents() as $agent)
-                                                <flux:checkbox wire:model="newMessageAgentIds" :value="$agent->id" :label="$agent->name" data-test="new-message-agent-{{ $agent->slug }}" />
-                                            @endforeach
-                                        </div>
-                                    </div>
-                                @endif
+                                @include('partials.message-routing-fields', [
+                                    'targetModel' => 'newMessageTarget',
+                                    'targetValue' => $newMessageTarget,
+                                    'topicModel' => 'newMessageTopicId',
+                                    'recipientModel' => 'newMessageRecipientPrincipalId',
+                                    'agentIdsModel' => 'newMessageAgentIds',
+                                    'availableTopics' => $this->availableTopics,
+                                    'availableRecipients' => $this->availableRecipients,
+                                    'availableAgents' => $this->newMessageAssignableAgents(),
+                                    'canChangeTopic' => true,
+                                    'testPrefix' => 'new-message',
+                                ])
 
                                 <flux:textarea wire:model="newMessageBody" :label="__('Body')" :placeholder="__('Write something...')" rows="12" data-test="new-message-body" />
                             </form>
@@ -1237,36 +1227,17 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                                         </div>
                                     </div>
 
-                                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-[10rem_minmax(0,1fr)]">
-                                        <flux:select wire:model.live="messageTarget" :label="__('To')" required>
-                                            <flux:select.option value="topic">{{ __('Topic') }}</flux:select.option>
-                                            <flux:select.option value="principal">{{ __('Principal') }}</flux:select.option>
-                                        </flux:select>
-
-                                        @if ($messageTarget === 'principal')
-                                            <flux:select wire:model="messageRecipientPrincipalId" :label="__('Recipient')" placeholder="{{ __('Select a principal…') }}" required>
-                                                @foreach ($this->availableRecipients as $recipient)
-                                                    <flux:select.option :value="$recipient->id">
-                                                        {{ $recipient->label() }} · {{ $recipient->type === \App\Models\Principal::TypeAgent ? __('Agent') : __('User') }}
-                                                    </flux:select.option>
-                                                @endforeach
-                                            </flux:select>
-                                        @else
-                                            <flux:input :label="__('Recipient')" :value="$selectedDashboardMessage->topic->name" readonly />
-                                        @endif
-                                    </div>
-
-                                    @if ($this->selectedMessageAssignableAgents()->isNotEmpty())
-                                        <div class="flex flex-col gap-2">
-                                            <flux:label>{{ __('Request agent work') }}</flux:label>
-
-                                            <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                                                @foreach ($this->selectedMessageAssignableAgents() as $agent)
-                                                    <flux:checkbox wire:model="messageAgentIds" :value="$agent->id" :label="$agent->name" />
-                                                @endforeach
-                                            </div>
-                                        </div>
-                                    @endif
+                                    @include('partials.message-routing-fields', [
+                                        'targetModel' => 'messageTarget',
+                                        'targetValue' => $messageTarget,
+                                        'topicName' => $selectedDashboardMessage->topic->name,
+                                        'recipientModel' => 'messageRecipientPrincipalId',
+                                        'agentIdsModel' => 'messageAgentIds',
+                                        'availableRecipients' => $this->availableRecipients,
+                                        'availableAgents' => $this->selectedMessageAssignableAgents(),
+                                        'canChangeTopic' => false,
+                                        'testPrefix' => 'message',
+                                    ])
 
                                     <flux:textarea wire:model="messageBody" :placeholder="__('Write something...')" rows="12" />
                                 </form>

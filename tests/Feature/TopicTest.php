@@ -400,7 +400,7 @@ test('dashboard can save selected draft message', function () {
         ->body->toBe('Updated body');
 });
 
-test('dashboard can change a draft message recipient to an agent principal', function () {
+test('dashboard cannot change a draft message recipient to an agent principal', function () {
     [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
@@ -420,11 +420,11 @@ test('dashboard can change a draft message recipient to an agent principal', fun
         ->set('messageTarget', 'principal')
         ->set('messageRecipientPrincipalId', $agentPrincipal->id)
         ->call('saveSelectedMessage')
-        ->assertHasNoErrors();
+        ->assertHasErrors(['messageRecipientPrincipalId']);
 
     expect($message->fresh())
-        ->title->toBe('Agent draft')
-        ->recipient_principal_id->toBe($agentPrincipal->id);
+        ->title->toBe('Draft note')
+        ->recipient_principal_id->toBeNull();
 });
 
 test('dashboard published message panel shows sender and recipient principals', function () {
@@ -819,7 +819,7 @@ test('dashboard can send a new message to a user', function () {
         ->and($message->status)->toBe(MessageStatus::Published);
 });
 
-test('dashboard can send a new message to an agent principal', function () {
+test('dashboard cannot send a new message to an agent principal', function () {
     [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
@@ -837,15 +837,9 @@ test('dashboard can send a new message to an agent principal', function () {
         ->set('newMessageTopicId', $topic->id)
         ->set('newMessageRecipientPrincipalId', $agentPrincipal->id)
         ->call('sendDashboardMessage')
-        ->assertHasNoErrors();
+        ->assertHasErrors(['newMessageRecipientPrincipalId']);
 
-    $message = $topic->messages()->where('title', 'Agent note')->first();
-
-    expect($message)->not->toBeNull()
-        ->and($message->sender_principal_id)->toBe($workspace->principalForUser($user)->id)
-        ->and($message->recipient_principal_id)->toBe($agentPrincipal->id)
-        ->and($message->recipient->agent->name)->toBe('Researcher')
-        ->and($message->status)->toBe(MessageStatus::Published);
+    expect($topic->messages()->where('title', 'Agent note')->exists())->toBeFalse();
 });
 
 test('dashboard defaults a principal recipient when none reached the server', function () {
