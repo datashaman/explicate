@@ -1126,7 +1126,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
                                     <div class="flex shrink-0 items-center gap-2">
                                         @if ($selectedDashboardPost->status === PostStatus::Published)
-                                            <flux:button wire:click="unpublishSelectedPost" size="sm" icon="pencil-square">{{ __('Move to drafts') }}</flux:button>
+                                            <flux:button wire:click="unpublishSelectedPost" size="sm" icon="pencil-square" icon:variant="outline">{{ __('Move to drafts') }}</flux:button>
                                             <flux:button wire:click="archiveSelectedPost" size="sm" icon="archive-box" icon:variant="outline">{{ __('Archive') }}</flux:button>
                                         @elseif ($selectedDashboardPost->status === PostStatus::Archived)
                                             <flux:badge :color="$selectedDashboardPost->status->color()" size="sm">{{ $selectedDashboardPost->status->label() }}</flux:badge>
