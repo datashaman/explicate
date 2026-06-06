@@ -8,18 +8,25 @@ use App\Models\Message;
 use App\Models\Topic;
 use Flux\Flux;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Attributes\Url;
 use Livewire\Component;
+use Livewire\WithFileUploads;
 
 new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component {
+    use WithFileUploads;
+
     #[Url(as: 'topic')]
     public ?string $selectedTopicSlug = null;
 
     #[Url(as: 'message')]
     public ?string $selectedMessageSlug = null;
+
+    #[Url(as: 'action')]
+    public ?string $panelAction = null;
 
     #[Url(as: 'panel')]
     public string $mobilePanel = 'topics';
@@ -42,10 +49,20 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
     public string $messageBody = '';
 
+    public string $newMessageTitle = '';
+
+    public string $newMessageBody = '';
+
+    public ?int $newMessageTopicId = null;
+
+    /** @var array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile> */
+    public array $newMessageUploads = [];
+
     public function mount(): void
     {
         $this->normalizeMobilePanel();
         $this->syncSelectedMessageFields();
+        $this->syncNewMessageTopic();
     }
 
     public function workspace(): ?\App\Models\Workspace
@@ -73,6 +90,11 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         }
 
         return $topic->messages()->where('slug', $this->selectedMessageSlug)->first();
+    }
+
+    public function isCreatingMessage(): bool
+    {
+        return $this->panelAction === 'new-message';
     }
 
     /**
@@ -148,6 +170,21 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             ->all();
     }
 
+    /**
+     * @return \Illuminate\Database\Eloquent\Collection<int, Topic>
+     */
+    #[Computed]
+    public function availableTopics(): \Illuminate\Database\Eloquent\Collection
+    {
+        $workspace = $this->workspace();
+
+        if (! $workspace) {
+            return new \Illuminate\Database\Eloquent\Collection();
+        }
+
+        return $workspace->topics()->get();
+    }
+
     /** @return list<string> */
     #[Computed]
     public function availableModels(): array
@@ -189,12 +226,25 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         $this->selectedMessageSlug = null;
         $this->messageTitle = '';
         $this->messageBody = '';
+        $this->syncNewMessageTopic();
         $this->normalizeMobilePanel();
     }
 
     public function updatedSelectedMessageSlug(): void
     {
+        if ($this->selectedMessageSlug) {
+            $this->panelAction = null;
+        }
+
         $this->syncSelectedMessageFields();
+    }
+
+    public function updatedPanelAction(): void
+    {
+        if ($this->isCreatingMessage()) {
+            $this->selectedMessageSlug = null;
+            $this->syncNewMessageTopic();
+        }
     }
 
     public function showMobilePanel(string $panel): void
@@ -261,6 +311,53 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         Flux::modal('new-dashboard-agent')->close();
 
         Flux::toast(variant: 'success', text: __('Agent created.'));
+    }
+
+    public function createDashboardMessage(): void
+    {
+        $workspace = $this->workspace();
+
+        abort_unless($workspace, 403);
+
+        $validated = $this->validate([
+            'newMessageTitle' => ['required', 'string', 'max:255'],
+            'newMessageBody' => ['nullable', 'string'],
+            'newMessageTopicId' => ['required', 'integer'],
+            'newMessageUploads.*' => ['file', 'max:51200'],
+        ]);
+
+        $topic = $workspace->topics()->findOrFail($validated['newMessageTopicId']);
+
+        $message = $topic->messages()->create([
+            'title' => $validated['newMessageTitle'],
+            'body' => $validated['newMessageBody'] ?: null,
+        ]);
+
+        foreach ($this->newMessageUploads as $upload) {
+            $filename = $upload->getClientOriginalName();
+            $path = $upload->storeAs(
+                'attachments/'.Str::uuid(),
+                $filename,
+                'public'
+            );
+
+            $message->attachments()->create([
+                'filename' => $filename,
+                'path' => $path,
+                'mime_type' => $upload->getMimeType(),
+                'size' => $upload->getSize(),
+            ]);
+        }
+
+        $this->selectedTopicSlug = $topic->slug;
+        $this->selectedMessageSlug = $message->slug;
+        $this->panelAction = null;
+        $this->mobilePanel = 'messages';
+        $this->reset('newMessageTitle', 'newMessageBody', 'newMessageUploads');
+        $this->newMessageTopicId = $topic->id;
+        $this->syncSelectedMessageFields();
+
+        Flux::toast(variant: 'success', text: __('Message created.'));
     }
 
     public function assignAgent(int $agentId): void
@@ -359,6 +456,15 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         $this->messageTitle = $message?->title ?? '';
         $this->messageBody = $message?->body ?? '';
     }
+
+    private function syncNewMessageTopic(): void
+    {
+        $topic = $this->selectedTopic();
+
+        if ($topic) {
+            $this->newMessageTopicId = $topic->id;
+        }
+    }
 }; ?>
 
 @php
@@ -433,7 +539,59 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                         'hidden xl:flex' => $this->mobilePanel !== 'messages',
                     ])
                 >
-                    @if ($selectedDashboardMessage)
+                    @if ($this->isCreatingMessage())
+                        <div class="flex items-center justify-between gap-3 border-b border-neutral-300 bg-emerald-50 px-4 py-3 dark:border-white/10 dark:bg-emerald-500/10">
+                            <flux:heading size="sm" class="min-w-0 flex-1 truncate">{{ __('New message') }}</flux:heading>
+
+                            <flux:button :href="route('dashboard', ['topic' => $this->selectedTopic()->slug, 'panel' => 'messages'])" wire:navigate size="xs" variant="filled" icon="arrow-left">
+                                {{ __('Messages') }}
+                            </flux:button>
+                        </div>
+
+                        <div class="flex flex-1 flex-col gap-6 overflow-auto px-4 py-4 xl:min-h-0" data-test="dashboard-message-create-panel">
+                            <form wire:submit="createDashboardMessage" class="flex flex-col gap-6">
+                                <div class="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_16rem]">
+                                    <flux:input wire:model="newMessageTitle" :label="__('Title')" required autofocus />
+
+                                    <flux:select wire:model="newMessageTopicId" :label="__('Topic')" placeholder="{{ __('Select a topic…') }}" required>
+                                        @foreach ($this->availableTopics as $topic)
+                                            <flux:select.option :value="$topic->id">{{ $topic->name }}</flux:select.option>
+                                        @endforeach
+                                    </flux:select>
+                                </div>
+
+                                <flux:textarea wire:model="newMessageBody" :label="__('Body')" :placeholder="__('Write something...')" rows="12" />
+
+                                <div class="flex flex-col gap-3">
+                                    <flux:heading size="sm">{{ __('Attachments') }}</flux:heading>
+
+                                    <div x-data="{ uploading: false, progress: 0 }"
+                                         x-on:livewire-upload-start="uploading = true"
+                                         x-on:livewire-upload-finish="uploading = false"
+                                         x-on:livewire-upload-error="uploading = false"
+                                         x-on:livewire-upload-progress="progress = $event.detail.progress"
+                                         class="flex flex-col gap-2">
+                                        <flux:input type="file" wire:model="newMessageUploads" multiple />
+
+                                        <div x-show="uploading" class="h-1 w-full overflow-hidden rounded-full bg-neutral-100 dark:bg-white/10">
+                                            <div class="h-full rounded-full bg-blue-500 transition-all" :style="`width: ${progress}%`"></div>
+                                        </div>
+
+                                        @error('newMessageUploads.*')
+                                            <flux:error>{{ $message }}</flux:error>
+                                        @enderror
+                                    </div>
+                                </div>
+
+                                <div class="flex justify-end gap-2">
+                                    <flux:button :href="route('dashboard', ['topic' => $this->selectedTopic()->slug, 'panel' => 'messages'])" wire:navigate variant="filled">
+                                        {{ __('Cancel') }}
+                                    </flux:button>
+                                    <flux:button type="submit" variant="primary">{{ __('Create draft') }}</flux:button>
+                                </div>
+                            </form>
+                        </div>
+                    @elseif ($selectedDashboardMessage)
                         <div class="flex items-center justify-between gap-3 border-b border-neutral-300 bg-emerald-50 px-4 py-3 dark:border-white/10 dark:bg-emerald-500/10">
                             <flux:heading size="sm" class="min-w-0 flex-1 truncate">{{ $selectedDashboardMessage->title }}</flux:heading>
 
@@ -497,7 +655,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                             'icon' => 'document-text',
                             'iconClass' => 'size-12 text-neutral-400 group-hover:text-neutral-300',
                             'emptyText' => __('No messages'),
-                            'createHref' => route('messages.create', ['topic' => $this->selectedTopic()->slug]),
+                            'createHref' => route('dashboard', ['topic' => $this->selectedTopic()->slug, 'action' => 'new-message', 'panel' => 'messages']),
                             'createLabel' => __('New message'),
                             'showArchivedModel' => 'showArchived',
                             'toolbarClass' => 'border-b border-neutral-300 bg-emerald-50 px-4 py-3 dark:border-white/10 dark:bg-emerald-500/10',

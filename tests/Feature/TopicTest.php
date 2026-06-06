@@ -281,12 +281,56 @@ test('dashboard shows new message action', function () {
     $workspace = Workspace::factory()->for($user->currentTeam)->create();
     $user->switchWorkspace($workspace);
 
-    Topic::factory()->for($workspace)->create();
+    $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
 
     $this->actingAs($user)
-        ->get(route('dashboard'))
+        ->get(route('dashboard', ['topic' => $topic->slug]))
         ->assertOk()
+        ->assertSee(e(route('dashboard', ['topic' => $topic->slug, 'action' => 'new-message', 'panel' => 'messages'])), escape: false)
         ->assertDontSee(route('messages.create'), escape: false);
+});
+
+test('dashboard shows new message form in the main panel', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->for($user->currentTeam)->create();
+    $user->switchWorkspace($workspace);
+
+    $topic = Topic::factory()->for($workspace)->create(['name' => 'Design', 'slug' => 'design']);
+
+    $this->actingAs($user)
+        ->get(route('dashboard', ['topic' => $topic->slug, 'action' => 'new-message', 'panel' => 'messages']))
+        ->assertOk()
+        ->assertSee('data-test="dashboard-message-create-panel"', escape: false)
+        ->assertSee('New message')
+        ->assertSee('Create draft')
+        ->assertSee('Design');
+});
+
+test('dashboard can create a draft message in the main panel', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->for($user->currentTeam)->create();
+    $user->switchWorkspace($workspace);
+
+    $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::dashboard')
+        ->set('selectedTopicSlug', $topic->slug)
+        ->set('panelAction', 'new-message')
+        ->set('newMessageTitle', 'New draft')
+        ->set('newMessageBody', 'Draft body')
+        ->set('newMessageTopicId', $topic->id)
+        ->call('createDashboardMessage')
+        ->assertHasNoErrors()
+        ->assertSet('panelAction', null)
+        ->assertSet('selectedTopicSlug', $topic->slug)
+        ->assertSet('selectedMessageSlug', 'new-draft');
+
+    $message = $topic->messages()->where('title', 'New draft')->first();
+
+    expect($message)->not->toBeNull()
+        ->and($message->body)->toBe('Draft body');
 });
 
 test('dashboard shows mobile bottom navigation with topics active by default', function () {
