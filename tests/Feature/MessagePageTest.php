@@ -22,7 +22,10 @@ test('message page loads', function () {
     $this->actingAs($this->user)
         ->get(route('messages.show', ['topic' => $this->topic->slug, 'message' => $this->message->slug]))
         ->assertOk()
-        ->assertSee($this->message->title);
+        ->assertSee($this->message->title)
+        ->assertSee('data-test="message-panel"', escape: false)
+        ->assertSee('min-h-[calc(100dvh-4rem)]', escape: false)
+        ->assertDontSee('data-flux-breadcrumbs', escape: false);
 });
 
 test('message create page loads', function () {

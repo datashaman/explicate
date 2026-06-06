@@ -183,7 +183,59 @@ test('dashboard shows selected topic in the main panel', function () {
         ->assertOk()
         ->assertSee('Selected Topic')
         ->assertSee($selectedMessage->title)
+        ->assertSee(e(route('dashboard', ['topic' => $selectedTopic->slug, 'message' => $selectedMessage->slug, 'panel' => 'messages'])), escape: false)
+        ->assertDontSee(route('messages.show', ['topic' => $selectedTopic->slug, 'message' => $selectedMessage->slug]), escape: false)
         ->assertDontSee('Other message');
+});
+
+test('dashboard shows selected draft message in the main panel', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->for($user->currentTeam)->create();
+    $user->switchWorkspace($workspace);
+
+    $topic = Topic::factory()->for($workspace)->create(['name' => 'Design', 'slug' => 'design']);
+    $message = Message::factory()->for($topic)->create([
+        'title' => 'Draft brief',
+        'body' => 'Draft body',
+        'status' => MessageStatus::Draft,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('dashboard', ['topic' => $topic->slug, 'message' => $message->slug, 'panel' => 'messages']))
+        ->assertOk()
+        ->assertSee('data-test="dashboard-message-panel"', escape: false)
+        ->assertSee('Draft brief')
+        ->assertSee('Draft body')
+        ->assertDontSee('data-flux-breadcrumbs', escape: false)
+        ->assertSee('Save draft')
+        ->assertSee('Publish');
+});
+
+test('dashboard can save selected draft message', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->for($user->currentTeam)->create();
+    $user->switchWorkspace($workspace);
+
+    $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
+    $message = Message::factory()->for($topic)->create([
+        'title' => 'Draft brief',
+        'body' => 'Draft body',
+        'status' => MessageStatus::Draft,
+    ]);
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::dashboard')
+        ->set('selectedTopicSlug', $topic->slug)
+        ->set('selectedMessageSlug', $message->slug)
+        ->set('messageTitle', 'Updated brief')
+        ->set('messageBody', 'Updated body')
+        ->call('saveSelectedMessage')
+        ->assertHasNoErrors();
+
+    expect($message->fresh())
+        ->title->toBe('Updated brief')
+        ->body->toBe('Updated body');
 });
 
 test('dashboard shows workspace agents in the right rail', function () {

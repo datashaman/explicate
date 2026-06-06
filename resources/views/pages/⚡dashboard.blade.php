@@ -18,6 +18,9 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
     #[Url(as: 'topic')]
     public ?string $selectedTopicSlug = null;
 
+    #[Url(as: 'message')]
+    public ?string $selectedMessageSlug = null;
+
     #[Url(as: 'panel')]
     public string $mobilePanel = 'topics';
 
@@ -35,9 +38,14 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
     public bool $showArchived = false;
 
+    public string $messageTitle = '';
+
+    public string $messageBody = '';
+
     public function mount(): void
     {
         $this->normalizeMobilePanel();
+        $this->syncSelectedMessageFields();
     }
 
     public function workspace(): ?\App\Models\Workspace
@@ -54,6 +62,17 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         }
 
         return $workspace->topics()->where('slug', $this->selectedTopicSlug)->first();
+    }
+
+    public function selectedMessage(): ?Message
+    {
+        $topic = $this->selectedTopic();
+
+        if (! $topic || ! $this->selectedMessageSlug) {
+            return null;
+        }
+
+        return $topic->messages()->where('slug', $this->selectedMessageSlug)->first();
     }
 
     /**
@@ -119,7 +138,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             ->when(! $this->showArchived, fn ($query) => $query->where('status', '!=', MessageStatus::Archived))
             ->get()
             ->map(fn (Message $message) => [
-                'href' => route('messages.show', ['topic' => $topic->slug, 'message' => $message->slug]),
+                'href' => route('dashboard', ['topic' => $topic->slug, 'message' => $message->slug, 'panel' => 'messages']),
                 'name' => $message->title,
                 'badge' => [
                     'label' => $message->status->label(),
@@ -163,6 +182,19 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
     public function updatedMobilePanel(): void
     {
         $this->normalizeMobilePanel();
+    }
+
+    public function updatedSelectedTopicSlug(): void
+    {
+        $this->selectedMessageSlug = null;
+        $this->messageTitle = '';
+        $this->messageBody = '';
+        $this->normalizeMobilePanel();
+    }
+
+    public function updatedSelectedMessageSlug(): void
+    {
+        $this->syncSelectedMessageFields();
     }
 
     public function showMobilePanel(string $panel): void
@@ -256,6 +288,77 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
         Flux::toast(variant: 'success', text: __('Agent removed.'));
     }
+
+    public function saveSelectedMessage(): void
+    {
+        $message = $this->selectedMessage();
+
+        abort_unless($message && $message->status === MessageStatus::Draft, 403);
+
+        $validated = $this->validate([
+            'messageTitle' => ['required', 'string', 'max:255'],
+            'messageBody' => ['nullable', 'string'],
+        ]);
+
+        $message->update([
+            'title' => $validated['messageTitle'],
+            'body' => $validated['messageBody'],
+        ]);
+
+        $this->selectedMessageSlug = $message->fresh()->slug;
+
+        Flux::toast(variant: 'success', text: __('Saved.'));
+    }
+
+    public function publishSelectedMessage(): void
+    {
+        $message = $this->selectedMessage();
+
+        abort_unless($message && $message->status === MessageStatus::Draft, 403);
+
+        $this->saveSelectedMessage();
+
+        $message->fresh()->update(['status' => MessageStatus::Published]);
+    }
+
+    public function archiveSelectedMessage(): void
+    {
+        $message = $this->selectedMessage();
+
+        abort_unless($message, 404);
+
+        $message->update(['status' => MessageStatus::Archived]);
+    }
+
+    public function unpublishSelectedMessage(): void
+    {
+        $message = $this->selectedMessage();
+
+        abort_unless($message && $message->status === MessageStatus::Published, 403);
+
+        $message->update(['status' => MessageStatus::Draft]);
+
+        $this->syncSelectedMessageFields();
+    }
+
+    public function unarchiveSelectedMessage(): void
+    {
+        $message = $this->selectedMessage();
+
+        abort_unless($message && $message->status === MessageStatus::Archived, 403);
+
+        $message->update(['status' => MessageStatus::Draft]);
+
+        $this->syncSelectedMessageFields();
+    }
+
+    private function syncSelectedMessageFields(): void
+    {
+        $message = $this->selectedMessage();
+
+        $this->messageTitle = $message?->title ?? '';
+        $this->messageBody = $message?->body ?? '';
+    }
 }; ?>
 
 @php
@@ -320,6 +423,8 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             </section>
 
             @if ($this->selectedTopic())
+                @php $selectedDashboardMessage = $this->selectedMessage(); @endphp
+
                 <section
                     id="messages-panel"
                     data-mobile-panel="messages"
@@ -328,23 +433,78 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                         'hidden xl:flex' => $this->mobilePanel !== 'messages',
                     ])
                 >
-                    @include('partials.folder-view', [
-                        'breadcrumbs' => [
-                            ['label' => $this->workspace()->name, 'href' => route('dashboard')],
-                            ['label' => $this->selectedTopic()->name],
-                        ],
-                        'titleLabel' => __('Messages'),
-                        'items' => collect($this->selectedTopicItems()),
-                        'icon' => 'document-text',
-                        'iconClass' => 'size-12 text-neutral-400 group-hover:text-neutral-300',
-                        'emptyText' => __('No messages'),
-                        'createHref' => route('messages.create', ['topic' => $this->selectedTopic()->slug]),
-                        'createLabel' => __('New message'),
-                        'showArchivedModel' => 'showArchived',
-                        'toolbarClass' => 'border-b border-neutral-300 bg-emerald-50 px-4 py-3 dark:border-white/10 dark:bg-emerald-500/10',
-                        'rootClass' => 'flex flex-col xl:h-full',
-                        'contentClass' => 'overflow-auto px-4 py-4 xl:flex-1 xl:min-h-0',
-                    ])
+                    @if ($selectedDashboardMessage)
+                        <div class="flex items-center justify-between gap-3 border-b border-neutral-300 bg-emerald-50 px-4 py-3 dark:border-white/10 dark:bg-emerald-500/10">
+                            <flux:heading size="sm" class="min-w-0 flex-1 truncate">{{ $selectedDashboardMessage->title }}</flux:heading>
+
+                            <flux:button :href="route('dashboard', ['topic' => $this->selectedTopic()->slug, 'panel' => 'messages'])" wire:navigate size="xs" variant="filled" icon="arrow-left">
+                                {{ __('Messages') }}
+                            </flux:button>
+                        </div>
+
+                        <div class="flex flex-1 flex-col gap-6 overflow-auto px-4 py-4 xl:min-h-0" data-test="dashboard-message-panel">
+                            @if ($selectedDashboardMessage->status === MessageStatus::Draft)
+                                <form wire:submit="saveSelectedMessage" class="flex flex-col gap-4">
+                                    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                        <flux:input wire:model="messageTitle" class="flex-1" required />
+
+                                        <div class="flex shrink-0 items-center gap-2">
+                                            <flux:badge :color="$selectedDashboardMessage->status->color()" size="sm">{{ $selectedDashboardMessage->status->label() }}</flux:badge>
+                                            <flux:button wire:click="archiveSelectedMessage" type="button" size="sm" icon="archive-box">{{ __('Archive') }}</flux:button>
+                                            <flux:button wire:click="publishSelectedMessage" type="button" size="sm" variant="primary" icon="arrow-up-circle">{{ __('Publish') }}</flux:button>
+                                        </div>
+                                    </div>
+
+                                    <flux:textarea wire:model="messageBody" :placeholder="__('Write something...')" rows="12" />
+
+                                    <div class="flex justify-end">
+                                        <flux:button type="submit" size="sm" variant="filled">{{ __('Save draft') }}</flux:button>
+                                    </div>
+                                </form>
+                            @else
+                                <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                    <flux:heading size="xl" class="min-w-0 flex-1 truncate">{{ $selectedDashboardMessage->title }}</flux:heading>
+
+                                    <div class="flex shrink-0 items-center gap-2">
+                                        <flux:badge :color="$selectedDashboardMessage->status->color()" size="sm">{{ $selectedDashboardMessage->status->label() }}</flux:badge>
+
+                                        @if ($selectedDashboardMessage->status === MessageStatus::Published)
+                                            <flux:button wire:click="unpublishSelectedMessage" size="sm" icon="arrow-down-circle">{{ __('Unpublish') }}</flux:button>
+                                            <flux:button wire:click="archiveSelectedMessage" size="sm" icon="archive-box">{{ __('Archive') }}</flux:button>
+                                        @elseif ($selectedDashboardMessage->status === MessageStatus::Archived)
+                                            <flux:button wire:click="unarchiveSelectedMessage" size="sm" icon="archive-box-x-mark">{{ __('Unarchive') }}</flux:button>
+                                        @endif
+                                    </div>
+                                </div>
+
+                                <div>
+                                    @if ($selectedDashboardMessage->body)
+                                        <flux:text class="whitespace-pre-wrap text-sm leading-relaxed text-neutral-700 dark:text-neutral-300">{{ $selectedDashboardMessage->body }}</flux:text>
+                                    @else
+                                        <flux:text class="text-sm text-neutral-400 dark:text-neutral-600">{{ __('No content.') }}</flux:text>
+                                    @endif
+                                </div>
+                            @endif
+                        </div>
+                    @else
+                        @include('partials.folder-view', [
+                            'breadcrumbs' => [
+                                ['label' => $this->workspace()->name, 'href' => route('dashboard')],
+                                ['label' => $this->selectedTopic()->name],
+                            ],
+                            'titleLabel' => __('Messages'),
+                            'items' => collect($this->selectedTopicItems()),
+                            'icon' => 'document-text',
+                            'iconClass' => 'size-12 text-neutral-400 group-hover:text-neutral-300',
+                            'emptyText' => __('No messages'),
+                            'createHref' => route('messages.create', ['topic' => $this->selectedTopic()->slug]),
+                            'createLabel' => __('New message'),
+                            'showArchivedModel' => 'showArchived',
+                            'toolbarClass' => 'border-b border-neutral-300 bg-emerald-50 px-4 py-3 dark:border-white/10 dark:bg-emerald-500/10',
+                            'rootClass' => 'flex flex-col xl:h-full',
+                            'contentClass' => 'overflow-auto px-4 py-4 xl:flex-1 xl:min-h-0',
+                        ])
+                    @endif
                 </section>
             @else
                 <section
