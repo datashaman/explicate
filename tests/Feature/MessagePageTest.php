@@ -2,6 +2,7 @@
 
 use App\Enums\MessageStatus;
 use App\Enums\TeamRole;
+use App\Models\Agent;
 use App\Models\Attachment;
 use App\Models\Message;
 use App\Models\Topic;
@@ -62,6 +63,44 @@ test('draft message can be saved', function () {
         ->assertHasNoErrors();
 
     expect($this->message->fresh()->body)->toBe('Hello world');
+});
+
+test('draft message recipient can be changed to an agent principal', function () {
+    $agent = Agent::factory()->for($this->workspace)->create(['name' => 'Researcher']);
+    $agentPrincipal = $this->workspace->principalForAgent($agent);
+
+    $this->actingAs($this->user);
+
+    Livewire::test('pages::message', ['topic' => $this->topic, 'message' => $this->message])
+        ->set('title', 'Agent draft')
+        ->set('target', 'principal')
+        ->set('recipientPrincipalId', $agentPrincipal->id)
+        ->call('save')
+        ->assertHasNoErrors();
+
+    expect($this->message->fresh())
+        ->title->toBe('Agent draft')
+        ->recipient_principal_id->toBe($agentPrincipal->id);
+});
+
+test('published message page shows sender and recipient principals', function () {
+    $agent = Agent::factory()->for($this->workspace)->create(['name' => 'Researcher']);
+    $senderPrincipal = $this->workspace->principalForUser($this->user);
+    $agentPrincipal = $this->workspace->principalForAgent($agent);
+
+    $this->message->update([
+        'status' => MessageStatus::Published,
+        'sender_principal_id' => $senderPrincipal->id,
+        'recipient_principal_id' => $agentPrincipal->id,
+    ]);
+
+    $this->actingAs($this->user)
+        ->get(route('messages.show', ['topic' => $this->topic->slug, 'message' => $this->message->slug]))
+        ->assertOk()
+        ->assertSee('From')
+        ->assertSee($this->user->name)
+        ->assertSee('To')
+        ->assertSee('Researcher');
 });
 
 test('published message cannot be saved', function () {

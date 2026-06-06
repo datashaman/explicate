@@ -1,13 +1,16 @@
 <?php
 
 use App\Enums\MessageStatus;
+use App\Models\Agent;
 use App\Models\Attachment;
 use App\Models\Message;
+use App\Models\Principal;
 use App\Models\Topic;
 use Flux\Flux;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Component;
@@ -24,6 +27,10 @@ new #[Layout('layouts::workspace'), Title('Message')] class extends Component {
 
     public string $body = '';
 
+    public string $target = 'topic';
+
+    public ?int $recipientPrincipalId = null;
+
     /** @var array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile> */
     public array $uploads = [];
 
@@ -38,6 +45,43 @@ new #[Layout('layouts::workspace'), Title('Message')] class extends Component {
 
         $this->title = $message->title;
         $this->body = $message->body ?? '';
+        $this->target = $message->recipient_principal_id ? 'principal' : 'topic';
+        $this->recipientPrincipalId = $message->recipient_principal_id;
+    }
+
+    /**
+     * @return \Illuminate\Support\Collection<int, Principal>
+     */
+    #[Computed]
+    public function availablePrincipals(): \Illuminate\Support\Collection
+    {
+        $workspace = Auth::user()->currentWorkspace;
+        $team = Auth::user()->currentTeam;
+
+        if (! $workspace || ! $team) {
+            return collect();
+        }
+
+        $users = $team->members()
+            ->orderBy('name')
+            ->get()
+            ->map(fn ($user) => $workspace->principalForUser($user)->load('user'));
+
+        $agents = $workspace->agents()
+            ->orderBy('name')
+            ->get()
+            ->map(fn (Agent $agent) => $workspace->principalForAgent($agent)->load('agent'));
+
+        return $users->merge($agents)->values();
+    }
+
+    /**
+     * @return \Illuminate\Support\Collection<int, Principal>
+     */
+    #[Computed]
+    public function availableRecipients(): \Illuminate\Support\Collection
+    {
+        return $this->availablePrincipals;
     }
 
     public function save(): void
@@ -47,9 +91,15 @@ new #[Layout('layouts::workspace'), Title('Message')] class extends Component {
         $validated = $this->validate([
             'title' => ['required', 'string', 'max:255'],
             'body' => ['nullable', 'string'],
+            'target' => ['required', 'string', 'in:topic,principal'],
+            'recipientPrincipalId' => ['nullable', 'required_if:target,principal', 'integer'],
         ]);
 
-        $this->message->update($validated);
+        $this->message->update([
+            'title' => $validated['title'],
+            'body' => $validated['body'],
+            'recipient_principal_id' => $this->resolvedRecipientPrincipalId($validated),
+        ]);
 
         Flux::toast(variant: 'success', text: __('Saved.'));
     }
@@ -61,9 +111,21 @@ new #[Layout('layouts::workspace'), Title('Message')] class extends Component {
         $validated = $this->validate([
             'title' => ['required', 'string', 'max:255'],
             'body' => ['nullable', 'string'],
+            'target' => ['required', 'string', 'in:topic,principal'],
+            'recipientPrincipalId' => ['nullable', 'required_if:target,principal', 'integer'],
         ]);
 
-        $this->message->update([...$validated, 'status' => MessageStatus::Published]);
+        $workspace = Auth::user()->currentWorkspace;
+
+        abort_unless($workspace, 403);
+
+        $this->message->update([
+            'title' => $validated['title'],
+            'body' => $validated['body'],
+            'recipient_principal_id' => $this->resolvedRecipientPrincipalId($validated),
+            'sender_principal_id' => $this->message->sender_principal_id ?: $workspace->principalForUser(Auth::user())->id,
+            'status' => MessageStatus::Published,
+        ]);
     }
 
     public function unpublish(): void
@@ -72,6 +134,8 @@ new #[Layout('layouts::workspace'), Title('Message')] class extends Component {
 
         $this->title = $this->message->title;
         $this->body = $this->message->body ?? '';
+        $this->target = $this->message->recipient_principal_id ? 'principal' : 'topic';
+        $this->recipientPrincipalId = $this->message->recipient_principal_id;
     }
 
     public function archive(): void
@@ -85,6 +149,8 @@ new #[Layout('layouts::workspace'), Title('Message')] class extends Component {
 
         $this->title = $this->message->title;
         $this->body = $this->message->body ?? '';
+        $this->target = $this->message->recipient_principal_id ? 'principal' : 'topic';
+        $this->recipientPrincipalId = $this->message->recipient_principal_id;
     }
 
     public function uploadAttachments(): void
@@ -128,6 +194,25 @@ new #[Layout('layouts::workspace'), Title('Message')] class extends Component {
 
         Flux::toast(variant: 'success', text: __('Attachment deleted.'));
     }
+
+    /**
+     * @param  array{target: string, recipientPrincipalId: int|null}  $validated
+     */
+    private function resolvedRecipientPrincipalId(array $validated): ?int
+    {
+        if ($validated['target'] !== 'principal') {
+            return null;
+        }
+
+        $workspace = Auth::user()->currentWorkspace;
+
+        abort_unless($workspace, 403);
+
+        return $workspace->principals()
+            ->whereKey($validated['recipientPrincipalId'])
+            ->firstOrFail()
+            ->id;
+    }
 }; ?>
 
 <div class="flex h-full w-full flex-1 flex-col gap-3 xl:flex-1">
@@ -150,6 +235,25 @@ new #[Layout('layouts::workspace'), Title('Message')] class extends Component {
                         </div>
                     </div>
 
+                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-[10rem_minmax(0,1fr)]">
+                        <flux:select wire:model.live="target" :label="__('To')" required>
+                            <flux:select.option value="topic">{{ __('Topic') }}</flux:select.option>
+                            <flux:select.option value="principal">{{ __('Principal') }}</flux:select.option>
+                        </flux:select>
+
+                        @if ($target === 'principal')
+                            <flux:select wire:model="recipientPrincipalId" :label="__('Recipient')" placeholder="{{ __('Select a principal…') }}" required>
+                                @foreach ($this->availableRecipients as $recipient)
+                                    <flux:select.option :value="$recipient->id">
+                                        {{ $recipient->label() }} · {{ $recipient->type === \App\Models\Principal::TypeAgent ? __('Agent') : __('User') }}
+                                    </flux:select.option>
+                                @endforeach
+                            </flux:select>
+                        @else
+                            <flux:input :label="__('Recipient')" :value="$topic->name" readonly />
+                        @endif
+                    </div>
+
                     <flux:textarea wire:model="body" :placeholder="__('Write something...')" rows="12" />
 
                     <div class="flex justify-end">
@@ -170,6 +274,17 @@ new #[Layout('layouts::workspace'), Title('Message')] class extends Component {
                             <flux:button wire:click="unarchive" size="sm" icon="archive-box-x-mark">{{ __('Unarchive') }}</flux:button>
                         @endif
                     </div>
+                </div>
+
+                <div class="flex flex-wrap gap-2">
+                    @if ($message->sender)
+                        <flux:badge color="zinc" size="sm">{{ __('From') }}: {{ $message->sender->label() }}</flux:badge>
+                    @endif
+
+                    <flux:badge color="zinc" size="sm">
+                        {{ __('To') }}:
+                        {{ $message->recipient ? $message->recipient->label() : $topic->name }}
+                    </flux:badge>
                 </div>
 
                 <div>

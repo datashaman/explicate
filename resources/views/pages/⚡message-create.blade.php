@@ -34,7 +34,6 @@ new #[Title('New Message')] class extends Component {
         $workspace = Auth::user()->currentWorkspace;
 
         abort_unless($workspace, 403);
-
         $topicSlug = request()->query('topic');
 
         if (! $topicSlug) {
@@ -65,7 +64,7 @@ new #[Title('New Message')] class extends Component {
      * @return \Illuminate\Support\Collection<int, Principal>
      */
     #[Computed]
-    public function availableRecipients(): \Illuminate\Support\Collection
+    public function availablePrincipals(): \Illuminate\Support\Collection
     {
         $workspace = Auth::user()->currentWorkspace;
         $team = Auth::user()->currentTeam;
@@ -85,6 +84,15 @@ new #[Title('New Message')] class extends Component {
             ->map(fn (Agent $agent) => $workspace->principalForAgent($agent)->load('agent'));
 
         return $users->merge($agents)->values();
+    }
+
+    /**
+     * @return \Illuminate\Support\Collection<int, Principal>
+     */
+    #[Computed]
+    public function availableRecipients(): \Illuminate\Support\Collection
+    {
+        return $this->availablePrincipals;
     }
 
     public function create(): void

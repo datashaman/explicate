@@ -66,6 +66,10 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
     public string $messageBody = '';
 
+    public string $messageTarget = 'topic';
+
+    public ?int $messageRecipientPrincipalId = null;
+
     public string $newMessageTitle = '';
 
     public string $newMessageBody = '';
@@ -329,7 +333,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
      * @return \Illuminate\Support\Collection<int, Principal>
      */
     #[Computed]
-    public function availableRecipients(): \Illuminate\Support\Collection
+    public function availablePrincipals(): \Illuminate\Support\Collection
     {
         $workspace = $this->workspace();
         $team = Auth::user()->currentTeam;
@@ -349,6 +353,15 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             ->map(fn (Agent $agent) => $workspace->principalForAgent($agent)->load('agent'));
 
         return $users->merge($agents)->values();
+    }
+
+    /**
+     * @return \Illuminate\Support\Collection<int, Principal>
+     */
+    #[Computed]
+    public function availableRecipients(): \Illuminate\Support\Collection
+    {
+        return $this->availablePrincipals;
     }
 
     /** @return list<string> */
@@ -427,6 +440,8 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         $this->selectedMessageSlug = null;
         $this->messageTitle = '';
         $this->messageBody = '';
+        $this->messageTarget = 'topic';
+        $this->messageRecipientPrincipalId = null;
         $this->syncNewMessageTopic();
         $this->normalizeMobilePanel();
     }
@@ -703,11 +718,28 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         $validated = $this->validate([
             'messageTitle' => ['required', 'string', 'max:255'],
             'messageBody' => ['nullable', 'string'],
+            'messageTarget' => ['required', 'string', 'in:topic,principal'],
+            'messageRecipientPrincipalId' => ['nullable', 'required_if:messageTarget,principal', 'integer'],
         ]);
+
+        $workspace = $this->workspace();
+
+        abort_unless($workspace, 403);
+
+        $recipientPrincipalId = null;
+
+        if ($validated['messageTarget'] === 'principal') {
+            $recipient = $workspace->principals()
+                ->whereKey($validated['messageRecipientPrincipalId'])
+                ->firstOrFail();
+
+            $recipientPrincipalId = $recipient->id;
+        }
 
         $message->update([
             'title' => $validated['messageTitle'],
             'body' => $validated['messageBody'],
+            'recipient_principal_id' => $recipientPrincipalId,
         ]);
 
         $this->selectedMessageSlug = $message->fresh()->slug;
@@ -723,7 +755,14 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
         $this->saveSelectedMessage();
 
-        $message->fresh()->update(['status' => MessageStatus::Published]);
+        $workspace = $this->workspace();
+
+        abort_unless($workspace, 403);
+
+        $message->fresh()->update([
+            'sender_principal_id' => $message->sender_principal_id ?: $workspace->principalForUser(Auth::user())->id,
+            'status' => MessageStatus::Published,
+        ]);
     }
 
     public function archiveSelectedMessage(): void
@@ -763,6 +802,8 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
         $this->messageTitle = $message?->title ?? '';
         $this->messageBody = $message?->body ?? '';
+        $this->messageTarget = $message?->recipient_principal_id ? 'principal' : 'topic';
+        $this->messageRecipientPrincipalId = $message?->recipient_principal_id;
     }
 
     private function syncNewMessageTopic(): void
@@ -971,6 +1012,25 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                                         </div>
                                     </div>
 
+                                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-[10rem_minmax(0,1fr)]">
+                                        <flux:select wire:model.live="messageTarget" :label="__('To')" required>
+                                            <flux:select.option value="topic">{{ __('Topic') }}</flux:select.option>
+                                            <flux:select.option value="principal">{{ __('Principal') }}</flux:select.option>
+                                        </flux:select>
+
+                                        @if ($messageTarget === 'principal')
+                                            <flux:select wire:model="messageRecipientPrincipalId" :label="__('Recipient')" placeholder="{{ __('Select a principal…') }}" required>
+                                                @foreach ($this->availableRecipients as $recipient)
+                                                    <flux:select.option :value="$recipient->id">
+                                                        {{ $recipient->label() }} · {{ $recipient->type === \App\Models\Principal::TypeAgent ? __('Agent') : __('User') }}
+                                                    </flux:select.option>
+                                                @endforeach
+                                            </flux:select>
+                                        @else
+                                            <flux:input :label="__('Recipient')" :value="$selectedDashboardMessage->topic->name" readonly />
+                                        @endif
+                                    </div>
+
                                     <flux:textarea wire:model="messageBody" :placeholder="__('Write something...')" rows="12" />
 
                                     <div class="flex justify-end">
@@ -990,6 +1050,17 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                                             <flux:button wire:click="unarchiveSelectedMessage" size="sm" icon="archive-box-x-mark">{{ __('Unarchive') }}</flux:button>
                                         @endif
                                     </div>
+                                </div>
+
+                                <div class="flex flex-wrap gap-2">
+                                    @if ($selectedDashboardMessage->sender)
+                                        <flux:badge color="zinc" size="sm">{{ __('From') }}: {{ $selectedDashboardMessage->sender->label() }}</flux:badge>
+                                    @endif
+
+                                    <flux:badge color="zinc" size="sm">
+                                        {{ __('To') }}:
+                                        {{ $selectedDashboardMessage->recipient ? $selectedDashboardMessage->recipient->label() : $selectedDashboardMessage->topic->name }}
+                                    </flux:badge>
                                 </div>
 
                                 <div>

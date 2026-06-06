@@ -381,6 +381,58 @@ test('dashboard can save selected draft message', function () {
         ->body->toBe('Updated body');
 });
 
+test('dashboard can change a draft message recipient to an agent principal', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->for($user->currentTeam)->create();
+    $user->switchWorkspace($workspace);
+
+    $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
+    $agent = Agent::factory()->for($workspace)->create(['name' => 'Researcher']);
+    $agentPrincipal = $workspace->principalForAgent($agent);
+    $message = Message::factory()->for($topic)->create([
+        'title' => 'Draft note',
+        'status' => MessageStatus::Draft,
+    ]);
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::dashboard')
+        ->set('selectedTopicSlug', $topic->slug)
+        ->set('selectedMessageSlug', $message->slug)
+        ->set('messageTitle', 'Agent draft')
+        ->set('messageTarget', 'principal')
+        ->set('messageRecipientPrincipalId', $agentPrincipal->id)
+        ->call('saveSelectedMessage')
+        ->assertHasNoErrors();
+
+    expect($message->fresh())
+        ->title->toBe('Agent draft')
+        ->recipient_principal_id->toBe($agentPrincipal->id);
+});
+
+test('dashboard published message panel shows sender and recipient principals', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->for($user->currentTeam)->create();
+    $user->switchWorkspace($workspace);
+
+    $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
+    $agent = Agent::factory()->for($workspace)->create(['name' => 'Researcher']);
+    $message = Message::factory()->for($topic)->create([
+        'title' => 'Published note',
+        'status' => MessageStatus::Published,
+        'sender_principal_id' => $workspace->principalForUser($user)->id,
+        'recipient_principal_id' => $workspace->principalForAgent($agent)->id,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('dashboard', ['topic' => $topic->slug, 'message' => $message->slug, 'panel' => 'messages']))
+        ->assertOk()
+        ->assertSee('From')
+        ->assertSee($user->name)
+        ->assertSee('To')
+        ->assertSee('Researcher');
+});
+
 test('dashboard shows workspace agents in the right rail', function () {
     $user = User::factory()->create();
     $workspace = Workspace::factory()->for($user->currentTeam)->create();
