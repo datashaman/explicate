@@ -1093,7 +1093,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
                                         <div class="flex shrink-0 items-center gap-2">
                                             <flux:badge :color="$selectedDashboardPost->status->color()" size="sm">{{ $selectedDashboardPost->status->label() }}</flux:badge>
-                                            <flux:button wire:click="archiveSelectedPost" type="button" size="sm" icon="archive-box">{{ __('Archive') }}</flux:button>
+                                            <flux:button wire:click="archiveSelectedPost" type="button" size="sm" icon="archive-box" icon:variant="outline">{{ __('Archive') }}</flux:button>
                                             <flux:button wire:click="publishSelectedPost" type="button" size="sm" variant="primary" icon="paper-airplane">{{ __('Post') }}</flux:button>
                                         </div>
                                     </div>
@@ -1127,7 +1127,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                                     <div class="flex shrink-0 items-center gap-2">
                                         @if ($selectedDashboardPost->status === PostStatus::Published)
                                             <flux:button wire:click="unpublishSelectedPost" size="sm" icon="pencil-square">{{ __('Move to drafts') }}</flux:button>
-                                            <flux:button wire:click="archiveSelectedPost" size="sm" icon="archive-box">{{ __('Archive') }}</flux:button>
+                                            <flux:button wire:click="archiveSelectedPost" size="sm" icon="archive-box" icon:variant="outline">{{ __('Archive') }}</flux:button>
                                         @elseif ($selectedDashboardPost->status === PostStatus::Archived)
                                             <flux:badge :color="$selectedDashboardPost->status->color()" size="sm">{{ $selectedDashboardPost->status->label() }}</flux:badge>
                                             <flux:button wire:click="unarchiveSelectedPost" size="sm" icon="archive-box-x-mark">{{ __('Unarchive') }}</flux:button>
