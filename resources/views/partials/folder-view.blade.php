@@ -322,15 +322,8 @@
                     @foreach ($items as $item)
                         @php
                             $itemKey = md5($item['href']);
-                            $metaByLabel = collect($item['meta'] ?? [])->mapWithKeys(fn ($meta) => [$meta['label'] => $meta['value']]);
-                            $metaTitlesByLabel = collect($item['meta'] ?? [])->mapWithKeys(fn ($meta) => [$meta['label'] => $meta['title'] ?? null]);
-                            $columnLabels = [
-                                'sender' => __('Sender'),
-                                'topic' => __('Topic'),
-                                'sent' => __('Sent'),
-                                'saved' => __('Saved'),
-                                'status' => __('Status'),
-                            ];
+                            $metaByKey = collect($item['meta'] ?? [])->mapWithKeys(fn ($meta) => [$meta['key'] => $meta['value']]);
+                            $metaTitlesByKey = collect($item['meta'] ?? [])->mapWithKeys(fn ($meta) => [$meta['key'] => $meta['title'] ?? null]);
                         @endphp
                         <a href="{{ $item['href'] }}" wire:navigate
                            wire:key="folder-list-{{ $itemKey }}"
@@ -365,9 +358,8 @@
                                         </span>
                                     @else
                                         @php
-                                            $columnLabel = $columnLabels[$column['key']] ?? $column['label'];
-                                            $columnValue = $metaByLabel[$columnLabel] ?? null;
-                                            $columnTitle = $metaTitlesByLabel[$columnLabel] ?? null;
+                                            $columnValue = $metaByKey[$column['key']] ?? null;
+                                            $columnTitle = $metaTitlesByKey[$column['key']] ?? null;
                                         @endphp
                                         <span
                                             @class(['hidden truncate text-xs text-neutral-500 sm:block dark:text-neutral-400', $column['class'] ?? null])

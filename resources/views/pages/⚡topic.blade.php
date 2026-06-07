@@ -56,7 +56,7 @@ new #[Layout('layouts::workspace'), Title('Topic')] class extends Component {
     }
 
     /**
-     * @return list<array{href: string, name: string, meta: list<array{label: string, value: string}>, attachments_count: int, badge: array{label: string, color: string}|null}>
+     * @return list<array{href: string, name: string, meta: list<array{key: string, label: string, value: string, title?: string}>, attachments_count: int, badge: array{label: string, color: string}|null}>
      */
     public function items(): array
     {

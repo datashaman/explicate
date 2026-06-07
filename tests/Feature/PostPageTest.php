@@ -127,9 +127,9 @@ test('post list metadata uses sender recipient fallback and timestamp labels', f
         showRecipient: true,
         recipientFallback: $this->topic->name,
     ))->toBe([
-        ['label' => 'Sender', 'value' => $this->user->name],
-        ['label' => 'To', 'value' => $this->topic->name],
-        ['label' => 'Sent', 'value' => '5 minutes ago', 'title' => $updatedAt->timezone(config('app.timezone'))->isoFormat('LLLL')],
+        ['key' => 'sender', 'label' => 'Sender', 'value' => $this->user->name],
+        ['key' => 'to', 'label' => 'To', 'value' => $this->topic->name],
+        ['key' => 'sent', 'label' => 'Sent', 'value' => '5 minutes ago', 'title' => $updatedAt->timezone(config('app.timezone'))->isoFormat('LLLL')],
     ]);
 });
 
@@ -151,6 +151,7 @@ test('post list timestamp titles use the user timezone when provided', function 
             timezone: 'Africa/Johannesburg',
         ))->toBe([
             [
+                'key' => 'sent',
                 'label' => 'Sent',
                 'value' => '0 seconds ago',
                 'title' => $updatedAt->copy()->timezone('Africa/Johannesburg')->isoFormat('LLLL'),

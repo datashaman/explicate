@@ -302,7 +302,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
     }
 
     /**
-     * @return list<array{href: string, name: string, meta: list<array{label: string, value: string}>, attachments_count: int, badge: array{label: string, color: string}|null}>
+     * @return list<array{href: string, name: string, meta: list<array{key: string, label: string, value: string, title?: string}>, attachments_count: int, badge: array{label: string, color: string}|null}>
      */
     public function selectedTopicItems(): array
     {
@@ -335,7 +335,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
     }
 
     /**
-     * @return list<array{href: string, name: string, meta: list<array{label: string, value: string}>, attachments_count: int, badge: array{label: string, color: string}|null}>
+     * @return list<array{href: string, name: string, meta: list<array{key: string, label: string, value: string, title?: string}>, attachments_count: int, badge: array{label: string, color: string}|null}>
      */
     public function selectedSystemFolderItems(): array
     {
@@ -363,17 +363,19 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
                 $meta = $isDraftsFolder
                     ? [
-                        ['label' => __('Topic'), 'value' => $post->topic->name],
+                        ['key' => 'topic', 'label' => __('Topic'), 'value' => $post->topic->name],
                         [
+                            'key' => 'saved',
                             'label' => __('Saved'),
                             'value' => $post->updated_at->diffForHumans(),
                             'title' => $post->updated_at->timezone($timezone)->isoFormat('LLLL'),
                         ],
                     ]
                     : [
-                        ...($post->sender ? [['label' => __('Sender'), 'value' => $post->sender->label()]] : []),
-                        ['label' => __('Topic'), 'value' => $post->topic->name],
+                        ...($post->sender ? [['key' => 'sender', 'label' => __('Sender'), 'value' => $post->sender->label()]] : []),
+                        ['key' => 'topic', 'label' => __('Topic'), 'value' => $post->topic->name],
                         [
+                            'key' => 'sent',
                             'label' => __('Sent'),
                             'value' => $post->updated_at->diffForHumans(),
                             'title' => $post->updated_at->timezone($timezone)->isoFormat('LLLL'),

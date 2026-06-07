@@ -200,25 +200,26 @@ class Post extends Model
     }
 
     /**
-     * @return list<array{label: string, value: string, title?: string}>
+     * @return list<array{key: string, label: string, value: string, title?: string}>
      */
     public function listMeta(bool $showSender, bool $showRecipient, ?string $recipientFallback = null, ?string $timezone = null, ?string $recipientLabel = null): array
     {
         $meta = [];
 
         if ($showSender && $this->sender) {
-            $meta[] = ['label' => __('Sender'), 'value' => $this->sender->label()];
+            $meta[] = ['key' => 'sender', 'label' => __('Sender'), 'value' => $this->sender->label()];
         }
 
         if ($showRecipient) {
             $recipient = $this->recipient?->label() ?? $recipientFallback;
 
             if ($recipient) {
-                $meta[] = ['label' => $recipientLabel ?? __('To'), 'value' => $recipient];
+                $meta[] = ['key' => 'to', 'label' => $recipientLabel ?? __('To'), 'value' => $recipient];
             }
         }
 
         $meta[] = [
+            'key' => $this->status === PostStatus::Draft ? 'saved' : 'sent',
             'label' => $this->status === PostStatus::Draft ? __('Saved') : __('Sent'),
             'value' => $this->updated_at->diffForHumans(),
             'title' => $this->updated_at->timezone($timezone ?: config('app.timezone'))->isoFormat('LLLL'),
