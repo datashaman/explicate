@@ -76,19 +76,24 @@ test('draft post can be saved', function () {
 
 test('published post page shows sender and topic', function () {
     $senderPrincipal = $this->workspace->principalForUser($this->user);
+    $postedAt = now()->subMinutes(4);
 
-    $this->post->update([
+    $this->post->timestamps = false;
+    $this->post->forceFill([
         'status' => PostStatus::Published,
         'sender_principal_id' => $senderPrincipal->id,
-    ]);
+        'created_at' => $postedAt,
+    ])->save();
 
     $this->actingAs($this->user)
         ->get(route('posts.show', ['post' => $this->post]))
         ->assertOk()
-        ->assertSee('Sender')
+        ->assertSee('data-test="post-message"', escape: false)
+        ->assertSee('data-test="post-message-sender"', escape: false)
+        ->assertSee('data-test="post-message-timestamp"', escape: false)
+        ->assertSee(e($postedAt->timezone($this->user->displayTimezone())->isoFormat('LLLL')), escape: false)
         ->assertSee($this->user->name)
-        ->assertSee('Topic')
-        ->assertSee($this->topic->name)
+        ->assertSee('#'.$this->topic->name)
         ->assertSee('Move to drafts')
         ->assertDontSee('Return to draft');
 });

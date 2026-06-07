@@ -148,7 +148,10 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             return null;
         }
 
-        return $topic->posts()->where('slug', $this->selectedPostSlug)->first();
+        return $topic->posts()
+            ->with(['assignedAgents', 'sender.user', 'sender.agent', 'topic'])
+            ->where('slug', $this->selectedPostSlug)
+            ->first();
     }
 
     public function postsPanelReturnRoute(): string
@@ -317,7 +320,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
     }
 
     /**
-     * @return list<array{href: string, name: string, meta: list<array{key: string, label: string, value: string, title?: string}>, attachments_count: int, badge: array{label: string, color: string}|null}>
+     * @return list<array{href: string, post: Post, name: string, meta: list<array{key: string, label: string, value: string, title?: string}>, attachments_count: int, badge: array{label: string, color: string}|null}>
      */
     public function selectedTopicItems(): array
     {
@@ -328,15 +331,16 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         }
 
         return $topic->posts()
-            ->with(['sender.user', 'sender.agent'])
+            ->with(['assignedAgents', 'sender.user', 'sender.agent', 'topic'])
             ->withCount('attachments')
+            ->reorder()
             ->when(! $this->showArchived, fn ($query) => $query->where('status', '!=', PostStatus::Archived))
             ->where('status', '!=', PostStatus::Draft)
-            ->orderByDesc('updated_at')
-            ->orderByDesc('id')
+            ->orderBy('id')
             ->get()
             ->map(fn (Post $post) => [
                 'href' => route('dashboard', ['topic' => $topic->slug, 'post' => $post->slug, 'panel' => 'posts']),
+                'post' => $post,
                 'name' => $post->title,
                 'meta' => $post->listMeta(showSender: true, timezone: Auth::user()->displayTimezone()),
                 'attachments_count' => $post->attachments_count,
@@ -350,7 +354,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
     }
 
     /**
-     * @return list<array{href: string, name: string, meta: list<array{key: string, label: string, value: string, title?: string}>, attachments_count: int, badge: array{label: string, color: string}|null}>
+     * @return list<array{href: string, post: Post, name: string, meta: list<array{key: string, label: string, value: string, title?: string}>, attachments_count: int, badge: array{label: string, color: string}|null}>
      */
     public function selectedSystemFolderItems(): array
     {
@@ -362,13 +366,12 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         }
 
         return Post::query()
-            ->with(['topic', 'sender.user', 'sender.agent'])
+            ->with(['assignedAgents', 'topic', 'sender.user', 'sender.agent'])
             ->withCount('attachments')
             ->whereHas('topic', fn ($query) => $query->where('workspace_id', $workspace->id))
             ->where('status', $folder->status())
             ->when($folder !== PostFolder::Archived && ! $this->showArchived, fn ($query) => $query->where('status', '!=', PostStatus::Archived))
-            ->orderByDesc('updated_at')
-            ->orderByDesc('id')
+            ->orderBy('id')
             ->get()
             ->map(function (Post $post) use ($folder): array {
                 $isDraftsFolder = $folder === PostFolder::Drafts;
@@ -387,6 +390,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                         'post' => $post->slug,
                         'panel' => 'posts',
                     ]),
+                    'post' => $post,
                     'name' => $post->title,
                     'meta' => $post->listTopicMeta(showSender: ! $isDraftsFolder, timezone: $timezone),
                     'attachments_count' => $post->attachments_count,
@@ -863,6 +867,39 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         $post->archive();
     }
 
+    public function movePostToDraft(int $postId): void
+    {
+        $post = $this->workspacePost($postId);
+
+        abort_unless($post, 404);
+
+        $post->moveToDraft();
+
+        Flux::toast(variant: 'success', text: __('Moved to drafts.'));
+    }
+
+    public function archivePost(int $postId): void
+    {
+        $post = $this->workspacePost($postId);
+
+        abort_unless($post, 404);
+
+        $post->archive();
+
+        Flux::toast(variant: 'success', text: __('Archived.'));
+    }
+
+    public function unarchivePost(int $postId): void
+    {
+        $post = $this->workspacePost($postId);
+
+        abort_unless($post, 404);
+
+        $post->moveToDraft();
+
+        Flux::toast(variant: 'success', text: __('Moved to drafts.'));
+    }
+
     public function unpublishSelectedPost(): void
     {
         $post = $this->selectedPost();
@@ -883,6 +920,20 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         $post->moveToDraft();
 
         $this->syncSelectedPostFields();
+    }
+
+    private function workspacePost(int $postId): ?Post
+    {
+        $workspace = $this->workspace();
+
+        if (! $workspace) {
+            return null;
+        }
+
+        return Post::query()
+            ->whereKey($postId)
+            ->whereHas('topic', fn ($query) => $query->where('workspace_id', $workspace->id))
+            ->first();
     }
 
     private function syncSelectedPostFields(): void
@@ -1091,42 +1142,16 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                             ])
                         @else
                             <div class="flex flex-1 flex-col gap-6 overflow-auto px-4 py-4 xl:min-h-0" data-test="dashboard-post-panel">
-                                <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                                    <flux:heading size="xl" class="min-w-0 flex-1 truncate">{{ $selectedDashboardPost->title }}</flux:heading>
-
-                                    <div class="flex shrink-0 items-center gap-2">
+                                <x-post-message :post="$selectedDashboardPost">
+                                    <x-slot:actions>
                                         @if ($selectedDashboardPost->status === PostStatus::Published)
-                                            <flux:button wire:click="unpublishSelectedPost" size="sm" icon="pencil-square" icon:variant="outline">{{ __('Move to drafts') }}</flux:button>
-                                            <flux:button wire:click="archiveSelectedPost" size="sm" icon="archive-box" icon:variant="outline">{{ __('Archive') }}</flux:button>
+                                            <flux:menu.item wire:click="unpublishSelectedPost" icon="pencil-square">{{ __('Move to drafts') }}</flux:menu.item>
+                                            <flux:menu.item wire:click="archiveSelectedPost" icon="archive-box">{{ __('Archive') }}</flux:menu.item>
                                         @elseif ($selectedDashboardPost->status === PostStatus::Archived)
-                                            <flux:badge :color="$selectedDashboardPost->status->color()" size="sm">{{ $selectedDashboardPost->status->label() }}</flux:badge>
-                                            <flux:button wire:click="unarchiveSelectedPost" size="sm" icon="archive-box-x-mark">{{ __('Unarchive') }}</flux:button>
+                                            <flux:menu.item wire:click="unarchiveSelectedPost" icon="archive-box-x-mark">{{ __('Unarchive') }}</flux:menu.item>
                                         @endif
-                                    </div>
-                                </div>
-
-                                <div class="flex flex-wrap gap-2">
-                                    @if ($selectedDashboardPost->sender)
-                                        <flux:badge color="zinc" size="sm">{{ __('Sender') }}: {{ $selectedDashboardPost->sender->label() }}</flux:badge>
-                                    @endif
-
-                                    <flux:badge color="zinc" size="sm">
-                                        {{ __('Topic') }}:
-                                        {{ $selectedDashboardPost->topic->name }}
-                                    </flux:badge>
-
-                                    @foreach ($selectedDashboardPost->assignedAgents as $agent)
-                                        <flux:badge color="amber" size="sm">{{ __('Agent work') }}: {{ $agent->name }}</flux:badge>
-                                    @endforeach
-                                </div>
-
-                                <div>
-                                    @if ($selectedDashboardPost->body)
-                                        <flux:text class="whitespace-pre-wrap text-sm leading-relaxed text-neutral-700 dark:text-neutral-300">{{ $selectedDashboardPost->body }}</flux:text>
-                                    @else
-                                        <flux:text class="text-sm text-neutral-400 dark:text-neutral-600">{{ __('No content.') }}</flux:text>
-                                    @endif
-                                </div>
+                                    </x-slot:actions>
+                                </x-post-message>
 
                             @include('partials.post-attachments', [
                                 'post' => $selectedDashboardPost,
@@ -1144,6 +1169,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                             ],
                             'titleLabel' => $selectedDashboardFolder?->label() ?? $this->selectedTopic()?->name ?? __('Feed'),
                             'items' => collect($selectedDashboardFolder ? $this->selectedSystemFolderItems() : $this->selectedTopicItems()),
+                            'itemPresentation' => 'posts',
                             'icon' => 'document-text',
                             'iconClass' => 'size-12 text-neutral-400 group-hover:text-neutral-300',
                             'emptyText' => __('No posts'),
@@ -1154,6 +1180,9 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                             'listColumns' => $this->selectedPostListColumns(),
                             'listDefaultSort' => $selectedDashboardFolder?->dateKey() ?? PostListColumn::Sent->value,
                             'listDefaultSortDirection' => 'desc',
+                            'moveToDraftAction' => 'movePostToDraft',
+                            'archiveAction' => 'archivePost',
+                            'unarchiveAction' => 'unarchivePost',
                             'toolbarClass' => 'border-b border-neutral-300 bg-emerald-50 px-4 py-3 dark:border-white/10 dark:bg-emerald-500/10',
                             'rootClass' => 'flex flex-col xl:h-full',
                             'contentClass' => 'overflow-auto px-4 py-4 xl:flex-1 xl:min-h-0',

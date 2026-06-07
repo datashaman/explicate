@@ -59,20 +59,21 @@ new #[Layout('layouts::workspace'), Title('Topic')] class extends Component {
     }
 
     /**
-     * @return list<array{href: string, name: string, meta: list<array{key: string, label: string, value: string, title?: string}>, attachments_count: int, badge: array{label: string, color: string}|null}>
+     * @return list<array{href: string, post: Post, name: string, meta: list<array{key: string, label: string, value: string, title?: string}>, attachments_count: int, badge: array{label: string, color: string}|null}>
      */
     public function items(): array
     {
         return $this->topic->posts()
-            ->with(['sender.user', 'sender.agent'])
+            ->with(['assignedAgents', 'sender.user', 'sender.agent', 'topic'])
             ->withCount('attachments')
+            ->reorder()
             ->when(! $this->showArchived, fn ($q) => $q->where('status', '!=', PostStatus::Archived))
             ->where('status', '!=', PostStatus::Draft)
-            ->orderByDesc('updated_at')
-            ->orderByDesc('id')
+            ->orderBy('id')
             ->get()
             ->map(fn (Post $post) => [
                 'href' => route('posts.show', ['post' => $post]),
+                'post' => $post,
                 'name' => $post->title,
                 'meta' => $post->listMeta(showSender: true, timezone: Auth::user()->displayTimezone()),
                 'attachments_count' => $post->attachments_count,
@@ -83,6 +84,33 @@ new #[Layout('layouts::workspace'), Title('Topic')] class extends Component {
                 ],
             ])
             ->all();
+    }
+
+    public function movePostToDraft(int $postId): void
+    {
+        $post = $this->topic->posts()->findOrFail($postId);
+
+        $post->moveToDraft();
+
+        Flux::toast(variant: 'success', text: __('Moved to drafts.'));
+    }
+
+    public function archivePost(int $postId): void
+    {
+        $post = $this->topic->posts()->findOrFail($postId);
+
+        $post->archive();
+
+        Flux::toast(variant: 'success', text: __('Archived.'));
+    }
+
+    public function unarchivePost(int $postId): void
+    {
+        $post = $this->topic->posts()->findOrFail($postId);
+
+        $post->moveToDraft();
+
+        Flux::toast(variant: 'success', text: __('Moved to drafts.'));
     }
 
     /**
@@ -216,6 +244,7 @@ new #[Layout('layouts::workspace'), Title('Topic')] class extends Component {
                 ],
                 'titleLabel' => $topic->name,
                 'items' => collect($this->items()),
+                'itemPresentation' => 'posts',
                 'icon' => 'document-text',
                 'iconClass' => 'size-12 text-neutral-400 group-hover:text-neutral-300',
                 'emptyText' => __('No posts'),
@@ -231,6 +260,9 @@ new #[Layout('layouts::workspace'), Title('Topic')] class extends Component {
                 ],
                 'listDefaultSort' => PostListColumn::Sent->value,
                 'listDefaultSortDirection' => 'desc',
+                'moveToDraftAction' => 'movePostToDraft',
+                'archiveAction' => 'archivePost',
+                'unarchiveAction' => 'unarchivePost',
                 'toolbarClass' => 'border-b border-neutral-300 bg-emerald-50 px-4 py-3 dark:border-white/10 dark:bg-emerald-500/10',
                 'rootClass' => 'flex flex-col xl:h-full',
                 'contentClass' => 'overflow-auto px-4 py-4 xl:flex-1 xl:min-h-0',

@@ -61,6 +61,8 @@
         $contentClass = $contentClass ?? 'mt-4 overflow-auto';
         $listIconClass = $listIconClass ?? str($iconClass)->replaceMatches('/\bsize-\S+/', 'size-5')->toString();
         $listColumns = $listColumns ?? [];
+        $itemPresentation = $itemPresentation ?? 'files';
+        $usesPostMessages = $itemPresentation === 'posts';
     @endphp
 
     {{-- Toolbar --}}
@@ -102,6 +104,7 @@
                         </div>
                     @endisset
 
+                    @unless ($usesPostMessages)
                     <div class="flex items-center rounded-md border border-neutral-200 dark:border-white/10">
                         <button @click="setView('icons')" title="{{ __('Icon view') }}"
                                 :class="view === 'icons' ? 'bg-neutral-100 dark:bg-white/10 text-neutral-900 dark:text-white' : 'text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300'"
@@ -115,6 +118,7 @@
                             <flux:icon name="list-bullet" variant="mini" class="size-3.5" />
                         </button>
                     </div>
+                    @endunless
 
                     @isset($createHref)
                         <flux:button :href="$createHref" wire:navigate icon="plus" size="xs" data-test="{{ isset($createTest) ? $createTest.'-desktop' : 'folder-create-button-desktop' }}">{{ $createLabel }}</flux:button>
@@ -145,6 +149,7 @@
                     </div>
                 @endisset
 
+                @unless ($usesPostMessages)
                 <div class="flex items-center rounded-md border border-neutral-200 dark:border-white/10">
                     <button @click="setView('icons')" title="{{ __('Icon view') }}"
                             :class="view === 'icons' ? 'bg-neutral-100 dark:bg-white/10 text-neutral-900 dark:text-white' : 'text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300'"
@@ -158,6 +163,7 @@
                         <flux:icon name="list-bullet" variant="mini" class="size-3.5" />
                     </button>
                 </div>
+                @endunless
             </div>
         @else
             {{-- Breadcrumbs / inline name editor --}}
@@ -229,6 +235,7 @@
                     </div>
                 @endisset
 
+                @unless ($usesPostMessages)
                 <div class="flex items-center rounded-md border border-neutral-200 dark:border-white/10">
                     <button @click="setView('icons')" title="{{ __('Icon view') }}"
                             :class="view === 'icons' ? 'bg-neutral-100 dark:bg-white/10 text-neutral-900 dark:text-white' : 'text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300'"
@@ -242,6 +249,7 @@
                         <flux:icon name="list-bullet" variant="mini" class="size-3.5" />
                     </button>
                 </div>
+                @endunless
 
                 @isset($secondaryCreateHref)
                     <flux:button :href="$secondaryCreateHref" wire:navigate icon="plus" size="sm">{{ $secondaryCreateLabel }}</flux:button>
@@ -271,6 +279,44 @@
                 $hasListBadges = $items->contains(fn ($item) => !empty($item['badge']));
             @endphp
 
+            @if ($usesPostMessages)
+                <div class="divide-y divide-neutral-100 dark:divide-white/5">
+                    @foreach ($items as $item)
+                        @php
+                            $post = $item['post'];
+                            $itemKey = md5($item['href']);
+                        @endphp
+
+                        <div
+                            wire:key="folder-post-message-{{ $itemKey }}"
+                            class="py-4"
+                            data-test="folder-post-message"
+                            data-post-title="{{ $post->title }}"
+                            data-sort-index="{{ $loop->index }}"
+                            @foreach (($item['sort'] ?? []) as $sortKey => $sortValue)
+                                data-sort-{{ $sortKey }}="{{ $sortValue }}"
+                            @endforeach
+                        >
+                            <x-post-message :post="$post" :href="$item['href']" :show-topic="$showPostMessageTopic ?? true">
+                                <x-slot:actions>
+                                    @if ($post->status === \App\Enums\PostStatus::Published)
+                                        @isset($moveToDraftAction)
+                                            <flux:menu.item wire:click="{{ $moveToDraftAction }}({{ $post->id }})" icon="pencil-square">{{ __('Move to drafts') }}</flux:menu.item>
+                                        @endisset
+                                        @isset($archiveAction)
+                                            <flux:menu.item wire:click="{{ $archiveAction }}({{ $post->id }})" icon="archive-box">{{ __('Archive') }}</flux:menu.item>
+                                        @endisset
+                                    @elseif ($post->status === \App\Enums\PostStatus::Archived)
+                                        @isset($unarchiveAction)
+                                            <flux:menu.item wire:click="{{ $unarchiveAction }}({{ $post->id }})" icon="archive-box-x-mark">{{ __('Unarchive') }}</flux:menu.item>
+                                        @endisset
+                                    @endif
+                                </x-slot:actions>
+                            </x-post-message>
+                        </div>
+                    @endforeach
+                </div>
+            @else
             <template x-if="view === 'icons'">
                 <div class="flex flex-wrap content-start justify-start gap-3">
                     @foreach ($items as $item)
@@ -435,6 +481,7 @@
                     </div>
                 </div>
             </template>
+            @endif
         @else
             <div class="flex h-full items-start justify-start pt-4">
                 <flux:text class="text-sm text-neutral-400 dark:text-neutral-600">{{ $emptyText }}</flux:text>

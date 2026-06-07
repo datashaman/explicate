@@ -42,6 +42,7 @@ new #[Layout('layouts::workspace'), Title('Post')] class extends Component {
         );
 
         $this->topic = $topic;
+        $this->post = $post->loadMissing(['assignedAgents', 'sender.user', 'sender.agent', 'topic']);
         $this->title = $post->title;
         $this->body = $post->body ?? '';
         $this->agentIds = $post->assignedAgentIds();
@@ -198,43 +199,16 @@ new #[Layout('layouts::workspace'), Title('Post')] class extends Component {
             ])
         @else
             <div class="flex flex-1 flex-col gap-6 overflow-auto px-4 py-4 xl:min-h-0">
-                {{-- Non-draft posts are read-only. --}}
-                <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <flux:heading size="xl" class="min-w-0 flex-1 truncate">{{ $post->title }}</flux:heading>
-
-                    <div class="flex shrink-0 items-center gap-2">
+                <x-post-message :post="$post">
+                    <x-slot:actions>
                         @if ($post->status === App\Enums\PostStatus::Published)
-                            <flux:button wire:click="unpublish" size="sm" icon="pencil-square" icon:variant="outline">{{ __('Move to drafts') }}</flux:button>
-                            <flux:button wire:click="archive" size="sm" icon="archive-box" icon:variant="outline">{{ __('Archive') }}</flux:button>
+                            <flux:menu.item wire:click="unpublish" icon="pencil-square">{{ __('Move to drafts') }}</flux:menu.item>
+                            <flux:menu.item wire:click="archive" icon="archive-box">{{ __('Archive') }}</flux:menu.item>
                         @elseif ($post->status === App\Enums\PostStatus::Archived)
-                            <flux:badge :color="$post->status->color()" size="sm">{{ $post->status->label() }}</flux:badge>
-                            <flux:button wire:click="unarchive" size="sm" icon="archive-box-x-mark">{{ __('Unarchive') }}</flux:button>
+                            <flux:menu.item wire:click="unarchive" icon="archive-box-x-mark">{{ __('Unarchive') }}</flux:menu.item>
                         @endif
-                    </div>
-                </div>
-
-                <div class="flex flex-wrap gap-2">
-                    @if ($post->sender)
-                        <flux:badge color="zinc" size="sm">{{ __('Sender') }}: {{ $post->sender->label() }}</flux:badge>
-                    @endif
-
-                    <flux:badge color="zinc" size="sm">
-                        {{ __('Topic') }}:
-                        {{ $topic->name }}
-                    </flux:badge>
-
-                    @foreach ($post->assignedAgents as $agent)
-                        <flux:badge color="amber" size="sm">{{ __('Agent work') }}: {{ $agent->name }}</flux:badge>
-                    @endforeach
-                </div>
-
-                <div>
-                    @if ($post->body)
-                        <flux:text class="whitespace-pre-wrap text-sm leading-relaxed text-neutral-700 dark:text-neutral-300">{{ $post->body }}</flux:text>
-                    @else
-                        <flux:text class="text-sm text-neutral-400 dark:text-neutral-600">{{ __('No content.') }}</flux:text>
-                    @endif
-                </div>
+                    </x-slot:actions>
+                </x-post-message>
 
                 @include('partials.post-attachments', [
                     'post' => $post,

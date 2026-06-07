@@ -158,16 +158,15 @@ test('dashboard system draft folder shows draft posts across topics', function (
             'post' => $designDraft->slug,
             'panel' => 'posts',
         ])), escape: false)
+        ->assertSee('data-test="post-message"', escape: false)
+        ->assertSee('#Design')
+        ->assertSee('data-test="post-message-timestamp"', escape: false)
         ->assertDontSee('data-test="folder-list-sort-from"', escape: false)
         ->assertDontSee('data-test="folder-list-sort-sender"', escape: false)
+        ->assertDontSee('data-test="folder-list-sort-header"', escape: false)
         ->assertDontSeeText('Author')
-        ->assertSee('data-test="folder-list-sort-topic"', escape: false)
         ->assertSee('data-sort-topic=', escape: false)
-        ->assertSeeText('Topic:')
-        ->assertSeeText('Design')
-        ->assertSeeText('Saved:')
         ->assertSeeText('7 minutes ago')
-        ->assertSee('data-test="folder-list-sort-saved"', escape: false)
         ->assertSee('data-sort-saved=', escape: false)
         ->assertDontSee('data-test="folder-list-sort-sent"', escape: false)
         ->assertDontSee('Engineering sent');
@@ -205,12 +204,13 @@ test('dashboard feed folder shows all published topic posts', function () {
     $topic = Topic::factory()->for($workspace)->create(['name' => 'Design', 'slug' => 'design']);
     $userPrincipal = $workspace->principalForUser($user);
 
-    Post::factory()->for($topic)->create([
+    $firstPost = Post::factory()->for($topic)->create([
         'title' => 'First topic post',
-        'updated_at' => now()->subMinutes(9),
         'status' => PostStatus::Published,
         'sender_principal_id' => $userPrincipal->id,
     ]);
+    $firstPost->timestamps = false;
+    $firstPost->forceFill(['created_at' => now()->subMinutes(9)])->save();
 
     Post::factory()->for($topic)->create([
         'title' => 'Second topic post',
@@ -233,13 +233,11 @@ test('dashboard feed folder shows all published topic posts', function () {
         ->assertSee('Second topic post')
         ->assertSee('Third topic post')
         ->assertDontSeeText('Author')
-        ->assertSee('data-test="folder-list-sort-sender"', escape: false)
-        ->assertSeeText('Sender:')
+        ->assertSee('data-test="post-message"', escape: false)
+        ->assertSee('data-test="post-message-actions"', escape: false)
+        ->assertDontSee('data-test="folder-list-sort-header"', escape: false)
         ->assertSeeText($user->name)
-        ->assertSee('data-test="folder-list-sort-topic"', escape: false)
-        ->assertSeeText('Topic:')
-        ->assertSeeText('Design')
-        ->assertSeeText('Sent:')
+        ->assertSee('#Design')
         ->assertSeeText('9 minutes ago');
 });
 
@@ -289,12 +287,13 @@ test('dashboard archived folder shows archived feed', function () {
     $topic = Topic::factory()->for($workspace)->create(['name' => 'Design', 'slug' => 'design']);
     $userPrincipal = $workspace->principalForUser($user);
 
-    Post::factory()->for($topic)->create([
+    $archivedPost = Post::factory()->for($topic)->create([
         'title' => 'Archived post',
-        'updated_at' => now()->subMinutes(11),
         'status' => PostStatus::Archived,
         'sender_principal_id' => $userPrincipal->id,
     ]);
+    $archivedPost->timestamps = false;
+    $archivedPost->forceFill(['created_at' => now()->subMinutes(11)])->save();
 
     $response = $this->actingAs($user)
         ->get(route('posts.archived'))
@@ -303,13 +302,11 @@ test('dashboard archived folder shows archived feed', function () {
         ->assertSeeText('Archived')
         ->assertSee('Archived post')
         ->assertDontSeeText('Author')
-        ->assertSee('data-test="folder-list-sort-sender"', escape: false)
-        ->assertSeeText('Sender:')
+        ->assertSee('data-test="post-message"', escape: false)
+        ->assertSee('data-test="post-message-actions"', escape: false)
+        ->assertDontSee('data-test="folder-list-sort-header"', escape: false)
         ->assertSeeText($user->name)
-        ->assertSee('data-test="folder-list-sort-topic"', escape: false)
-        ->assertSeeText('Topic:')
-        ->assertSeeText('Design')
-        ->assertSeeText('Sent:')
+        ->assertSee('#Design')
         ->assertSeeText('11 minutes ago');
 
     $response->assertDontSee('data-test="folder-item-badge"', escape: false);
@@ -497,10 +494,10 @@ test('dashboard published post panel shows sender and topic', function () {
     $this->actingAs($user)
         ->get(route('dashboard', ['topic' => $topic->slug, 'post' => $post->slug, 'panel' => 'posts']))
         ->assertOk()
-        ->assertSee('Sender')
+        ->assertSee('data-test="post-message"', escape: false)
+        ->assertSee('data-test="post-message-sender"', escape: false)
         ->assertSee($user->name)
-        ->assertSee('Topic')
-        ->assertSee('Design')
+        ->assertSee('#Design')
         ->assertSee('Move to drafts')
         ->assertDontSee('Return to draft');
 });
@@ -964,12 +961,12 @@ test('dashboard selected topic shows attach and detach actions in the agents rai
         ->assertSee('Detach');
 });
 
-test('topic page left aligns post icons in icon view', function () {
+test('topic page renders posts as message feed items', function () {
     [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['name' => 'Design']);
     $post = Post::factory()->for($topic)->create([
-        'updated_at' => now()->subMinutes(13),
+        'created_at' => now()->subMinutes(13),
         'status' => PostStatus::Published,
         'sender_principal_id' => $workspace->principalForUser($user)->id,
     ]);
@@ -987,74 +984,63 @@ test('topic page left aligns post icons in icon view', function () {
         ->assertSee('data-test="folder-controls-toggle"', escape: false)
         ->assertSee('data-test="folder-controls-drawer"', escape: false)
         ->assertSee('flex w-full flex-wrap items-center justify-between gap-2 md:hidden', escape: false)
-        ->assertSee('x-if="view === \'icons\'"', escape: false)
-        ->assertSee('x-if="view === \'list\'"', escape: false)
-        ->assertSee('flex h-36 w-28 flex-col items-center gap-1', escape: false)
-        ->assertSee('line-clamp-2 min-h-8 w-full text-xs leading-4', escape: false)
-        ->assertSee('flex min-h-12 items-center gap-3', escape: false)
+        ->assertDontSee('x-if="view === \'icons\'"', escape: false)
+        ->assertDontSee('x-if="view === \'list\'"', escape: false)
+        ->assertDontSee('flex h-36 w-28 flex-col items-center gap-1', escape: false)
+        ->assertSee('data-test="post-message"', escape: false)
+        ->assertSee('data-test="post-message-actions"', escape: false)
+        ->assertSee(e(route('posts.show', ['post' => $post])), escape: false)
         ->assertSee('min-w-0 flex-1', escape: false)
-        ->assertSee('block truncate text-sm', escape: false)
-        ->assertSee('data-test="folder-item-attachments"', escape: false)
-        ->assertSee('title="1 attachment"', escape: false)
-        ->assertSee('data-test="folder-list-sort-header"', escape: false)
-        ->assertSee('data-test="folder-list-sort-name"', escape: false)
-        ->assertSee('data-test="folder-list-sort-sender"', escape: false)
-        ->assertSee('data-test="folder-list-sort-sent"', escape: false)
-        ->assertSee('data-test="folder-list-sort-attachments"', escape: false)
+        ->assertDontSee('data-test="folder-list-sort-header"', escape: false)
         ->assertSee('data-sort-sent=', escape: false)
         ->assertSee('data-sort-attachments=', escape: false)
-        ->assertSee('wire:key="folder-icon-', escape: false)
-        ->assertSee('wire:key="folder-list-', escape: false)
-        ->assertSeeText('Sender:')
+        ->assertSee('wire:key="folder-post-message-', escape: false)
         ->assertSeeText($user->name)
-        ->assertSeeText('Sent:')
+        ->assertSee('#Design')
         ->assertSeeText('13 minutes ago')
         ->assertSee('grid grid-cols-1 items-stretch gap-3 xl:flex-1 xl:auto-rows-fr xl:grid-cols-[minmax(0,1fr)_19rem]', escape: false)
         ->assertSee('xl:h-full', escape: false)
         ->assertDontSee('xl:sticky xl:top-6');
 });
 
-test('topic post list has a deterministic default order', function () {
+test('topic post list uses insertion order for channel order', function () {
     [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create();
-    $timestamp = now()->subMinutes(10);
-
     Post::factory()->for($topic)->create([
         'title' => 'Older post',
         'status' => PostStatus::Published,
-        'updated_at' => now()->subHour(),
     ]);
 
     $firstTie = Post::factory()->for($topic)->create([
         'title' => 'First tied post',
         'status' => PostStatus::Published,
-        'updated_at' => $timestamp,
     ]);
 
     $secondTie = Post::factory()->for($topic)->create([
         'title' => 'Second tied post',
         'status' => PostStatus::Published,
-        'updated_at' => $timestamp,
     ]);
 
     Post::factory()->for($topic)->create([
         'title' => 'Newest post',
         'status' => PostStatus::Published,
-        'updated_at' => now(),
     ]);
 
     expect($secondTie->id)->toBeGreaterThan($firstTie->id);
 
-    $this->actingAs($user)
+    $response = $this->actingAs($user)
         ->get(route('topics.show', ['topic' => $topic->slug]))
-        ->assertOk()
-        ->assertSeeInOrder([
-            'Newest post',
-            'Second tied post',
-            'First tied post',
-            'Older post',
-        ]);
+        ->assertOk();
+
+    preg_match_all('/data-post-title="([^"]+)"/', $response->getContent(), $matches);
+
+    expect($matches[1])->toBe([
+        'Older post',
+        'First tied post',
+        'Second tied post',
+        'Newest post',
+    ]);
 });
 
 test('topic page agent rail labels attach and detach actions clearly', function () {
