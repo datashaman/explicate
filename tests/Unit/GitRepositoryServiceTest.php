@@ -11,6 +11,7 @@ function makeBareRepo(): string
     $path = sys_get_temp_dir().'/test-bare-repo-'.uniqid();
     mkdir($path, 0755, true);
     exec("git init --bare {$path} 2>&1");
+    exec("git -C {$path} symbolic-ref HEAD refs/heads/main 2>&1");
 
     $tmp = sys_get_temp_dir().'/test-clone-'.uniqid();
     exec("git clone {$path} {$tmp} 2>&1");
@@ -66,7 +67,7 @@ test('sync pulls new commits when repo is already cloned', function () {
     $service->sync();
 
     $tmp = sys_get_temp_dir().'/test-push-'.uniqid();
-    exec("git clone {$bare} {$tmp} 2>&1");
+    exec("git clone --branch main {$bare} {$tmp} 2>&1");
     file_put_contents("{$tmp}/new-file.md", 'New content');
     exec("git -C {$tmp} config user.email test@example.com 2>&1");
     exec("git -C {$tmp} config user.name Test 2>&1");
