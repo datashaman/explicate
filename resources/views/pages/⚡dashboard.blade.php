@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\Posts\StorePostAttachments;
+use App\Actions\Posts\UpdateDraftPost;
 use App\Enums\PostFolder;
 use App\Enums\PostListColumn;
 use App\Enums\PostStatus;
@@ -772,15 +773,18 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             'postUploads.*' => __('attachment'),
         ])->validate();
 
-        $post->update([
-            'title' => $validated['postTitle'],
-            'body' => $validated['postBody'],
-        ]);
-        $post->assignAgents($validated['postAgentIds']);
-        app(StorePostAttachments::class)->handle($post, $uploads);
+        $post = app(UpdateDraftPost::class)->handle(
+            post: $post,
+            workspace: $workspace,
+            user: Auth::user(),
+            title: $validated['postTitle'],
+            body: $validated['postBody'],
+            agentIds: $validated['postAgentIds'],
+            uploads: $uploads,
+        );
         $this->reset('postUploads');
 
-        $this->selectedPostSlug = $post->fresh()->slug;
+        $this->selectedPostSlug = $post->slug;
 
         Flux::toast(variant: 'success', text: __('Saved.'));
     }
@@ -791,16 +795,22 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
         abort_unless($post && $post->status === PostStatus::Draft, 403);
 
-        $this->saveSelectedPost();
-
         $workspace = $this->workspace();
 
         abort_unless($workspace, 403);
 
-        $post->fresh()->update([
-            'sender_principal_id' => $post->sender_principal_id ?: $workspace->principalForUser(Auth::user())->id,
-            'status' => PostStatus::Published,
-        ]);
+        $this->saveSelectedPost();
+
+        app(UpdateDraftPost::class)->handle(
+            post: $post->fresh(),
+            workspace: $workspace,
+            user: Auth::user(),
+            title: $this->postTitle,
+            body: $this->postBody,
+            agentIds: $this->postAgentIds,
+            uploads: [],
+            publish: true,
+        );
     }
 
     public function deleteSelectedPostAttachment(int $attachmentId): void

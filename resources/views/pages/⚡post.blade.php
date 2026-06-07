@@ -1,7 +1,7 @@
 <?php
 
 use App\Enums\PostStatus;
-use App\Actions\Posts\StorePostAttachments;
+use App\Actions\Posts\UpdateDraftPost;
 use App\Models\Agent;
 use App\Models\Post;
 use App\Models\Topic;
@@ -90,12 +90,15 @@ new #[Layout('layouts::workspace'), Title('Post')] class extends Component {
             'uploads.*' => __('attachment'),
         ])->validate();
 
-        $this->post->update([
-            'title' => $validated['title'],
-            'body' => $validated['body'],
-        ]);
-        $this->post->assignAgents($validated['agentIds']);
-        app(StorePostAttachments::class)->handle($this->post, $uploads);
+        $this->post = app(UpdateDraftPost::class)->handle(
+            post: $this->post,
+            workspace: $workspace,
+            user: Auth::user(),
+            title: $validated['title'],
+            body: $validated['body'],
+            agentIds: $validated['agentIds'],
+            uploads: $uploads,
+        );
         $this->reset('uploads');
 
         Flux::toast(variant: 'success', text: __('Saved.'));
@@ -125,14 +128,16 @@ new #[Layout('layouts::workspace'), Title('Post')] class extends Component {
             'uploads.*' => __('attachment'),
         ])->validate();
 
-        $this->post->update([
-            'title' => $validated['title'],
-            'body' => $validated['body'],
-            'sender_principal_id' => $this->post->sender_principal_id ?: $workspace->principalForUser(Auth::user())->id,
-            'status' => PostStatus::Published,
-        ]);
-        $this->post->assignAgents($validated['agentIds']);
-        app(StorePostAttachments::class)->handle($this->post, $uploads);
+        $this->post = app(UpdateDraftPost::class)->handle(
+            post: $this->post,
+            workspace: $workspace,
+            user: Auth::user(),
+            title: $validated['title'],
+            body: $validated['body'],
+            agentIds: $validated['agentIds'],
+            uploads: $uploads,
+            publish: true,
+        );
         $this->reset('uploads');
     }
 
