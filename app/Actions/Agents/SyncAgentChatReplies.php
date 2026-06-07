@@ -20,6 +20,21 @@ class SyncAgentChatReplies
     {
         $post->loadMissing(['sender.agent', 'thread', 'topic.workspace']);
 
+        if ($post->sender?->type === Principal::TypeAgent) {
+            $mentionedAgents = $post->mentionedAgents()
+                ->reject(fn (Agent $agent): bool => $agent->is($post->sender?->agent))
+                ->values();
+
+            $this->removeStaleMentionSummons($post, $mentionedAgents);
+            $this->removeStaleRoutedSummons($post, Collection::make());
+
+            if ($post->status === PostStatus::Published && $mentionedAgents->isNotEmpty()) {
+                $this->summonAgents($post, $mentionedAgents, AgentTask::EventChatSummoned);
+            }
+
+            return;
+        }
+
         $mentionedAgents = $post->mentionedAgents();
 
         $this->removeStaleMentionSummons($post, $mentionedAgents);

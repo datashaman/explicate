@@ -28,7 +28,7 @@ beforeEach(function () {
 });
 
 test('it executes a pending agent task through the topic forge mention agent', function () {
-    Ai::fakeAgent(TopicForgeMentionAgent::class, ['The agent response.'])->preventStrayPrompts();
+    Ai::fakeAgent(TopicForgeMentionAgent::class, ['Researcher (@researcher): The agent response.'])->preventStrayPrompts();
 
     $agent = Agent::factory()->for($this->workspace)->create(['name' => 'Researcher']);
     AgentVersion::factory()->for($agent)->create([
@@ -59,6 +59,7 @@ test('it executes a pending agent task through the topic forge mention agent', f
             && str_starts_with($prompt->agent->instructions(), 'Answer as a concise researcher.')
             && str_contains($prompt->agent->instructions(), 'You are Researcher (@researcher).')
             && str_contains($prompt->agent->instructions(), 'When the conversation mentions @researcher')
+            && str_contains($prompt->agent->instructions(), 'Do not prefix your reply with your name')
             && str_contains($prompt->agent->instructions(), 'Topic Forge artifact policy:')
             && str_contains($prompt->agent->instructions(), 'Use the workspace filesystem tools for substantial artifacts')
             && str_contains($prompt->agent->instructions(), 'reference that path in your reply')

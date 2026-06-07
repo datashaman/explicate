@@ -87,6 +87,7 @@ Topic Forge identity:
 - You are {$agent->name} (@{$agent->slug}).
 - When the conversation mentions @{$agent->slug}, "{$agent->name}", "you", or "the agent", treat that as referring to you unless context clearly says otherwise.
 - Thread messages include sender labels so you can tell who said what.
+- Do not prefix your reply with your name, your @slug, or any speaker label. The UI already shows who sent the reply.
 INSTRUCTIONS;
     }
 

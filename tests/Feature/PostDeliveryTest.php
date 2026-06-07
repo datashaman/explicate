@@ -253,3 +253,47 @@ test('an explicit agent mention in a thread bypasses the router', function () {
     Queue::assertNotPushed(RouteThreadAgentReplies::class);
     Ai::assertAgentNeverPrompted(TopicForgeAgentRouter::class);
 });
+
+test('agent authored replies do not summon themselves when their body contains their mention', function () {
+    Ai::fakeAgent(TopicForgeAgentRouter::class)->preventStrayPrompts();
+
+    $agent = Agent::factory()->for($this->workspace)->create(['name' => 'Specification Writer']);
+    $thread = Thread::factory()->for($this->topic)->create();
+
+    $reply = Post::factory()->for($this->topic)->for($thread)->create([
+        'sender_principal_id' => $this->workspace->principalForAgent($agent)->id,
+        'body' => 'Specification Writer (@specification-writer): Acknowledged.',
+        'status' => PostStatus::Published,
+    ]);
+
+    expect(AgentTask::query()->whereBelongsTo($reply)->exists())->toBeFalse();
+
+    Queue::assertNotPushed(ProcessAgentTask::class);
+    Queue::assertNotPushed(RouteThreadAgentReplies::class);
+    Ai::assertAgentNeverPrompted(TopicForgeAgentRouter::class);
+});
+
+test('agent authored replies can summon other mentioned agents', function () {
+    Ai::fakeAgent(TopicForgeAgentRouter::class)->preventStrayPrompts();
+
+    $writer = Agent::factory()->for($this->workspace)->create(['name' => 'Specification Writer']);
+    $reviewer = Agent::factory()->for($this->workspace)->create(['name' => 'Reviewer']);
+    $thread = Thread::factory()->for($this->topic)->create();
+
+    $reply = Post::factory()->for($this->topic)->for($thread)->create([
+        'sender_principal_id' => $this->workspace->principalForAgent($writer)->id,
+        'body' => '@reviewer Please check this specification before I continue.',
+        'status' => PostStatus::Published,
+    ]);
+
+    $task = AgentTask::query()
+        ->whereBelongsTo($reviewer)
+        ->whereBelongsTo($reply)
+        ->sole();
+
+    expect($task->event_type)->toBe(AgentTask::EventChatSummoned);
+
+    Queue::assertPushed(ProcessAgentTask::class, fn (ProcessAgentTask $job): bool => $job->task->is($task));
+    Queue::assertNotPushed(RouteThreadAgentReplies::class);
+    Ai::assertAgentNeverPrompted(TopicForgeAgentRouter::class);
+});

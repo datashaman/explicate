@@ -9,6 +9,7 @@ use App\Models\Post;
 use App\Models\User;
 use Laravel\Ai\Enums\Lab;
 use RuntimeException;
+use Stringable;
 use Throwable;
 
 class ExecuteAgentTask
@@ -56,7 +57,7 @@ class ExecuteAgentTask
                 'last_error' => null,
             ])->save();
 
-            return $task->syncStatusPost($response->text);
+            return $task->syncStatusPost($this->cleanReplyText($task, $response->text));
         } catch (Throwable $throwable) {
             $task->forceFill([
                 'status' => AgentTaskStatus::Failed,
@@ -72,6 +73,21 @@ class ExecuteAgentTask
     protected function promptFor(Post $post): string
     {
         return trim($post->body);
+    }
+
+    private function cleanReplyText(AgentTask $task, string|Stringable $text): string
+    {
+        $agent = $task->agent;
+        $reply = trim((string) $text);
+        $name = preg_quote($agent->name, '/');
+        $slug = preg_quote($agent->slug, '/');
+
+        return trim((string) preg_replace(
+            "/^{$name}(?:\\s+\\(@{$slug}\\)|\\s+@{$slug})?\\s*:\\s*/i",
+            '',
+            $reply,
+            1,
+        ));
     }
 
     private function toolUserFor(AgentTask $task): User
