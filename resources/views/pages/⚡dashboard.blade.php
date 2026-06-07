@@ -832,7 +832,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
         abort_unless($post, 404);
 
-        $post->update(['status' => PostStatus::Archived]);
+        $post->archive();
     }
 
     public function unpublishSelectedPost(): void
@@ -841,7 +841,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
         abort_unless($post && $post->status === PostStatus::Published, 403);
 
-        $post->update(['status' => PostStatus::Draft]);
+        $post->moveToDraft();
 
         $this->syncSelectedPostFields();
     }
@@ -852,7 +852,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
         abort_unless($post && $post->status === PostStatus::Archived, 403);
 
-        $post->update(['status' => PostStatus::Draft]);
+        $post->moveToDraft();
 
         $this->syncSelectedPostFields();
     }

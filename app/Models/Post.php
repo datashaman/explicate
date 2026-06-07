@@ -160,6 +160,16 @@ class Post extends Model
             ->update(['available_at' => now()]);
     }
 
+    public function moveToDraft(): void
+    {
+        $this->update(['status' => PostStatus::Draft]);
+    }
+
+    public function archive(): void
+    {
+        $this->update(['status' => PostStatus::Archived]);
+    }
+
     /** @return list<int> */
     public function assignedAgentIds(): array
     {

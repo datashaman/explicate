@@ -139,7 +139,7 @@ new #[Layout('layouts::workspace'), Title('Post')] class extends Component {
 
     public function unpublish(): void
     {
-        $this->post->update(['status' => PostStatus::Draft]);
+        $this->post->moveToDraft();
 
         $this->title = $this->post->title;
         $this->body = $this->post->body ?? '';
@@ -148,12 +148,12 @@ new #[Layout('layouts::workspace'), Title('Post')] class extends Component {
 
     public function archive(): void
     {
-        $this->post->update(['status' => PostStatus::Archived]);
+        $this->post->archive();
     }
 
     public function unarchive(): void
     {
-        $this->post->update(['status' => PostStatus::Draft]);
+        $this->post->moveToDraft();
 
         $this->title = $this->post->title;
         $this->body = $this->post->body ?? '';
