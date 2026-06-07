@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\PostFolder;
+use App\Enums\PostListColumn;
 use App\Enums\PostStatus;
 use App\Enums\Provider;
 use App\Enums\ReasoningEffort;
@@ -404,18 +405,19 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         $dateLabel = $folder?->dateLabel() ?? __('Posted');
 
         $columns = [
-            ['key' => 'name', 'label' => __('Post'), 'class' => 'min-w-0 flex-1'],
+            PostListColumn::Name->toColumn(),
         ];
 
         if ($folder === PostFolder::Drafts) {
-            $columns[] = ['key' => 'topic', 'label' => __('Topic'), 'class' => 'w-28 shrink-0'];
+            $columns[] = PostListColumn::Topic->toColumn();
         } else {
-            $columns[] = ['key' => 'sender', 'label' => __('Sender'), 'class' => 'w-28 shrink-0'];
-            $columns[] = ['key' => 'topic', 'label' => __('Topic'), 'class' => 'w-28 shrink-0'];
+            $columns[] = PostListColumn::Sender->toColumn();
+            $columns[] = PostListColumn::Topic->toColumn();
         }
 
-        $columns[] = ['key' => $folder?->dateKey() ?? 'sent', 'label' => $dateLabel, 'class' => 'w-28 shrink-0'];
-        $columns[] = ['key' => 'attachments', 'label' => __('Files'), 'class' => 'w-12 shrink-0 justify-center'];
+        $dateColumn = PostListColumn::from($folder?->dateKey() ?? PostListColumn::Sent->value);
+        $columns[] = $dateColumn->toColumn($dateLabel);
+        $columns[] = PostListColumn::Attachments->toColumn();
 
         return $columns;
     }

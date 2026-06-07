@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\PostStatus;
+use App\Enums\PostListColumn;
 use App\Enums\Provider;
 use App\Enums\ReasoningEffort;
 use App\Models\Agent;
@@ -221,10 +222,10 @@ new #[Layout('layouts::workspace'), Title('Topic')] class extends Component {
                 'createTest' => 'topic-new-post-button',
                 'showArchivedModel' => 'showArchived',
                 'listColumns' => [
-                    ['key' => 'name', 'label' => __('Post'), 'class' => 'min-w-0 flex-1'],
-                    ['key' => 'sender', 'label' => __('Sender'), 'class' => 'w-28 shrink-0'],
-                    ['key' => 'sent', 'label' => __('Sent'), 'class' => 'w-28 shrink-0'],
-                    ['key' => 'attachments', 'label' => __('Attachments'), 'class' => 'w-24 shrink-0'],
+                    PostListColumn::Name->toColumn(),
+                    PostListColumn::Sender->toColumn(),
+                    PostListColumn::Sent->toColumn(),
+                    PostListColumn::Attachments->toColumn(__('Attachments'), 'w-24 shrink-0'),
                 ],
                 'listDefaultSort' => 'sent',
                 'listDefaultSortDirection' => 'desc',
