@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\Agents\ExecuteAgentTask;
+use App\Ai\Tools\TopicForgeToolFactory;
 use App\Enums\AgentTaskStatus;
 use App\Enums\PostStatus;
 use App\Enums\Provider;
@@ -10,10 +11,13 @@ use App\Models\AgentVersion;
 use App\Models\Post;
 use App\Models\Thread;
 use App\Models\Topic;
+use App\Models\Workspace;
 use Illuminate\Support\Facades\Queue;
 use Laravel\Ai\Ai;
 use Laravel\Ai\AnonymousAgent;
 use Laravel\Ai\Prompts\AgentPrompt;
+use Laravel\Ai\Tools\Request as AiToolRequest;
+use Laravel\Ai\Tools\ToolNameResolver;
 
 beforeEach(function () {
     [$this->user, $this->workspace] = userWithWorkspace();
@@ -45,10 +49,18 @@ test('it executes a pending agent task through an anonymous laravel ai agent', f
     $reply = app(ExecuteAgentTask::class)->handle($task);
 
     Ai::assertAgentWasPrompted(AnonymousAgent::class, function (AgentPrompt $prompt): bool {
+        $toolNames = collect($prompt->agent->tools())
+            ->map(fn ($tool): string => ToolNameResolver::resolve($tool))
+            ->all();
+
         return $prompt->prompt === '@researcher Find the latest internal context.'
             && $prompt->model === 'gemini-2.5-flash'
             && $prompt->provider()->name() === 'gemini'
-            && $prompt->agent->instructions() === 'Answer as a concise researcher.';
+            && $prompt->agent->instructions() === 'Answer as a concise researcher.'
+            && in_array('list-files', $toolNames, true)
+            && in_array('write-file', $toolNames, true)
+            && in_array('create-post', $toolNames, true)
+            && ! in_array('switch-workspace', $toolNames, true);
     });
 
     expect($reply)->not->toBeNull()
@@ -146,4 +158,27 @@ test('it does not execute mentioned draft posts until they are published', funct
     expect(AgentTask::query()->whereBelongsTo($post)->count())->toBe(0);
 
     Ai::assertAgentNeverPrompted(AnonymousAgent::class);
+});
+
+test('mention agent tools run against the task workspace context', function () {
+    $otherWorkspace = Workspace::factory()->for($this->user->currentTeam)->create([
+        'name' => 'Other Workspace',
+        'slug' => 'other-workspace',
+    ]);
+    $this->user->switchWorkspace($otherWorkspace);
+
+    $tool = collect(app(TopicForgeToolFactory::class)->forAgentTask($this->user, $this->workspace))
+        ->first(fn ($tool): bool => ToolNameResolver::resolve($tool) === 'write-file');
+
+    expect($tool)->not->toBeNull();
+
+    $response = $tool->handle(new AiToolRequest([
+        'path' => 'notes/context.md',
+        'content' => 'Task-local context.',
+    ]));
+
+    expect((string) $response)->toContain('notes/context.md');
+    expect($this->workspace->files()->where('path', 'notes/context.md')->exists())->toBeTrue();
+    expect($otherWorkspace->files()->where('path', 'notes/context.md')->exists())->toBeFalse();
+    expect($this->user->fresh()->current_workspace_id)->toBe($otherWorkspace->id);
 });
