@@ -7,6 +7,8 @@ use App\Enums\AgentTaskStatus;
 use App\Models\AgentTask;
 use App\Models\Post;
 use App\Models\User;
+use App\Services\GitRepositoryService;
+use Illuminate\Support\Facades\Log;
 use Laravel\Ai\Enums\Lab;
 use RuntimeException;
 use Stringable;
@@ -36,6 +38,8 @@ class ExecuteAgentTask
         $task->syncStatusPost();
 
         try {
+            $this->syncRepositories($task);
+
             $version = $task->agent->latestVersion;
 
             if (! $version) {
@@ -67,6 +71,19 @@ class ExecuteAgentTask
             $task->syncStatusPost();
 
             throw $throwable;
+        }
+    }
+
+    private function syncRepositories(AgentTask $task): void
+    {
+        $workspace = $task->agent->workspace;
+
+        foreach ($workspace->repositories as $repo) {
+            try {
+                (new GitRepositoryService($repo))->sync();
+            } catch (Throwable $e) {
+                Log::warning("Failed to sync repository [{$repo->name}] for workspace [{$workspace->id}]: {$e->getMessage()}");
+            }
         }
     }
 

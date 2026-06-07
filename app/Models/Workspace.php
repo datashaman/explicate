@@ -57,6 +57,14 @@ class Workspace extends Model
     }
 
     /**
+     * @return HasMany<WorkspaceRepository, $this>
+     */
+    public function repositories(): HasMany
+    {
+        return $this->hasMany(WorkspaceRepository::class)->orderBy('name');
+    }
+
+    /**
      * @return HasMany<Principal, $this>
      */
     public function principals(): HasMany

@@ -13,6 +13,8 @@ use App\Enums\ReasoningEffort;
 use App\Models\Agent;
 use App\Models\Post;
 use App\Models\Principal;
+use App\Models\WorkspaceRepository;
+use App\Services\GitRepositoryService;
 use App\Services\WorkspaceFilesystemService;
 use App\Models\Thread;
 use App\Models\Topic;
@@ -94,6 +96,20 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
     public string $newWorkspaceFileName = '';
 
     public string $workspaceFileContent = '';
+
+    public ?int $editingRepositoryId = null;
+
+    public string $repositoryName = '';
+
+    public string $repositoryUrl = '';
+
+    public string $repositoryBranch = 'main';
+
+    public string $repositoryAuthType = 'ssh';
+
+    public string $repositorySshPrivateKey = '';
+
+    public string $repositoryAccessToken = '';
 
     /** @var array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile> */
     public array $newPostUploads = [];
@@ -288,6 +304,11 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         return $this->panelAction === 'files' || $this->selectedWorkspaceFilePath !== null;
     }
 
+    public function isReposPanel(): bool
+    {
+        return $this->panelAction === 'repos';
+    }
+
     public function isCreatingPost(): bool
     {
         return $this->creatingPostFromRoute || $this->panelAction === 'new-post';
@@ -352,6 +373,151 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         $countFiles('');
 
         return $count;
+    }
+
+    /** @return \Illuminate\Database\Eloquent\Collection<int, WorkspaceRepository> */
+    public function repositories(): \Illuminate\Database\Eloquent\Collection
+    {
+        $workspace = $this->workspace();
+
+        if (! $workspace) {
+            return collect();
+        }
+
+        return $workspace->repositories;
+    }
+
+    public function openRepository(int $repositoryId): void
+    {
+        $repo = $this->repositories()->find($repositoryId);
+
+        if (! $repo) {
+            return;
+        }
+
+        $this->editingRepositoryId = $repo->id;
+        $this->repositoryName = $repo->name;
+        $this->repositoryUrl = $repo->url;
+        $this->repositoryBranch = $repo->branch;
+        $this->repositoryAuthType = $repo->auth_type;
+        $this->repositorySshPrivateKey = '';
+        $this->repositoryAccessToken = '';
+
+        Flux::modal('edit-repository')->show();
+    }
+
+    public function createRepository(): void
+    {
+        $this->validate([
+            'repositoryName' => ['required', 'string', 'max:255'],
+            'repositoryUrl' => ['required', 'string', 'max:2048'],
+            'repositoryBranch' => ['required', 'string', 'max:255'],
+            'repositoryAuthType' => ['required', 'in:ssh,token'],
+            'repositorySshPrivateKey' => ['required_if:repositoryAuthType,ssh', 'nullable', 'string'],
+            'repositoryAccessToken' => ['required_if:repositoryAuthType,token', 'nullable', 'string'],
+        ]);
+
+        $workspace = $this->workspace();
+
+        if (! $workspace) {
+            return;
+        }
+
+        $repo = new WorkspaceRepository;
+        $repo->workspace_id = $workspace->id;
+        $repo->name = $this->repositoryName;
+        $repo->url = $this->repositoryUrl;
+        $repo->branch = $this->repositoryBranch;
+        $repo->auth_type = $this->repositoryAuthType;
+
+        if ($this->repositoryAuthType === 'ssh') {
+            $repo->ssh_private_key = $this->repositorySshPrivateKey;
+        } else {
+            $repo->access_token = $this->repositoryAccessToken;
+        }
+
+        $service = new GitRepositoryService($repo);
+
+        try {
+            $service->validate();
+        } catch (\Throwable $e) {
+            $this->addError('repositoryUrl', __('Could not connect to repository: ').$e->getMessage());
+
+            return;
+        }
+
+        $repo->save();
+
+        $this->resetRepositoryForm();
+        Flux::modal('new-repository')->close();
+    }
+
+    public function saveRepository(): void
+    {
+        $this->validate([
+            'repositoryName' => ['required', 'string', 'max:255'],
+            'repositoryUrl' => ['required', 'string', 'max:2048'],
+            'repositoryBranch' => ['required', 'string', 'max:255'],
+            'repositoryAuthType' => ['required', 'in:ssh,token'],
+            'repositorySshPrivateKey' => ['nullable', 'string'],
+            'repositoryAccessToken' => ['nullable', 'string'],
+        ]);
+
+        $repo = $this->repositories()->find($this->editingRepositoryId);
+
+        if (! $repo) {
+            return;
+        }
+
+        $repo->name = $this->repositoryName;
+        $repo->url = $this->repositoryUrl;
+        $repo->branch = $this->repositoryBranch;
+        $repo->auth_type = $this->repositoryAuthType;
+
+        if ($this->repositoryAuthType === 'ssh' && $this->repositorySshPrivateKey) {
+            $repo->ssh_private_key = $this->repositorySshPrivateKey;
+        }
+
+        if ($this->repositoryAuthType === 'token' && $this->repositoryAccessToken) {
+            $repo->access_token = $this->repositoryAccessToken;
+        }
+
+        $service = new GitRepositoryService($repo);
+
+        try {
+            $service->validate();
+        } catch (\Throwable $e) {
+            $this->addError('repositoryUrl', __('Could not connect to repository: ').$e->getMessage());
+
+            return;
+        }
+
+        $repo->save();
+
+        $this->resetRepositoryForm();
+        Flux::modal('edit-repository')->close();
+    }
+
+    public function deleteRepository(int $repositoryId): void
+    {
+        $repo = $this->repositories()->find($repositoryId);
+
+        if (! $repo) {
+            return;
+        }
+
+        (new GitRepositoryService($repo))->remove();
+        $repo->delete();
+
+        $this->resetRepositoryForm();
+        Flux::modal('edit-repository')->close();
+    }
+
+    private function resetRepositoryForm(): void
+    {
+        $this->reset('editingRepositoryId', 'repositoryName', 'repositoryUrl', 'repositoryBranch', 'repositoryAuthType', 'repositorySshPrivateKey', 'repositoryAccessToken');
+        $this->repositoryBranch = 'main';
+        $this->repositoryAuthType = 'ssh';
     }
 
     /** @return list<array{slug: string, name: string, icon: string, href: string, count: int}> */
@@ -1364,7 +1530,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             $selectedDashboardPost = $this->selectedPost();
             $selectedDashboardFolder = $this->selectedSystemFolder();
             $selectedDashboardFile = $this->selectedWorkspaceFile();
-            $hasSelectedPostsPanel = (bool) ($selectedDashboardAgent || $this->selectedTopic() || $selectedDashboardFolder || $this->isCreatingPost() || $this->isFilesPanel());
+            $hasSelectedPostsPanel = (bool) ($selectedDashboardAgent || $this->selectedTopic() || $selectedDashboardFolder || $this->isCreatingPost() || $this->isFilesPanel() || $this->isReposPanel());
             $hasThreadPanel = (bool) $selectedDashboardPost;
         @endphp
 
@@ -1457,6 +1623,24 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                     </a>
                 </section>
 
+                <section class="shrink-0 overflow-hidden rounded-lg border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none">
+                    <a href="{{ route('dashboard', ['action' => 'repos', 'panel' => 'posts']) }}" wire:navigate
+                       @class([
+                           'flex items-center gap-3 px-4 py-3 hover:bg-neutral-100 dark:hover:bg-white/5',
+                           'bg-sky-100/80 dark:bg-sky-500/15' => $this->isReposPanel(),
+                       ])>
+                        <div class="flex size-8 shrink-0 items-center justify-center rounded-full bg-sky-50 text-sky-500 dark:bg-sky-500/10 dark:text-sky-300">
+                            <flux:icon name="code-bracket" class="size-4" />
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <div class="truncate text-sm font-medium text-neutral-700 dark:text-neutral-300">{{ __('Repositories') }}</div>
+                        </div>
+                        @if ($this->repositories()->isNotEmpty())
+                            <flux:badge color="zinc" size="sm" data-test="workspace-repos-count">{{ $this->repositories()->count() }}</flux:badge>
+                        @endif
+                    </a>
+                </section>
+
                 <section class="flex max-h-[45%] min-h-0 shrink-0 flex-col overflow-hidden rounded-lg border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none">
                     <div class="border-b border-neutral-300 bg-amber-50 px-4 py-3 dark:border-white/10 dark:bg-amber-500/10">
                         <div class="flex items-center justify-between gap-3">
@@ -1497,7 +1681,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                 </section>
             </div>
 
-            @if ($this->selectedAgent() || $this->selectedTopic() || $this->selectedSystemFolder() || $this->isCreatingPost() || $this->isFilesPanel())
+            @if ($this->selectedAgent() || $this->selectedTopic() || $this->selectedSystemFolder() || $this->isCreatingPost() || $this->isFilesPanel() || $this->isReposPanel())
                 <section
                     id="posts-panel"
                     data-mobile-panel="posts"
@@ -1602,6 +1786,35 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                         @include('partials.dashboard-agent-form', [
                             'selectedDashboardAgent' => $selectedDashboardAgent,
                         ])
+                    @elseif ($this->isReposPanel())
+                        <div class="flex items-center justify-between gap-3 border-b border-neutral-300 bg-sky-50 px-4 py-3 dark:border-white/10 dark:bg-sky-500/10">
+                            <flux:heading size="sm">{{ __('Repositories') }}</flux:heading>
+                            <flux:modal.trigger name="new-repository">
+                                <flux:button icon="plus" size="xs">{{ __('Add repo') }}</flux:button>
+                            </flux:modal.trigger>
+                        </div>
+
+                        <div class="min-h-0 flex-1 overflow-auto" data-test="workspace-repos-panel">
+                            @if ($this->repositories()->isEmpty())
+                                <div class="px-4 py-6 text-center">
+                                    <flux:text class="text-sm text-neutral-400 dark:text-neutral-600">{{ __('No repositories connected to this workspace.') }}</flux:text>
+                                </div>
+                            @else
+                                <div class="divide-y divide-neutral-200 dark:divide-white/5">
+                                    @foreach ($this->repositories() as $repo)
+                                        <div wire:key="repo-{{ $repo->id }}" class="flex items-center gap-3 px-4 py-3">
+                                            <div class="min-w-0 flex-1">
+                                                <div class="truncate text-sm font-medium text-neutral-700 dark:text-neutral-300" data-test="repo-name-{{ $repo->id }}">{{ $repo->name }}</div>
+                                                <div class="truncate text-xs text-neutral-400 dark:text-neutral-500">{{ $repo->url }}</div>
+                                                <div class="text-xs text-neutral-400 dark:text-neutral-500">{{ $repo->branch }} &middot; {{ $repo->auth_type === 'ssh' ? __('SSH') : __('Token') }}</div>
+                                            </div>
+                                            <flux:button wire:click="openRepository({{ $repo->id }})" size="xs" variant="filled" icon="pencil-square">{{ __('Edit') }}</flux:button>
+                                        </div>
+                                    @endforeach
+                                </div>
+                            @endif
+                        </div>
+
                     @elseif ($this->isCreatingPost())
                         <div class="flex items-center justify-between gap-3 border-b border-neutral-300 bg-emerald-50 px-4 py-3 dark:border-white/10 dark:bg-emerald-500/10">
                             <flux:heading size="sm" class="min-w-0 flex-1 truncate">{{ __('New post') }}</flux:heading>
@@ -1897,6 +2110,70 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                         <flux:button variant="filled">{{ __('Cancel') }}</flux:button>
                     </flux:modal.close>
                     <flux:button variant="primary" type="submit">{{ __('Create') }}</flux:button>
+                </div>
+            </form>
+        </flux:modal>
+
+        <flux:modal name="new-repository" focusable class="max-w-lg">
+            <form wire:submit="createRepository" class="space-y-6">
+                <div>
+                    <flux:heading size="lg">{{ __('Add repository') }}</flux:heading>
+                    <flux:subheading>{{ __('Connect a git repository to this workspace.') }}</flux:subheading>
+                </div>
+
+                <flux:input wire:model="repositoryName" :label="__('Name')" type="text" required autofocus />
+                <flux:input wire:model="repositoryUrl" :label="__('URL')" type="text" required placeholder="git@github.com:org/repo.git" />
+                <flux:input wire:model="repositoryBranch" :label="__('Branch')" type="text" required />
+
+                <flux:select wire:model.live="repositoryAuthType" :label="__('Auth type')">
+                    <flux:select.option value="ssh">{{ __('SSH key') }}</flux:select.option>
+                    <flux:select.option value="token">{{ __('Access token') }}</flux:select.option>
+                </flux:select>
+
+                @if ($repositoryAuthType === 'ssh')
+                    <flux:textarea wire:model="repositorySshPrivateKey" :label="__('SSH private key')" rows="6" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----" required />
+                @else
+                    <flux:input wire:model="repositoryAccessToken" :label="__('Access token')" type="password" required />
+                @endif
+
+                <div class="flex justify-end gap-2">
+                    <flux:modal.close>
+                        <flux:button variant="filled">{{ __('Cancel') }}</flux:button>
+                    </flux:modal.close>
+                    <flux:button variant="primary" type="submit">{{ __('Add repository') }}</flux:button>
+                </div>
+            </form>
+        </flux:modal>
+
+        <flux:modal name="edit-repository" focusable class="max-w-lg">
+            <form wire:submit="saveRepository" class="space-y-6">
+                <div>
+                    <flux:heading size="lg">{{ __('Edit repository') }}</flux:heading>
+                </div>
+
+                <flux:input wire:model="repositoryName" :label="__('Name')" type="text" required autofocus />
+                <flux:input wire:model="repositoryUrl" :label="__('URL')" type="text" required />
+                <flux:input wire:model="repositoryBranch" :label="__('Branch')" type="text" required />
+
+                <flux:select wire:model.live="repositoryAuthType" :label="__('Auth type')">
+                    <flux:select.option value="ssh">{{ __('SSH key') }}</flux:select.option>
+                    <flux:select.option value="token">{{ __('Access token') }}</flux:select.option>
+                </flux:select>
+
+                @if ($repositoryAuthType === 'ssh')
+                    <flux:textarea wire:model="repositorySshPrivateKey" :label="__('SSH private key (leave blank to keep existing)')" rows="6" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----" />
+                @else
+                    <flux:input wire:model="repositoryAccessToken" :label="__('Access token (leave blank to keep existing)')" type="password" />
+                @endif
+
+                <div class="flex justify-between gap-2">
+                    <flux:button wire:click="deleteRepository({{ $editingRepositoryId ?? 0 }})" wire:confirm="{{ __('Remove this repository? The local clone will also be deleted.') }}" variant="danger" size="sm" icon="trash">{{ __('Remove') }}</flux:button>
+                    <div class="flex gap-2">
+                        <flux:modal.close>
+                            <flux:button variant="filled">{{ __('Cancel') }}</flux:button>
+                        </flux:modal.close>
+                        <flux:button variant="primary" type="submit">{{ __('Save') }}</flux:button>
+                    </div>
                 </div>
             </form>
         </flux:modal>
