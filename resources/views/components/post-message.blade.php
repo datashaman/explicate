@@ -1,6 +1,5 @@
 @props([
     'post',
-    'href' => null,
     'showTopic' => true,
 ])
 
@@ -86,17 +85,10 @@
         </div>
 
         <div class="text-sm leading-[1.2] text-neutral-800 dark:text-neutral-200">
-            @if ($href && $mentionedAgentsBySlug->isEmpty())
-                <a href="{{ $href }}" wire:navigate @class([
-                    'block whitespace-pre-wrap hover:underline',
-                    'text-neutral-400 dark:text-neutral-600' => ! $post->body,
-                ])>{{ $body }}</a>
-            @else
-                <div @class([
-                    'whitespace-pre-wrap',
-                    'text-neutral-400 dark:text-neutral-600' => ! $post->body,
-                ])>{!! $bodyHtml !!}</div>
-            @endif
+            <div @class([
+                'whitespace-pre-wrap',
+                'text-neutral-400 dark:text-neutral-600' => ! $post->body,
+            ])>{!! $bodyHtml !!}</div>
         </div>
 
         @if ($post->attachments->isNotEmpty())

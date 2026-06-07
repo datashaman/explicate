@@ -2,16 +2,20 @@
 
 use App\Enums\AgentTaskStatus;
 use App\Enums\PostStatus;
+use App\Jobs\ProcessAgentTask;
 use App\Models\Agent;
 use App\Models\AgentTask;
 use App\Models\Post;
 use App\Models\Topic;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Queue;
 
 beforeEach(function () {
     [$this->user, $this->workspace] = userWithWorkspace();
     $this->topic = Topic::factory()->for($this->workspace)->create();
     $this->senderPrincipal = $this->workspace->principalForUser($this->user);
+
+    Queue::fake();
 });
 
 test('mentioning an agent in a published post creates agent work instead of a notification', function () {
@@ -36,6 +40,8 @@ test('mentioning an agent in a published post creates agent work instead of a no
         ->and($task->event_type)->toBe(AgentTask::EventPostMentioned)
         ->and($task->status)->toBe(AgentTaskStatus::Pending)
         ->and($task->available_at)->not->toBeNull();
+
+    Queue::assertPushed(ProcessAgentTask::class, fn (ProcessAgentTask $job): bool => $job->task->is($task));
 });
 
 test('topic posts without assignments do not create notifications or agent tasks', function () {

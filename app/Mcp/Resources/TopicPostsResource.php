@@ -39,6 +39,7 @@ class TopicPostsResource extends Resource implements HasUriTemplate
             );
 
             $posts = $topic->posts()
+                ->topLevel()
                 ->with(['topic.workspace', 'sender.user', 'sender.agent'])
                 ->get()
                 ->map(fn ($post) => $this->postSummaryPayload($post))

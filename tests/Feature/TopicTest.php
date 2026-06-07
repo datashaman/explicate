@@ -14,6 +14,7 @@ use App\Models\User;
 use App\Models\Workspace;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 
@@ -432,6 +433,90 @@ test('dashboard shows selected topic in the main panel', function () {
         ->assertDontSeeText('Topic:')
         ->assertSee('Another selected post')
         ->assertDontSee('Other post');
+});
+
+test('dashboard keeps thread replies out of top-level topic lists', function () {
+    [$user, $workspace] = userWithWorkspace();
+
+    $topic = Topic::factory()->for($workspace)->create(['name' => 'Selected Topic', 'slug' => 'selected-topic']);
+    $sourcePost = Post::factory()->for($topic)->create([
+        'body' => 'Top-level request',
+        'status' => PostStatus::Published,
+    ]);
+    $thread = Thread::factory()->for($topic)->create([
+        'parent_post_id' => $sourcePost->id,
+        'title' => 'Top-level request',
+    ]);
+    Post::factory()->for($topic)->for($thread)->create([
+        'body' => 'Threaded agent reply',
+        'status' => PostStatus::Published,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('dashboard', ['topic' => $topic->slug]))
+        ->assertOk()
+        ->assertSee('Top-level request')
+        ->assertDontSee('Threaded agent reply');
+
+    $this->actingAs($user)
+        ->get(route('dashboard', ['topic' => $topic->slug, 'post' => $sourcePost->ulid, 'panel' => 'posts']))
+        ->assertOk()
+        ->assertSee('Top-level request')
+        ->assertSee('Threaded agent reply')
+        ->assertSee('id="posts-panel"', escape: false)
+        ->assertSee('id="thread-panel"', escape: false)
+        ->assertSee('data-test="folder-post-message"', escape: false);
+});
+
+test('dashboard post messages open from the row instead of a body link', function () {
+    [$user, $workspace] = userWithWorkspace();
+
+    $topic = Topic::factory()->for($workspace)->create(['name' => 'Selected Topic', 'slug' => 'selected-topic']);
+    $post = Post::factory()->for($topic)->create([
+        'body' => 'Open the thread panel from this row.',
+        'status' => PostStatus::Published,
+    ]);
+
+    $postHref = route('dashboard', ['topic' => $topic->slug, 'post' => $post->ulid, 'panel' => 'posts']);
+
+    $this->actingAs($user)
+        ->get(route('dashboard', ['topic' => $topic->slug]))
+        ->assertOk()
+        ->assertSee('data-test="folder-post-message"', escape: false)
+        ->assertSee('cursor-pointer', escape: false)
+        ->assertSee('data-href="'.e($postHref).'"', escape: false)
+        ->assertSee('$wire.openPost', escape: false)
+        ->assertDontSee('block whitespace-pre-wrap hover:underline', escape: false);
+});
+
+test('dashboard opens a post thread panel from the feed', function () {
+    [$user, $workspace] = userWithWorkspace();
+
+    $topic = Topic::factory()->for($workspace)->create(['name' => 'Selected Topic', 'slug' => 'selected-topic']);
+    $sourcePost = Post::factory()->for($topic)->create([
+        'body' => 'Top-level request',
+        'status' => PostStatus::Published,
+    ]);
+    $thread = Thread::factory()->for($topic)->create([
+        'parent_post_id' => $sourcePost->id,
+        'title' => 'Top-level request',
+    ]);
+    Post::factory()->for($topic)->for($thread)->create([
+        'body' => 'Threaded agent reply',
+        'status' => PostStatus::Published,
+    ]);
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::dashboard')
+        ->call('openPost', $sourcePost->ulid)
+        ->assertSet('selectedPostUlid', $sourcePost->ulid)
+        ->assertSee('Top-level request')
+        ->assertSee('Threaded agent reply')
+        ->assertSee('id="posts-panel"', escape: false)
+        ->assertSee('id="thread-panel"', escape: false)
+        ->assertSee('data-test="folder-post-message"', escape: false)
+        ->assertSee('data-test="dashboard-post-panel"', escape: false);
 });
 
 test('dashboard shows selected draft post in the main panel', function () {
@@ -884,6 +969,8 @@ test('dashboard can make a new post actionable in the main panel', function () {
 });
 
 test('dashboard creates agent tasks from mentions when sending a new post', function () {
+    Queue::fake();
+
     [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);

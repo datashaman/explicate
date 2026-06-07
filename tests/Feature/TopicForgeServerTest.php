@@ -3,6 +3,7 @@
 use App\Enums\PostStatus;
 use App\Enums\Provider;
 use App\Enums\ReasoningEffort;
+use App\Jobs\ProcessAgentTask;
 use App\Mcp\Resources\AgentResource;
 use App\Mcp\Resources\AgentTaskResource;
 use App\Mcp\Resources\AgentTasksResource;
@@ -17,6 +18,8 @@ use App\Mcp\Resources\WorkspaceTopicsResource;
 use App\Mcp\Servers\TopicForgeServer;
 use App\Mcp\Tools\CreateAgentTool;
 use App\Mcp\Tools\CreatePostTool;
+use App\Mcp\Tools\CreateTopicTool;
+use App\Mcp\Tools\DeletePostTool;
 use App\Mcp\Tools\GetAgentTaskTool;
 use App\Mcp\Tools\GetAgentTool;
 use App\Mcp\Tools\GetPostTool;
@@ -28,6 +31,7 @@ use App\Mcp\Tools\ListTopicsTool;
 use App\Mcp\Tools\ListWorkspacesTool;
 use App\Mcp\Tools\SwitchWorkspaceTool;
 use App\Mcp\Tools\UpdateAgentTool;
+use App\Mcp\Tools\WhoAmITool;
 use App\Mcp\TopicForgeContext;
 use App\Models\Agent;
 use App\Models\AgentTask;
@@ -39,6 +43,7 @@ use App\Models\User;
 use App\Models\Workspace;
 use Illuminate\Container\Container;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Queue;
 use Laravel\Mcp\Server\Transport\FakeTransporter;
 use Laravel\Mcp\Server\Transport\JsonRpcRequest;
 use Laravel\Mcp\Server\Transport\JsonRpcResponse;
@@ -92,6 +97,50 @@ test('list workspaces returns current team workspaces', function () {
                     'is_current' => false,
                 ],
             ],
+        ]);
+});
+
+test('who am i tool returns authenticated mcp identity', function () {
+    $user = User::factory()->create([
+        'name' => 'Local Agent',
+        'email' => 'who-am-i@example.com',
+    ]);
+    $workspace = Workspace::factory()->for($user->currentTeam)->create([
+        'name' => 'Who Am I Workspace',
+        'slug' => 'who-am-i-workspace',
+    ]);
+    $user->switchWorkspace($workspace);
+
+    $response = TopicForgeServer::actingAs($user)->tool(WhoAmITool::class, []);
+
+    $response
+        ->assertOk()
+        ->assertStructuredContent([
+            'resource_uri' => 'topic-forge://whoami',
+            'authenticated' => true,
+            'user' => [
+                'id' => $user->id,
+                'name' => 'Local Agent',
+                'email' => 'who-am-i@example.com',
+            ],
+            'team' => $user->currentTeam->only(['id', 'name', 'slug']),
+            'workspace' => $workspace->only(['id', 'name', 'slug']),
+        ]);
+});
+
+test('who am i tool reports an unauthenticated mcp session', function () {
+    auth()->guard('web')->logout();
+
+    $response = TopicForgeServer::tool(WhoAmITool::class, []);
+
+    $response
+        ->assertOk()
+        ->assertStructuredContent([
+            'resource_uri' => 'topic-forge://whoami',
+            'authenticated' => false,
+            'user' => null,
+            'team' => null,
+            'workspace' => null,
         ]);
 });
 
@@ -188,7 +237,10 @@ test('topic forge tools expose switch workspace instead of workspace slug parame
     $response = topicForgeServerMethodResponse('tools/list');
     $tools = collect($response['result']['tools'])->keyBy('name');
 
+    expect($response['result'])->not->toHaveKey('nextCursor');
+    expect($tools)->toHaveKey('who-am-i');
     expect($tools)->toHaveKey('switch-workspace');
+    expect($tools)->toHaveKey('delete-post');
     expect($tools['switch-workspace']['inputSchema']['properties'])->toHaveKey('workspace_slug');
 
     foreach ([
@@ -200,12 +252,45 @@ test('topic forge tools expose switch workspace instead of workspace slug parame
         'get-agent',
         'list-posts',
         'get-post',
+        'create-topic',
         'create-agent',
         'update-agent',
         'create-post',
+        'delete-post',
     ] as $toolName) {
         expect($tools[$toolName]['inputSchema']['properties'] ?? [])->not->toHaveKey('workspace_slug');
     }
+});
+
+test('create topic creates a topic in the current workspace', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->for($user->currentTeam)->create([
+        'slug' => 'strategy',
+    ]);
+    $otherWorkspace = Workspace::factory()->for($user->currentTeam)->create();
+    $user->switchWorkspace($workspace);
+
+    $response = TopicForgeServer::actingAs($user)->tool(CreateTopicTool::class, [
+        'name' => 'General',
+    ]);
+
+    $topic = $workspace->topics()->where('name', 'General')->first();
+
+    expect($topic)->not->toBeNull();
+    expect($topic?->workspace_id)->toBe($workspace->id);
+    expect($topic?->slug)->toBe('general');
+    expect($otherWorkspace->topics()->count())->toBe(0);
+
+    $response
+        ->assertOk()
+        ->assertStructuredContent(fn ($json) => $json
+            ->where('workspace.slug', 'strategy')
+            ->where('topic.name', 'General')
+            ->where('topic.slug', 'general')
+            ->where('topic.posts_count', 0)
+            ->where('topic.resource_uri', 'topic-forge://workspaces/strategy/topics/general')
+            ->etc()
+        );
 });
 
 test('get topic returns attached agents for an accessible workspace', function () {
@@ -646,6 +731,108 @@ test('create post creates a draft by default', function () {
             ->where('post.resource_uri', "topic-forge://workspaces/strategy/topics/alpha-topic/posts/{$post->ulid}")
             ->etc()
         );
+});
+
+test('create post dispatches mentioned agent task once when published', function () {
+    Queue::fake();
+
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->for($user->currentTeam)->create([
+        'slug' => 'strategy',
+    ]);
+    $user->switchWorkspace($workspace);
+
+    $topic = Topic::factory()->for($workspace)->create([
+        'slug' => 'alpha-topic',
+    ]);
+    Agent::factory()->for($workspace)->create([
+        'name' => 'Research Agent',
+    ]);
+
+    TopicForgeServer::actingAs($user)->tool(CreatePostTool::class, [
+        'topic_slug' => 'alpha-topic',
+        'body' => '@research-agent Please summarize.',
+        'status' => PostStatus::Published->value,
+    ])->assertOk();
+
+    $post = $topic->posts()->where('body', '@research-agent Please summarize.')->sole();
+    $task = AgentTask::query()->whereBelongsTo($post)->sole();
+
+    Queue::assertPushed(ProcessAgentTask::class, fn (ProcessAgentTask $job): bool => $job->task->is($task));
+    Queue::assertPushedTimes(ProcessAgentTask::class, 1);
+});
+
+test('delete post soft deletes an own post and clears derived records', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->for($user->currentTeam)->create([
+        'slug' => 'strategy',
+    ]);
+    $user->switchWorkspace($workspace);
+
+    $topic = Topic::factory()->for($workspace)->create([
+        'slug' => 'alpha-topic',
+    ]);
+    $agent = Agent::factory()->for($workspace)->create([
+        'slug' => 'research-agent',
+    ]);
+    $post = Post::factory()->for($topic)->create([
+        'body' => 'Please summarize.',
+        'status' => PostStatus::Published,
+        'sender_principal_id' => $workspace->principalForUser($user)->id,
+    ]);
+    $attachment = Attachment::factory()->for($post)->create();
+    AgentTask::factory()->for($agent)->for($post)->create();
+
+    expect(AgentTask::query()->whereBelongsTo($post)->count())->toBe(1);
+
+    $response = TopicForgeServer::actingAs($user)->tool(DeletePostTool::class, [
+        'topic_slug' => 'alpha-topic',
+        'post_ulid' => $post->ulid,
+    ]);
+
+    $response
+        ->assertOk()
+        ->assertStructuredContent(fn ($json) => $json
+            ->where('workspace.slug', 'strategy')
+            ->where('topic.slug', 'alpha-topic')
+            ->where('post.ulid', $post->ulid)
+            ->where('post.preview', 'Please summarize.')
+            ->where('deleted', true)
+            ->etc()
+        );
+
+    expect(Post::query()->find($post->id))->toBeNull()
+        ->and(Post::withTrashed()->find($post->id)?->trashed())->toBeTrue()
+        ->and(Attachment::withTrashed()->find($attachment->id)?->trashed())->toBeTrue()
+        ->and(AgentTask::query()->where('post_id', $post->id)->exists())->toBeFalse();
+});
+
+test('delete post denies posts sent by another user', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->for($user->currentTeam)->create([
+        'slug' => 'strategy',
+    ]);
+    $user->switchWorkspace($workspace);
+    [$member, $memberPrincipal] = teamMemberPrincipal($user, $workspace);
+
+    $topic = Topic::factory()->for($workspace)->create([
+        'slug' => 'alpha-topic',
+    ]);
+    $post = Post::factory()->for($topic)->create([
+        'sender_principal_id' => $memberPrincipal->id,
+    ]);
+
+    $response = TopicForgeServer::actingAs($user)->tool(DeletePostTool::class, [
+        'topic_slug' => 'alpha-topic',
+        'post_ulid' => $post->ulid,
+    ]);
+
+    $response->assertHasErrors([
+        'Only the post sender can delete this post.',
+    ]);
+
+    expect($post->fresh())->not->toBeNull()
+        ->and($member->exists)->toBeTrue();
 });
 
 test('topic resource returns topic context by uri template', function () {

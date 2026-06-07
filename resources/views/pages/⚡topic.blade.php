@@ -62,6 +62,7 @@ new #[Layout('layouts::workspace'), Title('Topic')] class extends Component {
     public function items(): array
     {
         return $this->topic->posts()
+            ->topLevel()
             ->with(['agentTasks.agent', 'attachments', 'sender.user', 'sender.agent', 'topic'])
             ->withCount('attachments')
             ->reorder()

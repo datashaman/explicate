@@ -33,7 +33,7 @@ class ListTopicsTool extends Tool
         $workspace = $this->context->workspaceFor($user);
 
         $topics = $workspace->topics()
-            ->withCount('posts')
+            ->withCount(['posts' => fn ($query) => $query->topLevel()])
             ->get()
             ->map(fn ($topic) => [
                 'id' => $topic->id,

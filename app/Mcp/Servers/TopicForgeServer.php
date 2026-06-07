@@ -15,6 +15,8 @@ use App\Mcp\Resources\WorkspacesResource;
 use App\Mcp\Resources\WorkspaceTopicsResource;
 use App\Mcp\Tools\CreateAgentTool;
 use App\Mcp\Tools\CreatePostTool;
+use App\Mcp\Tools\CreateTopicTool;
+use App\Mcp\Tools\DeletePostTool;
 use App\Mcp\Tools\GetAgentTaskTool;
 use App\Mcp\Tools\GetAgentTool;
 use App\Mcp\Tools\GetPostTool;
@@ -26,6 +28,7 @@ use App\Mcp\Tools\ListTopicsTool;
 use App\Mcp\Tools\ListWorkspacesTool;
 use App\Mcp\Tools\SwitchWorkspaceTool;
 use App\Mcp\Tools\UpdateAgentTool;
+use App\Mcp\Tools\WhoAmITool;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use Laravel\Mcp\Server;
@@ -37,10 +40,15 @@ use Throwable;
 
 #[Name('Topic Forge Server')]
 #[Version('0.0.1')]
-#[Instructions('Use this server to inspect the authenticated user\'s current team, browse workspaces, topics, agents, and posts, read topic and post state, and create draft or published posts inside accessible topics.')]
+#[Instructions('Use this server to inspect the authenticated user\'s current team, browse workspaces, topics, agents, and posts, read topic and post state, and create topics, agents, or draft and published posts inside accessible topics.')]
 class TopicForgeServer extends Server
 {
+    public int $maxPaginationLength = 250;
+
+    public int $defaultPaginationLength = 250;
+
     protected array $tools = [
+        WhoAmITool::class,
         ListWorkspacesTool::class,
         SwitchWorkspaceTool::class,
         ListTopicsTool::class,
@@ -51,9 +59,11 @@ class TopicForgeServer extends Server
         GetAgentTool::class,
         ListPostsTool::class,
         GetPostTool::class,
+        CreateTopicTool::class,
         CreateAgentTool::class,
         UpdateAgentTool::class,
         CreatePostTool::class,
+        DeletePostTool::class,
     ];
 
     protected array $resources = [

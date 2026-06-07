@@ -33,7 +33,7 @@ class WorkspaceTopicsResource extends Resource implements HasUriTemplate
             $workspace = $this->context->workspaceFor($user, (string) $request->get('workspace'));
 
             $topics = $workspace->topics()
-                ->withCount('posts')
+                ->withCount(['posts' => fn ($query) => $query->topLevel()])
                 ->get()
                 ->map(fn ($topic) => [
                     'id' => $topic->id,

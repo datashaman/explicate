@@ -33,7 +33,6 @@ class UpdateDraftPost
         }
 
         $post->update($attributes);
-        $post->syncMentionedAgentTasks();
         $this->storePostAttachments->handle($post, $uploads);
 
         return $post->fresh();

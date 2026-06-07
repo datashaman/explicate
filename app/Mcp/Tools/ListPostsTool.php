@@ -40,6 +40,7 @@ class ListPostsTool extends Tool
         $topic = $this->context->topicFor($user, $validated['topic_slug']);
 
         $posts = $topic->posts()
+            ->topLevel()
             ->with(['topic.workspace', 'sender.user', 'sender.agent'])
             ->get()
             ->map(fn ($post) => $this->postSummaryPayload($post))

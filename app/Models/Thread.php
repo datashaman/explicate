@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
-#[Fillable(['topic_id', 'title', 'slug', 'summary'])]
+#[Fillable(['topic_id', 'parent_post_id', 'title', 'slug', 'summary'])]
 class Thread extends Model
 {
     /** @use HasFactory<ThreadFactory> */
@@ -72,6 +72,14 @@ class Thread extends Model
     public function posts(): HasMany
     {
         return $this->hasMany(Post::class)->orderBy('created_at');
+    }
+
+    /**
+     * @return BelongsTo<Post, $this>
+     */
+    public function parentPost(): BelongsTo
+    {
+        return $this->belongsTo(Post::class, 'parent_post_id');
     }
 
     /**

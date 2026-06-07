@@ -285,19 +285,28 @@
                         @php
                             $post = $item['post'];
                             $itemKey = md5($item['href']);
+                            $openPostActionExpression = isset($openPostAction)
+                                ? "\$wire.{$openPostAction}(".\Illuminate\Support\Js::from($post->ulid).')'
+                                : "window.Livewire?.navigate ? window.Livewire.navigate(\$el.dataset.href) : window.location.href = \$el.dataset.href";
                         @endphp
 
                         <div
                             wire:key="folder-post-message-{{ $itemKey }}"
-                            class="py-4"
+                            class="cursor-pointer rounded-lg px-2 py-4 transition-colors hover:bg-neutral-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:hover:bg-white/5"
+                            role="button"
+                            tabindex="0"
+                            data-href="{{ $item['href'] }}"
                             data-test="folder-post-message"
                             data-post-preview="{{ $post->preview() }}"
                             data-sort-index="{{ $loop->index }}"
+                            x-on:click="if (!$event.target.closest('a, button, [role=menuitem], [data-no-row-click]')) { {!! $openPostActionExpression !!} }"
+                            x-on:keydown.enter.prevent="{!! $openPostActionExpression !!}"
+                            x-on:keydown.space.prevent="{!! $openPostActionExpression !!}"
                             @foreach (($item['sort'] ?? []) as $sortKey => $sortValue)
                                 data-sort-{{ $sortKey }}="{{ $sortValue }}"
                             @endforeach
                         >
-                            <x-post-message :post="$post" :href="$item['href']" :show-topic="$showPostMessageTopic ?? true">
+                            <x-post-message :post="$post" :show-topic="$showPostMessageTopic ?? true">
                                 <x-slot:actions>
                                     @if ($post->status === \App\Enums\PostStatus::Published)
                                         @isset($moveToDraftAction)

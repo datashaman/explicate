@@ -12,14 +12,10 @@ use Laravel\Mcp\ResponseFactory;
 use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Attributes\Name;
 use Laravel\Mcp\Server\Tool;
-use Laravel\Mcp\Server\Tools\Annotations\IsIdempotent;
-use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 
-#[Name('get-topic')]
-#[Description('Get a topic inside the current workspace.')]
-#[IsReadOnly]
-#[IsIdempotent]
-class GetTopicTool extends Tool
+#[Name('create-topic')]
+#[Description('Create a topic in the authenticated user\'s current workspace.')]
+class CreateTopicTool extends Tool
 {
     public function __construct(protected TopicForgeContext $context) {}
 
@@ -29,21 +25,23 @@ class GetTopicTool extends Tool
     public function handle(Request $request): Response|ResponseFactory
     {
         $validated = $request->validate([
-            'topic_slug' => ['required', 'string'],
+            'name' => ['required', 'string', 'max:255'],
         ]);
 
         /** @var User $user */
         $user = $this->context->requireUser($request->user());
-        $topic = $this->context->topicFor($user, $validated['topic_slug']);
-        $topic->load('workspace');
+        $workspace = $this->context->workspaceFor($user);
+        $topic = $workspace->topics()->create([
+            'name' => $validated['name'],
+        ]);
 
         return Response::structured([
-            'workspace' => $topic->workspace->only(['id', 'name', 'slug']),
+            'workspace' => $workspace->only(['id', 'name', 'slug']),
             'topic' => [
                 'id' => $topic->id,
                 'name' => $topic->name,
                 'slug' => $topic->slug,
-                'posts_count' => $topic->posts()->topLevel()->count(),
+                'posts_count' => 0,
                 'resource_uri' => TopicForgeUris::topic($topic),
             ],
         ]);
@@ -57,8 +55,8 @@ class GetTopicTool extends Tool
     public function schema(JsonSchema $schema): array
     {
         return [
-            'topic_slug' => $schema->string()
-                ->description('The topic slug to fetch.')
+            'name' => $schema->string()
+                ->description('The topic name.')
                 ->required(),
         ];
     }

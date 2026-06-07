@@ -5,12 +5,15 @@ namespace App\Models;
 use App\Enums\AgentTaskStatus;
 use App\Enums\PostListColumn;
 use App\Enums\PostStatus;
+use App\Jobs\ProcessAgentTask;
 use Database\Factories\PostFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
@@ -84,14 +87,26 @@ class Post extends Model
         }
 
         $mentionedAgentIds->each(function (int $agentId): void {
-            $this->agentTasks()->firstOrCreate([
+            $task = $this->agentTasks()->firstOrCreate([
                 'agent_id' => $agentId,
                 'event_type' => AgentTask::EventPostMentioned,
             ], [
                 'status' => AgentTaskStatus::Pending,
                 'available_at' => now(),
             ]);
+
+            if ($task->status === AgentTaskStatus::Pending) {
+                ProcessAgentTask::dispatch($task);
+            }
         });
+    }
+
+    /**
+     * @param  Builder<Post>  $query
+     */
+    public function scopeTopLevel(Builder $query): void
+    {
+        $query->whereNull('thread_id');
     }
 
     public function moveToDraft(): void
@@ -148,6 +163,44 @@ class Post extends Model
     public function thread(): BelongsTo
     {
         return $this->belongsTo(Thread::class);
+    }
+
+    /**
+     * @return HasOne<Thread, $this>
+     */
+    public function startedThread(): HasOne
+    {
+        return $this->hasOne(Thread::class, 'parent_post_id');
+    }
+
+    /**
+     * @return Collection<int, Post>
+     */
+    public function conversationPosts(): Collection
+    {
+        $thread = $this->thread ?: $this->startedThread;
+
+        if (! $thread) {
+            return Collection::make([$this]);
+        }
+
+        $thread->loadMissing([
+            'parentPost.agentTasks.agent',
+            'parentPost.attachments',
+            'parentPost.sender.user',
+            'parentPost.sender.agent',
+            'parentPost.topic',
+        ]);
+
+        $threadPosts = $thread->posts()
+            ->with(['agentTasks.agent', 'attachments', 'sender.user', 'sender.agent', 'topic'])
+            ->get();
+
+        return Collection::make([$thread->parentPost])
+            ->filter()
+            ->merge($threadPosts)
+            ->unique('id')
+            ->values();
     }
 
     /**

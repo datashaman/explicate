@@ -48,6 +48,7 @@ class TopicResource extends Resource implements HasUriTemplate
                     'resource_uri' => TopicForgeUris::topic($topic),
                 ],
                 'posts' => $topic->posts()
+                    ->topLevel()
                     ->get()
                     ->map(fn ($post) => [
                         'id' => $post->id,

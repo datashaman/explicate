@@ -7,6 +7,7 @@ use App\Enums\AgentTaskStatus;
 use App\Enums\PostStatus;
 use App\Models\AgentTask;
 use App\Models\Post;
+use App\Models\Thread;
 use Laravel\Ai\Enums\Lab;
 use RuntimeException;
 use Throwable;
@@ -56,6 +57,7 @@ class ExecuteAgentTask
                 sender: $task->agent->workspace->principalForAgent($task->agent),
                 body: $response->text,
                 status: PostStatus::Published,
+                thread: $this->threadFor($task->post),
             );
 
             $task->forceFill([
@@ -79,5 +81,17 @@ class ExecuteAgentTask
     protected function promptFor(Post $post): string
     {
         return trim($post->body);
+    }
+
+    protected function threadFor(Post $post): Thread
+    {
+        if ($post->thread) {
+            return $post->thread;
+        }
+
+        return $post->startedThread()->firstOrCreate([], [
+            'topic_id' => $post->topic_id,
+            'title' => $post->preview(),
+        ]);
     }
 }

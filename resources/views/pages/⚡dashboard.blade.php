@@ -144,14 +144,15 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
     public function selectedPost(): ?Post
     {
-        $topic = $this->selectedTopic();
+        $workspace = $this->workspace();
 
-        if (! $topic || ! $this->selectedPostUlid) {
+        if (! $workspace || ! $this->selectedPostUlid) {
             return null;
         }
 
-        return $topic->posts()
+        return Post::query()
             ->with(['agentTasks.agent', 'attachments', 'sender.user', 'sender.agent', 'topic'])
+            ->whereHas('topic', fn ($query) => $query->where('workspace_id', $workspace->id))
             ->where('ulid', $this->selectedPostUlid)
             ->first();
     }
@@ -223,6 +224,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         }
 
         $counts = Post::query()
+            ->topLevel()
             ->whereHas('topic', fn ($query) => $query->where('workspace_id', $workspace->id))
             ->selectRaw('status, count(*) as total')
             ->groupBy('status')
@@ -266,9 +268,9 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
         return $workspace->topics()
             ->withCount([
-                'posts as draft_count' => fn ($q) => $q->where('status', PostStatus::Draft),
-                'posts as published_count' => fn ($q) => $q->where('status', PostStatus::Published),
-                'posts as archived_count' => fn ($q) => $q->where('status', PostStatus::Archived),
+                'posts as draft_count' => fn ($q) => $q->topLevel()->where('status', PostStatus::Draft),
+                'posts as published_count' => fn ($q) => $q->topLevel()->where('status', PostStatus::Published),
+                'posts as archived_count' => fn ($q) => $q->topLevel()->where('status', PostStatus::Archived),
             ])
             ->get();
     }
@@ -285,6 +287,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         }
 
         return $topic->posts()
+            ->topLevel()
             ->with(['agentTasks.agent', 'attachments', 'sender.user', 'sender.agent', 'topic'])
             ->withCount('attachments')
             ->reorder()
@@ -320,6 +323,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         }
 
         return Post::query()
+            ->topLevel()
             ->with(['agentTasks.agent', 'attachments', 'topic', 'sender.user', 'sender.agent'])
             ->withCount('attachments')
             ->whereHas('topic', fn ($query) => $query->where('workspace_id', $workspace->id))
@@ -496,7 +500,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         $this->normalizeMobilePanel();
     }
 
-    public function updatedSelectedPostSlug(): void
+    public function updatedSelectedPostUlid(): void
     {
         if ($this->selectedPostUlid) {
             $this->panelAction = null;
@@ -512,6 +516,25 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         }
 
         $this->syncSelectedAgentFields();
+    }
+
+    public function openPost(string $postUlid): void
+    {
+        $workspace = $this->workspace();
+
+        abort_unless($workspace, 403);
+
+        Post::query()
+            ->where('ulid', $postUlid)
+            ->whereHas('topic', fn ($query) => $query->where('workspace_id', $workspace->id))
+            ->firstOrFail();
+
+        $this->selectedPostUlid = $postUlid;
+        $this->selectedAgentSlug = null;
+        $this->panelAction = null;
+        $this->creatingPostFromRoute = false;
+        $this->mobilePanel = 'posts';
+        $this->syncSelectedPostFields();
     }
 
     public function updatedPanelAction(): void
@@ -905,10 +928,18 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 <div class="flex min-h-0 w-full flex-1">
     @if ($this->workspace())
         @php
-            $hasSelectedPostsPanel = (bool) ($this->selectedAgent() || $this->selectedTopic() || $this->selectedSystemFolder() || $this->isCreatingPost());
+            $selectedDashboardAgent = $this->selectedAgent();
+            $selectedDashboardPost = $this->selectedPost();
+            $selectedDashboardFolder = $this->selectedSystemFolder();
+            $hasSelectedPostsPanel = (bool) ($selectedDashboardAgent || $this->selectedTopic() || $selectedDashboardFolder || $this->isCreatingPost());
+            $hasThreadPanel = (bool) $selectedDashboardPost;
         @endphp
 
-        <div class="grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)] items-stretch gap-2 xl:auto-rows-fr xl:grid-cols-[16rem_minmax(0,1fr)]">
+        <div @class([
+            'grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)] items-stretch gap-2 xl:auto-rows-fr',
+            'xl:grid-cols-[16rem_minmax(0,0.9fr)_minmax(24rem,1.1fr)]' => $hasThreadPanel,
+            'xl:grid-cols-[16rem_minmax(0,1fr)]' => ! $hasThreadPanel,
+        ])>
             <div
                 id="topics-panel"
                 data-mobile-panel="topics"
@@ -1019,12 +1050,6 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             </div>
 
             @if ($this->selectedAgent() || $this->selectedTopic() || $this->selectedSystemFolder() || $this->isCreatingPost())
-                @php
-                    $selectedDashboardAgent = $this->selectedAgent();
-                    $selectedDashboardPost = $this->selectedPost();
-                    $selectedDashboardFolder = $this->selectedSystemFolder();
-                @endphp
-
                 <section
                     id="posts-panel"
                     data-mobile-panel="posts"
@@ -1068,53 +1093,6 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                             'loadingTarget' => 'newPostUploads',
                             'dataTest' => 'dashboard-post-create-panel',
                         ])
-                    @elseif ($selectedDashboardPost)
-                        <div class="flex items-center justify-between gap-3 border-b border-neutral-300 bg-emerald-50 px-4 py-3 dark:border-white/10 dark:bg-emerald-500/10">
-                            <flux:heading size="sm" class="min-w-0 flex-1 truncate">{{ __('Post') }}</flux:heading>
-
-                            <flux:button :href="$this->postsPanelReturnRoute()" wire:navigate size="xs" variant="filled" icon="arrow-left" data-test="posts-panel-return">
-                                {{ $this->postsPanelReturnLabel() }}
-                            </flux:button>
-                        </div>
-
-                        @if ($selectedDashboardPost->status === PostStatus::Draft)
-                            @include('partials.post-draft-form', [
-                                'formId' => 'dashboard-selected-post-form',
-                                'submitAction' => 'saveSelectedPost',
-                                'bodyModel' => 'postBody',
-                                'topicName' => $selectedDashboardPost->topic->name,
-                                'canChangeTopic' => false,
-                                'testPrefix' => 'post',
-                                'post' => $selectedDashboardPost,
-                                'uploadModel' => 'postUploads',
-                                'uploadError' => 'postUploads.*',
-                                'deleteAction' => 'deleteSelectedPostAttachment',
-                                'archiveAction' => 'archiveSelectedPost',
-                                'publishAction' => 'publishSelectedPost',
-                                'loadingTarget' => 'postUploads',
-                                'dataTest' => 'dashboard-post-panel',
-                            ])
-                        @else
-                            <div class="flex flex-1 flex-col gap-6 overflow-auto px-4 py-4 xl:min-h-0" data-test="dashboard-post-panel">
-                                <x-post-message :post="$selectedDashboardPost" :show-topic="$selectedDashboardFolder !== null">
-                                    <x-slot:actions>
-                                        @if ($selectedDashboardPost->status === PostStatus::Published)
-                                            <flux:menu.item wire:click="unpublishSelectedPost" icon="pencil-square">{{ __('Move to drafts') }}</flux:menu.item>
-                                            <flux:menu.item wire:click="archiveSelectedPost" icon="archive-box">{{ __('Archive') }}</flux:menu.item>
-                                        @elseif ($selectedDashboardPost->status === PostStatus::Archived)
-                                            <flux:menu.item wire:click="unarchiveSelectedPost" icon="archive-box-x-mark">{{ __('Unarchive') }}</flux:menu.item>
-                                        @endif
-                                    </x-slot:actions>
-                                </x-post-message>
-
-                            @include('partials.post-attachments', [
-                                'post' => $selectedDashboardPost,
-                                'uploadModel' => 'postUploads',
-                                'uploadError' => 'postUploads.*',
-                                'deleteAction' => 'deleteSelectedPostAttachment',
-                                ])
-                            </div>
-                        @endif
                     @else
                         @include('partials.folder-view', [
                             'breadcrumbs' => [
@@ -1124,6 +1102,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                             'titleLabel' => $selectedDashboardFolder?->label() ?? $this->selectedTopic()?->name ?? __('Feed'),
                             'items' => collect($selectedDashboardFolder ? $this->selectedSystemFolderItems() : $this->selectedTopicItems()),
                             'itemPresentation' => 'posts',
+                            'openPostAction' => 'openPost',
                             'showPostMessageTopic' => (bool) $selectedDashboardFolder,
                             'icon' => 'document-text',
                             'iconClass' => 'size-12 text-neutral-400 group-hover:text-neutral-300',
@@ -1168,6 +1147,69 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                             </flux:text>
                         </div>
                     </div>
+                </section>
+            @endif
+
+            @if ($selectedDashboardPost)
+                <section
+                    id="thread-panel"
+                    data-mobile-panel="posts"
+                    class="scroll-mt-4 flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none"
+                >
+                    <div class="flex items-center justify-between gap-3 border-b border-neutral-300 bg-emerald-50 px-4 py-3 dark:border-white/10 dark:bg-emerald-500/10">
+                        <flux:heading size="sm" class="min-w-0 flex-1 truncate">{{ __('Thread') }}</flux:heading>
+
+                        <flux:button wire:click="$set('selectedPostUlid', null)" size="xs" variant="filled" icon="x-mark" data-test="thread-panel-close">
+                            {{ __('Close') }}
+                        </flux:button>
+                    </div>
+
+                    @if ($selectedDashboardPost->status === PostStatus::Draft)
+                        @include('partials.post-draft-form', [
+                            'formId' => 'dashboard-selected-post-form',
+                            'submitAction' => 'saveSelectedPost',
+                            'bodyModel' => 'postBody',
+                            'topicName' => $selectedDashboardPost->topic->name,
+                            'canChangeTopic' => false,
+                            'testPrefix' => 'post',
+                            'post' => $selectedDashboardPost,
+                            'uploadModel' => 'postUploads',
+                            'uploadError' => 'postUploads.*',
+                            'deleteAction' => 'deleteSelectedPostAttachment',
+                            'archiveAction' => 'archiveSelectedPost',
+                            'publishAction' => 'publishSelectedPost',
+                            'loadingTarget' => 'postUploads',
+                            'dataTest' => 'dashboard-post-panel',
+                        ])
+                    @else
+                        <div class="flex flex-1 flex-col gap-6 overflow-auto px-4 py-4 xl:min-h-0" data-test="dashboard-post-panel">
+                            @php
+                                $selectedDashboardThreadPosts = $selectedDashboardPost->conversationPosts();
+                            @endphp
+
+                            @foreach ($selectedDashboardThreadPosts as $threadPost)
+                                <x-post-message :post="$threadPost" :show-topic="$selectedDashboardFolder !== null">
+                                    @if ($threadPost->is($selectedDashboardPost))
+                                        <x-slot:actions>
+                                            @if ($selectedDashboardPost->status === PostStatus::Published)
+                                                <flux:menu.item wire:click="unpublishSelectedPost" icon="pencil-square">{{ __('Move to drafts') }}</flux:menu.item>
+                                                <flux:menu.item wire:click="archiveSelectedPost" icon="archive-box">{{ __('Archive') }}</flux:menu.item>
+                                            @elseif ($selectedDashboardPost->status === PostStatus::Archived)
+                                                <flux:menu.item wire:click="unarchiveSelectedPost" icon="archive-box-x-mark">{{ __('Unarchive') }}</flux:menu.item>
+                                            @endif
+                                        </x-slot:actions>
+                                    @endif
+                                </x-post-message>
+                            @endforeach
+
+                            @include('partials.post-attachments', [
+                                'post' => $selectedDashboardPost,
+                                'uploadModel' => 'postUploads',
+                                'uploadError' => 'postUploads.*',
+                                'deleteAction' => 'deleteSelectedPostAttachment',
+                            ])
+                        </div>
+                    @endif
                 </section>
             @endif
 
