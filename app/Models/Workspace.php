@@ -57,16 +57,6 @@ class Workspace extends Model
     }
 
     /**
-     * @return HasMany<WorkspaceFile, $this>
-     */
-    public function files(): HasMany
-    {
-        return $this->hasMany(WorkspaceFile::class)
-            ->orderByRaw("case when type = 'folder' then 0 else 1 end")
-            ->orderBy('name');
-    }
-
-    /**
      * @return HasMany<Principal, $this>
      */
     public function principals(): HasMany

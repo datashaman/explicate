@@ -1,13 +1,25 @@
 <?php
 
 use App\Enums\TeamRole;
-use App\Enums\WorkspaceFileType;
 use App\Models\Agent;
 use App\Models\Team;
 use App\Models\User;
 use App\Models\Workspace;
-use App\Models\WorkspaceFile;
 use Illuminate\Database\QueryException;
+
+afterEach(function () {
+    $workspacesDir = storage_path('app/workspaces');
+    if (is_dir($workspacesDir)) {
+        $iterator = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($workspacesDir, RecursiveDirectoryIterator::SKIP_DOTS),
+            RecursiveIteratorIterator::CHILD_FIRST
+        );
+        foreach ($iterator as $entry) {
+            $entry->isDir() ? rmdir($entry->getRealPath()) : unlink($entry->getRealPath());
+        }
+        rmdir($workspacesDir);
+    }
+});
 
 test('a team can have many workspaces', function () {
     $team = Team::factory()->create();
@@ -64,25 +76,19 @@ test('workspace lists team member and agent principals by label', function () {
     ]);
 });
 
-test('workspace files maintain nested paths and cascade folder deletes', function () {
+test('workspace filesystem deletes folder and all nested files recursively', function () {
     $workspace = Workspace::factory()->create();
-    $folder = WorkspaceFile::factory()->for($workspace)->folder()->create([
-        'name' => 'docs',
-    ]);
-    $file = WorkspaceFile::factory()->for($workspace)->create([
-        'parent_id' => $folder->id,
-        'name' => 'spec.md',
-    ]);
+    $fs = $workspace->filesystem();
 
-    expect($folder->path)->toBe('docs');
-    expect($file->refresh()->path)->toBe('docs/spec.md');
+    $fs->mkdir('docs');
+    $fs->write('docs/spec.md', '# Spec');
+    $fs->write('docs/notes.md', 'Notes');
 
-    $folder->update(['name' => 'notes']);
+    expect($fs->isDirectory('docs'))->toBeTrue();
+    expect($fs->exists('docs/spec.md'))->toBeTrue();
 
-    expect($file->refresh()->path)->toBe('notes/spec.md');
+    $fs->delete('docs');
 
-    $folder->delete();
-
-    expect($workspace->files()->whereKey($file->id)->exists())->toBeFalse();
-    expect($workspace->files()->where('type', WorkspaceFileType::Folder)->exists())->toBeFalse();
+    expect($fs->exists('docs'))->toBeFalse();
+    expect($fs->exists('docs/spec.md'))->toBeFalse();
 });
