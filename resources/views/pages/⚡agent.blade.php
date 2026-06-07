@@ -142,9 +142,7 @@ new #[Title('Agent')] class extends Component {
                 <form wire:submit="saveVersion" class="space-y-4 p-4">
                     <div class="grid grid-cols-2 gap-4">
                         <flux:select wire:model.live="provider" :label="__('Provider')" placeholder="{{ __('Select provider…') }}" required>
-                            @foreach (Provider::cases() as $p)
-                                <flux:select.option :value="$p->value">{{ $p->label() }}</flux:select.option>
-                            @endforeach
+                            <x-provider-options />
                         </flux:select>
 
                         <flux:select wire:model="model" :label="__('Model')" placeholder="{{ __('Select model…') }}" :disabled="!$provider" required>
@@ -156,10 +154,7 @@ new #[Title('Agent')] class extends Component {
 
                     @if ($this->showReasoningEffort)
                         <flux:select wire:model="reasoningEffort" :label="__('Reasoning effort')" placeholder="{{ __('Select effort…') }}">
-                            <flux:select.option value="">{{ __('None') }}</flux:select.option>
-                            @foreach (ReasoningEffort::cases() as $effort)
-                                <flux:select.option :value="$effort->value">{{ $effort->label() }}</flux:select.option>
-                            @endforeach
+                            <x-reasoning-effort-options />
                         </flux:select>
                     @endif
 

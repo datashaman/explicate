@@ -1240,9 +1240,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                                     <form wire:submit="saveSelectedAgentVersion" class="space-y-4 p-4">
                                         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                             <flux:select wire:model.live="selectedAgentProvider" :label="__('Provider')" placeholder="{{ __('Select provider…') }}" required>
-                                                @foreach (Provider::cases() as $providerOption)
-                                                    <flux:select.option :value="$providerOption->value">{{ $providerOption->label() }}</flux:select.option>
-                                                @endforeach
+                                                <x-provider-options />
                                             </flux:select>
 
                                             <flux:select wire:model="selectedAgentModel" :label="__('Model')" placeholder="{{ __('Select model…') }}" :disabled="!$selectedAgentProvider" required>
@@ -1254,10 +1252,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
                                         @if ($this->selectedAgentShowReasoningEffort)
                                             <flux:select wire:model="selectedAgentReasoningEffort" :label="__('Reasoning effort')" placeholder="{{ __('Select effort…') }}">
-                                                <flux:select.option value="">{{ __('None') }}</flux:select.option>
-                                                @foreach (ReasoningEffort::cases() as $effort)
-                                                    <flux:select.option :value="$effort->value">{{ $effort->label() }}</flux:select.option>
-                                                @endforeach
+                                                <x-reasoning-effort-options />
                                             </flux:select>
                                         @endif
 
@@ -1402,9 +1397,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
                 <div class="grid grid-cols-2 gap-4">
                     <flux:select wire:model.live="provider" :label="__('Provider')" placeholder="{{ __('Select provider…') }}" required>
-                        @foreach (Provider::cases() as $providerOption)
-                            <flux:select.option :value="$providerOption->value">{{ $providerOption->label() }}</flux:select.option>
-                        @endforeach
+                        <x-provider-options />
                     </flux:select>
 
                     <flux:select wire:model="model" :label="__('Model')" placeholder="{{ __('Select model…') }}" :disabled="!$provider" required>
@@ -1416,10 +1409,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
                 @if ($this->showReasoningEffort)
                     <flux:select wire:model="reasoningEffort" :label="__('Reasoning effort')" placeholder="{{ __('Select effort…') }}">
-                        <flux:select.option value="">{{ __('None') }}</flux:select.option>
-                        @foreach (ReasoningEffort::cases() as $effort)
-                            <flux:select.option :value="$effort->value">{{ $effort->label() }}</flux:select.option>
-                        @endforeach
+                        <x-reasoning-effort-options />
                     </flux:select>
                 @endif
 
