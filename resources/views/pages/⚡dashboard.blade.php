@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\PostFolder;
 use App\Enums\PostStatus;
 use App\Enums\Provider;
 use App\Enums\ReasoningEffort;
@@ -116,14 +117,13 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         return $workspace->topics()->where('slug', $this->selectedTopicSlug)->first();
     }
 
-    /** @return array{slug: string, name: string, icon: string}|null */
-    public function selectedSystemFolder(): ?array
+    public function selectedSystemFolder(): ?PostFolder
     {
         if (! $this->selectedSystemFolderSlug) {
             return null;
         }
 
-        return collect($this->systemFolders())->firstWhere('slug', $this->selectedSystemFolderSlug);
+        return PostFolder::tryFrom($this->selectedSystemFolderSlug);
     }
 
     public function selectedPost(): ?Post
@@ -140,7 +140,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
     public function postsPanelReturnRoute(): string
     {
         if ($folder = $this->selectedSystemFolder()) {
-            return route('dashboard', ['folder' => $folder['slug'], 'panel' => 'posts']);
+            return route('dashboard', ['folder' => $folder->value, 'panel' => 'posts']);
         }
 
         if ($topic = $this->selectedTopic()) {
@@ -153,7 +153,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
     public function postsPanelReturnLabel(): string
     {
         if ($folder = $this->selectedSystemFolder()) {
-            return $folder['name'];
+            return $folder->label();
         }
 
         if ($topic = $this->selectedTopic()) {
@@ -197,26 +197,14 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             ->groupBy('status')
             ->pluck('total', 'status');
 
-        return [
-            [
-                'slug' => 'feed',
-                'name' => __('Feed'),
-                'icon' => 'rss',
-                'count' => (int) ($counts[PostStatus::Published->value] ?? 0),
-            ],
-            [
-                'slug' => 'drafts',
-                'name' => __('Drafts'),
-                'icon' => 'document',
-                'count' => (int) ($counts[PostStatus::Draft->value] ?? 0),
-            ],
-            [
-                'slug' => 'archived',
-                'name' => __('Archived'),
-                'icon' => 'archive-box',
-                'count' => (int) ($counts[PostStatus::Archived->value] ?? 0),
-            ],
-        ];
+        return collect(PostFolder::cases())
+            ->map(fn (PostFolder $folder): array => [
+                'slug' => $folder->value,
+                'name' => $folder->label(),
+                'icon' => $folder->icon(),
+                'count' => (int) ($counts[$folder->status()->value] ?? 0),
+            ])
+            ->all();
     }
 
     /**
@@ -350,15 +338,13 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             ->with(['topic', 'sender.user', 'sender.agent', 'recipient.user', 'recipient.agent'])
             ->withCount('attachments')
             ->whereHas('topic', fn ($query) => $query->where('workspace_id', $workspace->id))
-            ->when($folder['slug'] === 'drafts', fn ($query) => $query->where('status', PostStatus::Draft))
-            ->when($folder['slug'] === 'feed', fn ($query) => $query->where('status', PostStatus::Published))
-            ->when($folder['slug'] === 'archived', fn ($query) => $query->where('status', PostStatus::Archived))
-            ->when($folder['slug'] !== 'archived' && ! $this->showArchived, fn ($query) => $query->where('status', '!=', PostStatus::Archived))
+            ->where('status', $folder->status())
+            ->when($folder !== PostFolder::Archived && ! $this->showArchived, fn ($query) => $query->where('status', '!=', PostStatus::Archived))
             ->orderByDesc('updated_at')
             ->orderByDesc('id')
             ->get()
             ->map(function (Post $post) use ($folder): array {
-                $isDraftsFolder = $folder['slug'] === 'drafts';
+                $isDraftsFolder = $folder === PostFolder::Drafts;
                 $timezone = Auth::user()->displayTimezone();
 
                 $meta = $isDraftsFolder
@@ -394,7 +380,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
                 return [
                     'href' => route('dashboard', [
-                        'folder' => $folder['slug'],
+                        'folder' => $folder->value,
                         'topic' => $post->topic->slug,
                         'post' => $post->slug,
                         'panel' => 'posts',
@@ -415,20 +401,20 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
     public function selectedPostListColumns(): array
     {
         $folder = $this->selectedSystemFolder();
-        $dateLabel = $folder && $folder['slug'] === 'drafts' ? __('Saved') : __('Posted');
+        $dateLabel = $folder?->dateLabel() ?? __('Posted');
 
         $columns = [
             ['key' => 'name', 'label' => __('Post'), 'class' => 'min-w-0 flex-1'],
         ];
 
-        if ($folder && $folder['slug'] === 'drafts') {
+        if ($folder === PostFolder::Drafts) {
             $columns[] = ['key' => 'topic', 'label' => __('Topic'), 'class' => 'w-28 shrink-0'];
         } else {
             $columns[] = ['key' => 'sender', 'label' => __('Sender'), 'class' => 'w-28 shrink-0'];
             $columns[] = ['key' => 'topic', 'label' => __('Topic'), 'class' => 'w-28 shrink-0'];
         }
 
-        $columns[] = ['key' => $folder && $folder['slug'] === 'drafts' ? 'saved' : 'sent', 'label' => $dateLabel, 'class' => 'w-28 shrink-0'];
+        $columns[] = ['key' => $folder?->dateKey() ?? 'sent', 'label' => $dateLabel, 'class' => 'w-28 shrink-0'];
         $columns[] = ['key' => 'attachments', 'label' => __('Files'), 'class' => 'w-12 shrink-0 justify-center'];
 
         return $columns;
@@ -1181,9 +1167,9 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                         @include('partials.folder-view', [
                             'breadcrumbs' => [
                                 ['label' => $this->workspace()->name, 'href' => route('dashboard')],
-                                ['label' => $selectedDashboardFolder['name'] ?? $this->selectedTopic()?->name ?? __('New post')],
+                                ['label' => $selectedDashboardFolder?->label() ?? $this->selectedTopic()?->name ?? __('New post')],
                             ],
-                            'titleLabel' => $selectedDashboardFolder['name'] ?? $this->selectedTopic()?->name ?? __('Feed'),
+                            'titleLabel' => $selectedDashboardFolder?->label() ?? $this->selectedTopic()?->name ?? __('Feed'),
                             'items' => collect($selectedDashboardFolder ? $this->selectedSystemFolderItems() : $this->selectedTopicItems()),
                             'icon' => 'document-text',
                             'iconClass' => 'size-12 text-neutral-400 group-hover:text-neutral-300',
@@ -1193,7 +1179,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                             'createTest' => 'dashboard-new-post-button',
                             'showArchivedModel' => 'showArchived',
                             'listColumns' => $this->selectedPostListColumns(),
-                            'listDefaultSort' => $selectedDashboardFolder && $selectedDashboardFolder['slug'] === 'drafts' ? 'saved' : 'sent',
+                            'listDefaultSort' => $selectedDashboardFolder?->dateKey() ?? 'sent',
                             'listDefaultSortDirection' => 'desc',
                             'toolbarClass' => 'border-b border-neutral-300 bg-emerald-50 px-4 py-3 dark:border-white/10 dark:bg-emerald-500/10',
                             'rootClass' => 'flex flex-col xl:h-full',
