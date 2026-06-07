@@ -245,6 +245,7 @@ new #[Layout('layouts::workspace'), Title('Topic')] class extends Component {
                 'titleLabel' => $topic->name,
                 'items' => collect($this->items()),
                 'itemPresentation' => 'posts',
+                'showPostMessageTopic' => false,
                 'icon' => 'document-text',
                 'iconClass' => 'size-12 text-neutral-400 group-hover:text-neutral-300',
                 'emptyText' => __('No posts'),

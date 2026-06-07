@@ -27,14 +27,19 @@
         {{ $senderInitials ?: '?' }}
     </div>
 
-    <div class="min-w-0 flex-1 space-y-2">
+    <div class="min-w-0 flex-1">
         <div class="flex min-w-0 items-start justify-between gap-3">
             <div class="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
                 <span class="min-w-0 truncate text-sm font-semibold text-neutral-900 dark:text-neutral-100" data-test="post-message-sender">{{ $senderName }}</span>
                 <span class="text-xs text-neutral-400 dark:text-neutral-500" title="{{ $timestampTitle }}" data-test="post-message-timestamp">{{ $timestampLabel }}</span>
 
                 @if ($showTopic)
-                    <span class="text-xs text-neutral-400 dark:text-neutral-500">#{{ $post->topic->name }}</span>
+                    <a
+                        href="{{ route('dashboard', ['topic' => $post->topic->slug, 'panel' => 'posts']) }}"
+                        wire:navigate
+                        class="text-xs text-neutral-400 hover:text-neutral-700 hover:underline dark:text-neutral-500 dark:hover:text-neutral-300"
+                        data-test="post-message-topic"
+                    >#{{ $post->topic->name }}</a>
                 @endif
             </div>
 
@@ -49,7 +54,7 @@
             @endif
         </div>
 
-        <div class="text-sm leading-6 text-neutral-800 dark:text-neutral-200">
+        <div class="text-sm leading-[1.2] text-neutral-800 dark:text-neutral-200">
             @if ($href)
                 <a href="{{ $href }}" wire:navigate @class([
                     'block whitespace-pre-wrap hover:underline',

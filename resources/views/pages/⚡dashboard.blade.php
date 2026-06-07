@@ -1126,7 +1126,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                             ])
                         @else
                             <div class="flex flex-1 flex-col gap-6 overflow-auto px-4 py-4 xl:min-h-0" data-test="dashboard-post-panel">
-                                <x-post-message :post="$selectedDashboardPost">
+                                <x-post-message :post="$selectedDashboardPost" :show-topic="$selectedDashboardFolder !== null">
                                     <x-slot:actions>
                                         @if ($selectedDashboardPost->status === PostStatus::Published)
                                             <flux:menu.item wire:click="unpublishSelectedPost" icon="pencil-square">{{ __('Move to drafts') }}</flux:menu.item>
@@ -1154,6 +1154,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                             'titleLabel' => $selectedDashboardFolder?->label() ?? $this->selectedTopic()?->name ?? __('Feed'),
                             'items' => collect($selectedDashboardFolder ? $this->selectedSystemFolderItems() : $this->selectedTopicItems()),
                             'itemPresentation' => 'posts',
+                            'showPostMessageTopic' => (bool) $selectedDashboardFolder,
                             'icon' => 'document-text',
                             'iconClass' => 'size-12 text-neutral-400 group-hover:text-neutral-300',
                             'emptyText' => __('No posts'),

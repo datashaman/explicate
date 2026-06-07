@@ -159,6 +159,8 @@ test('dashboard system draft folder shows draft posts across topics', function (
             'panel' => 'posts',
         ])), escape: false)
         ->assertSee('data-test="post-message"', escape: false)
+        ->assertSee('data-test="post-message-topic"', escape: false)
+        ->assertSee(e(route('dashboard', ['topic' => $design->slug, 'panel' => 'posts'])), escape: false)
         ->assertSee('#Design')
         ->assertSee('data-test="post-message-timestamp"', escape: false)
         ->assertDontSee('data-test="folder-list-sort-from"', escape: false)
@@ -237,6 +239,8 @@ test('dashboard feed folder shows all published topic posts', function () {
         ->assertSee('data-test="post-message-actions"', escape: false)
         ->assertDontSee('data-test="folder-list-sort-header"', escape: false)
         ->assertSeeText($user->name)
+        ->assertSee('data-test="post-message-topic"', escape: false)
+        ->assertSee(e(route('dashboard', ['topic' => $topic->slug, 'panel' => 'posts'])), escape: false)
         ->assertSee('#Design')
         ->assertSeeText('9 minutes ago');
 });
@@ -490,7 +494,7 @@ test('dashboard published post panel shows sender and topic', function () {
         ->assertSee('data-test="post-message"', escape: false)
         ->assertSee('data-test="post-message-sender"', escape: false)
         ->assertSee($user->name)
-        ->assertSee('#Design')
+        ->assertDontSee('#Design')
         ->assertSee('Move to drafts')
         ->assertDontSee('Return to draft');
 });
@@ -980,7 +984,8 @@ test('topic page renders posts as message feed items', function () {
         ->assertSee('data-sort-attachments=', escape: false)
         ->assertSee('wire:key="folder-post-message-', escape: false)
         ->assertSeeText($user->name)
-        ->assertSee('#Design')
+        ->assertDontSee('data-test="post-message-topic"', escape: false)
+        ->assertDontSee('#Design')
         ->assertSeeText('13 minutes ago')
         ->assertSee('grid grid-cols-1 items-stretch gap-3 xl:flex-1 xl:auto-rows-fr xl:grid-cols-[minmax(0,1fr)_19rem]', escape: false)
         ->assertSee('xl:h-full', escape: false)
