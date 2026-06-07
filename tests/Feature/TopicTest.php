@@ -446,6 +446,8 @@ test('dashboard selected topic shows a sticky composer in the main panel', funct
         ->assertOk()
         ->assertSee('data-test="main-panel-composer-shell"', escape: false)
         ->assertSee('data-test="main-panel-composer"', escape: false)
+        ->assertSee('data-test="main-panel-composer-attachments-button"', escape: false)
+        ->assertSee('data-test="main-panel-composer-attachments-input"', escape: false)
         ->assertSee('wire:submit="sendQuickPost"', escape: false)
         ->assertSee('Message Selected Topic')
         ->assertSee('shrink-0 border-t border-neutral-200', escape: false);
@@ -471,6 +473,60 @@ test('dashboard main composer creates a published top level post', function () {
         ->and($post->sender->is($workspace->principalForUser($user)))->toBeTrue()
         ->and($post->status)->toBe(PostStatus::Published)
         ->and($post->thread_id)->toBeNull();
+});
+
+test('dashboard main composer stores attachments with the published post', function () {
+    Storage::fake('public');
+
+    [$user, $workspace] = userWithWorkspace();
+
+    $topic = Topic::factory()->for($workspace)->create(['name' => 'Selected Topic', 'slug' => 'selected-topic']);
+    $file = UploadedFile::fake()->create('brief.pdf', 128, 'application/pdf');
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::dashboard')
+        ->set('selectedTopicSlug', $topic->slug)
+        ->set('quickPostBody', 'A smoother post with an attachment.')
+        ->set('quickPostUploads', [$file])
+        ->call('sendQuickPost')
+        ->assertHasNoErrors()
+        ->assertSet('quickPostBody', '')
+        ->assertSet('quickPostUploads', []);
+
+    $post = Post::query()->where('body', 'A smoother post with an attachment.')->sole();
+    $attachment = $post->attachments()->sole();
+
+    expect($attachment->filename)->toBe('brief.pdf')
+        ->and($attachment->path)->toContain('attachments/');
+
+    Storage::disk('public')->assertExists($attachment->path);
+});
+
+test('dashboard main composer can remove a pending attachment before posting', function () {
+    Storage::fake('public');
+
+    [$user, $workspace] = userWithWorkspace();
+
+    $topic = Topic::factory()->for($workspace)->create(['name' => 'Selected Topic', 'slug' => 'selected-topic']);
+    $removedFile = UploadedFile::fake()->create('remove-me.pdf', 128, 'application/pdf');
+    $keptFile = UploadedFile::fake()->create('keep-me.pdf', 128, 'application/pdf');
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::dashboard')
+        ->set('selectedTopicSlug', $topic->slug)
+        ->set('quickPostBody', 'A smoother post with one attachment.')
+        ->set('quickPostUploads', [$removedFile, $keptFile])
+        ->assertSee('data-test="main-panel-composer-attachment-remove"', escape: false)
+        ->call('removeQuickPostUpload', 0)
+        ->assertSet('quickPostUploads', fn (array $uploads): bool => count($uploads) === 1 && $uploads[0]->getClientOriginalName() === 'keep-me.pdf')
+        ->call('sendQuickPost')
+        ->assertHasNoErrors();
+
+    $post = Post::query()->where('body', 'A smoother post with one attachment.')->sole();
+
+    expect($post->attachments()->pluck('filename')->all())->toBe(['keep-me.pdf']);
 });
 
 test('dashboard keeps thread replies out of top-level topic lists', function () {
@@ -624,6 +680,8 @@ test('dashboard thread panel shows an inline reply composer', function () {
         ->assertOk()
         ->assertSee('data-test="thread-panel-composer-shell"', escape: false)
         ->assertSee('data-test="thread-panel-composer"', escape: false)
+        ->assertSee('data-test="thread-panel-composer-attachments-button"', escape: false)
+        ->assertSee('data-test="thread-panel-composer-attachments-input"', escape: false)
         ->assertSee('wire:submit="sendThreadReply"', escape: false)
         ->assertSee('Reply...');
 });
@@ -662,6 +720,79 @@ test('dashboard thread composer replies in the selected post thread', function (
         ->and($reply->status)->toBe(PostStatus::Published)
         ->and($reply->thread_id)->toBe($thread->id)
         ->and($reply->startedThread()->exists())->toBeFalse();
+});
+
+test('dashboard thread composer stores attachments with the reply', function () {
+    Storage::fake('public');
+
+    [$user, $workspace] = userWithWorkspace();
+
+    $topic = Topic::factory()->for($workspace)->create(['name' => 'Selected Topic', 'slug' => 'selected-topic']);
+    $sourcePost = Post::factory()->for($topic)->create([
+        'body' => 'Top-level request',
+        'status' => PostStatus::Published,
+        'sender_principal_id' => $workspace->principalForUser($user)->id,
+    ]);
+    $thread = Thread::factory()->for($topic)->create([
+        'parent_post_id' => $sourcePost->id,
+        'title' => 'Top-level request',
+    ]);
+    $file = UploadedFile::fake()->create('reply-brief.pdf', 128, 'application/pdf');
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::dashboard')
+        ->set('selectedPostUlid', $sourcePost->ulid)
+        ->set('threadReplyBody', 'Replying with an attachment.')
+        ->set('threadReplyUploads', [$file])
+        ->call('sendThreadReply')
+        ->assertHasNoErrors()
+        ->assertSet('threadReplyBody', '')
+        ->assertSet('threadReplyUploads', []);
+
+    $reply = Post::query()->where('body', 'Replying with an attachment.')->sole();
+    $attachment = $reply->attachments()->sole();
+
+    expect($reply->thread_id)->toBe($thread->id)
+        ->and($attachment->filename)->toBe('reply-brief.pdf')
+        ->and($attachment->path)->toContain('attachments/');
+
+    Storage::disk('public')->assertExists($attachment->path);
+});
+
+test('dashboard thread composer can remove a pending attachment before replying', function () {
+    Storage::fake('public');
+
+    [$user, $workspace] = userWithWorkspace();
+
+    $topic = Topic::factory()->for($workspace)->create(['name' => 'Selected Topic', 'slug' => 'selected-topic']);
+    $sourcePost = Post::factory()->for($topic)->create([
+        'body' => 'Top-level request',
+        'status' => PostStatus::Published,
+        'sender_principal_id' => $workspace->principalForUser($user)->id,
+    ]);
+    Thread::factory()->for($topic)->create([
+        'parent_post_id' => $sourcePost->id,
+        'title' => 'Top-level request',
+    ]);
+    $removedFile = UploadedFile::fake()->create('remove-reply.pdf', 128, 'application/pdf');
+    $keptFile = UploadedFile::fake()->create('keep-reply.pdf', 128, 'application/pdf');
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::dashboard')
+        ->set('selectedPostUlid', $sourcePost->ulid)
+        ->set('threadReplyBody', 'Replying with one attachment.')
+        ->set('threadReplyUploads', [$removedFile, $keptFile])
+        ->assertSee('data-test="thread-panel-composer-attachment-remove"', escape: false)
+        ->call('removeThreadReplyUpload', 0)
+        ->assertSet('threadReplyUploads', fn (array $uploads): bool => count($uploads) === 1 && $uploads[0]->getClientOriginalName() === 'keep-reply.pdf')
+        ->call('sendThreadReply')
+        ->assertHasNoErrors();
+
+    $reply = Post::query()->where('body', 'Replying with one attachment.')->sole();
+
+    expect($reply->attachments()->pluck('filename')->all())->toBe(['keep-reply.pdf']);
 });
 
 test('dashboard thread composer starts a thread from the selected top level post', function () {
@@ -776,7 +907,7 @@ test('dashboard post panel shows attachments', function () {
         ->assertSee('Attachments')
         ->assertSee('roadmap.pdf')
         ->assertSee('2 KB')
-        ->assertDontSee('type="file"', escape: false);
+        ->assertDontSee('wire:model="postUploads"', escape: false);
 });
 
 test('dashboard feed post messages show attachments', function () {

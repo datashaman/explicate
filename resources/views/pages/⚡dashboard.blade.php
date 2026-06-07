@@ -99,6 +99,12 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
     /** @var array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile> */
     public array $postUploads = [];
 
+    /** @var array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile> */
+    public array $quickPostUploads = [];
+
+    /** @var array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile> */
+    public array $threadReplyUploads = [];
+
     public function mount(?string $folder = null): void
     {
         if (! $this->selectedSystemFolderSlug && $folder && PostFolder::tryFrom($folder)) {
@@ -720,20 +726,28 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
         abort_unless($workspace && $topic, 403);
 
+        $uploads = $this->quickPostUploads;
+
         $validated = $this->validate([
             'quickPostBody' => ['required', 'string'],
         ], [], [
             'quickPostBody' => __('message'),
         ]);
+        Validator::make(['quickPostUploads' => $uploads], [
+            'quickPostUploads.*' => ['file', 'max:51200'],
+        ], [], [
+            'quickPostUploads.*' => __('attachment'),
+        ])->validate();
 
         app(CreatePost::class)->handle(
             topic: $topic,
             sender: $workspace->principalForUser(Auth::user()),
             body: $validated['quickPostBody'],
             status: PostStatus::Published,
+            uploads: $uploads,
         );
 
-        $this->reset('quickPostBody');
+        $this->reset('quickPostBody', 'quickPostUploads');
     }
 
     public function sendThreadReply(): void
@@ -743,11 +757,18 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
         abort_unless($workspace && $post && $post->status === PostStatus::Published, 403);
 
+        $uploads = $this->threadReplyUploads;
+
         $validated = $this->validate([
             'threadReplyBody' => ['required', 'string'],
         ], [], [
             'threadReplyBody' => __('reply'),
         ]);
+        Validator::make(['threadReplyUploads' => $uploads], [
+            'threadReplyUploads.*' => ['file', 'max:51200'],
+        ], [], [
+            'threadReplyUploads.*' => __('attachment'),
+        ])->validate();
 
         app(CreatePost::class)->handle(
             topic: $post->topic,
@@ -755,9 +776,20 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             body: $validated['threadReplyBody'],
             status: PostStatus::Published,
             thread: $this->threadForReply($post),
+            uploads: $uploads,
         );
 
-        $this->reset('threadReplyBody');
+        $this->reset('threadReplyBody', 'threadReplyUploads');
+    }
+
+    public function removeQuickPostUpload(int $index): void
+    {
+        $this->quickPostUploads = $this->withoutUploadAt($this->quickPostUploads, $index);
+    }
+
+    public function removeThreadReplyUpload(int $index): void
+    {
+        $this->threadReplyUploads = $this->withoutUploadAt($this->threadReplyUploads, $index);
     }
 
     private function createDashboardPostWithStatus(PostStatus $status): void
@@ -815,6 +847,17 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             'topic_id' => $post->topic_id,
             'title' => $post->preview(),
         ]);
+    }
+
+    /**
+     * @param  array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile>  $uploads
+     * @return array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile>
+     */
+    private function withoutUploadAt(array $uploads, int $index): array
+    {
+        unset($uploads[$index]);
+
+        return array_values($uploads);
     }
 
     public function openAgent(string $agentSlug): void
@@ -1495,8 +1538,12 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                                         'bodyModel' => 'quickPostBody',
                                         'buttonTest' => 'main-panel-composer-send',
                                         'dataTest' => 'main-panel-composer',
+                                        'loadingTarget' => 'quickPostUploads,sendQuickPost',
                                         'placeholder' => __('Message :topic', ['topic' => $selectedDashboardTopic->name]),
+                                        'removeUploadAction' => 'removeQuickPostUpload',
                                         'submitAction' => 'sendQuickPost',
+                                        'uploadError' => 'quickPostUploads.*',
+                                        'uploadModel' => 'quickPostUploads',
                                     ])
                                 </div>
                             @endif
@@ -1599,8 +1646,12 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                                         'bodyModel' => 'threadReplyBody',
                                         'buttonTest' => 'thread-panel-composer-send',
                                         'dataTest' => 'thread-panel-composer',
+                                        'loadingTarget' => 'threadReplyUploads,sendThreadReply',
                                         'placeholder' => __('Reply...'),
+                                        'removeUploadAction' => 'removeThreadReplyUpload',
                                         'submitAction' => 'sendThreadReply',
+                                        'uploadError' => 'threadReplyUploads.*',
+                                        'uploadModel' => 'threadReplyUploads',
                                     ])
                                 </div>
                             @endif
