@@ -3,6 +3,7 @@
 use App\Actions\Agents\CreateAgent;
 use App\Actions\Agents\CreateAgentVersion;
 use App\Actions\Posts\CreatePost;
+use App\Actions\Posts\DeletePostAttachment;
 use App\Actions\Posts\UpdateDraftPost;
 use App\Enums\PostFolder;
 use App\Enums\PostListColumn;
@@ -14,7 +15,6 @@ use App\Models\Post;
 use App\Models\Topic;
 use Flux\Flux;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Computed;
@@ -821,11 +821,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
         abort_unless($post && $post->status === PostStatus::Draft, 403);
 
-        $attachment = $post->attachments()->findOrFail($attachmentId);
-
-        Storage::disk('public')->delete($attachment->path);
-
-        $attachment->delete();
+        app(DeletePostAttachment::class)->handle($post, $attachmentId);
 
         Flux::toast(variant: 'success', text: __('Attachment deleted.'));
     }

@@ -1,13 +1,13 @@
 <?php
 
-use App\Enums\PostStatus;
+use App\Actions\Posts\DeletePostAttachment;
 use App\Actions\Posts\UpdateDraftPost;
+use App\Enums\PostStatus;
 use App\Models\Agent;
 use App\Models\Post;
 use App\Models\Topic;
 use Flux\Flux;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
@@ -164,11 +164,7 @@ new #[Layout('layouts::workspace'), Title('Post')] class extends Component {
     {
         abort_unless($this->post->status === PostStatus::Draft, 403);
 
-        $attachment = $this->post->attachments()->findOrFail($attachmentId);
-
-        Storage::disk('public')->delete($attachment->path);
-
-        $attachment->delete();
+        app(DeletePostAttachment::class)->handle($this->post, $attachmentId);
 
         Flux::toast(variant: 'success', text: __('Attachment deleted.'));
     }
