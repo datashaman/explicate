@@ -75,6 +75,23 @@ class Thread extends Model
     }
 
     /**
+     * @return HasMany<ThreadAgentState, $this>
+     */
+    public function agentStates(): HasMany
+    {
+        return $this->hasMany(ThreadAgentState::class);
+    }
+
+    public function agentStateFor(Agent $agent): ThreadAgentState
+    {
+        return $this->agentStates()->firstOrCreate([
+            'agent_id' => $agent->id,
+        ], [
+            'task_list' => [],
+        ]);
+    }
+
+    /**
      * @return BelongsTo<Post, $this>
      */
     public function parentPost(): BelongsTo

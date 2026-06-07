@@ -2,6 +2,7 @@
 
 namespace App\Ai\Agents;
 
+use App\Ai\Tools\ManageAgentTaskListTool;
 use App\Ai\Tools\TopicForgeToolFactory;
 use App\Models\AgentTask;
 use App\Models\Post;
@@ -38,6 +39,7 @@ class TopicForgeMentionAgent implements Agent, Conversational, HasTools
             trim((string) $this->task->agent->latestVersion?->prompt),
             $this->identityInstructions(),
             $this->artifactInstructions(),
+            $this->taskInstructions(),
         ])));
     }
 
@@ -75,7 +77,10 @@ class TopicForgeMentionAgent implements Agent, Conversational, HasTools
      */
     public function tools(): iterable
     {
-        return $this->toolFactory->forAgentTask($this->toolUser, $this->task->agent->workspace);
+        return [
+            new ManageAgentTaskListTool($this->task),
+            ...$this->toolFactory->forAgentTask($this->toolUser, $this->task->agent->workspace),
+        ];
     }
 
     private function identityInstructions(): string
@@ -99,6 +104,17 @@ Topic Forge artifact policy:
 - Use the workspace filesystem tools for substantial artifacts such as specifications, plans, reports, code, research notes, or any response that would otherwise be long.
 - Prefer creating or updating a well-named Markdown file with write-file, then reference that path in your reply instead of pasting large swaths of text into the post.
 - When you refer to a workspace file in a post reply, use a Markdown link with the file path as the label and the file tool response's dashboard_url as the href, for example [docs/spec.md](dashboard_url).
+INSTRUCTIONS;
+    }
+
+    private function taskInstructions(): string
+    {
+        return <<<'INSTRUCTIONS'
+Topic Forge task list policy:
+- Maintain a private task list with the task-list tool when the work has more than one step, has dependencies, or risks going off track.
+- Add concrete next steps, check them off as you complete them, and remove items that are no longer relevant.
+- Keep the task list short and actionable.
+- Do not paste the task list into the post reply unless a brief summary is helpful.
 INSTRUCTIONS;
     }
 

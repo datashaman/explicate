@@ -336,7 +336,6 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             ->pluck('total', 'status');
 
         $binCount = Post::onlyTrashed()
-            ->topLevel()
             ->where('deleted_by_user_id', Auth::id())
             ->whereHas('topic', fn ($query) => $query->where('workspace_id', $workspace->id))
             ->count();
@@ -438,7 +437,6 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         $query = $folder === PostFolder::Bin ? Post::onlyTrashed() : Post::query();
 
         return $query
-            ->topLevel()
             ->with(['agentTasks.agent', 'attachments', 'topic', 'sender.user', 'sender.agent'])
             ->withCount('attachments')
             ->whereHas('topic', fn ($query) => $query->where('workspace_id', $workspace->id))

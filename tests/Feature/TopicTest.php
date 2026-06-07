@@ -352,6 +352,18 @@ test('dashboard bin folder shows current user deleted posts', function () {
     $deletedPost->timestamps = false;
     $deletedPost->forceFill(['updated_at' => now()->subMinutes(11)])->save();
 
+    $thread = Thread::factory()->for($topic)->create([
+        'parent_post_id' => $deletedPost->id,
+        'title' => $deletedPost->body,
+    ]);
+
+    Post::factory()->trashed()->for($topic)->for($thread)->create([
+        'body' => 'Deleted reply',
+        'status' => PostStatus::Published,
+        'sender_principal_id' => $userPrincipal->id,
+        'deleted_by_user_id' => $user->id,
+    ]);
+
     Post::factory()->trashed()->for($topic)->create([
         'body' => 'Member deleted post',
         'status' => PostStatus::Published,
@@ -372,6 +384,7 @@ test('dashboard bin folder shows current user deleted posts', function () {
         ->assertDontSee('data-test="folder-list-sort-header"', escape: false)
         ->assertSeeText($user->name)
         ->assertSee('#Design')
+        ->assertSee('Deleted reply')
         ->assertSee('Restore')
         ->assertSee('Delete permanently');
 

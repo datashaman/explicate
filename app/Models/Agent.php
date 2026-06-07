@@ -92,6 +92,14 @@ class Agent extends Model
     }
 
     /**
+     * @return HasMany<ThreadAgentState, $this>
+     */
+    public function threadStates(): HasMany
+    {
+        return $this->hasMany(ThreadAgentState::class);
+    }
+
+    /**
      * @return HasOne<AgentVersion, $this>
      */
     public function latestVersion(): HasOne

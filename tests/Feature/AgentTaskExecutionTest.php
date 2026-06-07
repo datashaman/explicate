@@ -65,9 +65,12 @@ test('it executes a pending agent task through the topic forge mention agent', f
             && str_contains($prompt->agent->instructions(), 'reference that path in your reply')
             && str_contains($prompt->agent->instructions(), 'use a Markdown link with the file path as the label')
             && str_contains($prompt->agent->instructions(), 'dashboard_url as the href')
+            && str_contains($prompt->agent->instructions(), 'Topic Forge task list policy:')
+            && str_contains($prompt->agent->instructions(), 'Maintain a private task list with the task-list tool')
             && in_array('list-files', $toolNames, true)
             && in_array('write-file', $toolNames, true)
             && in_array('create-post', $toolNames, true)
+            && in_array('task-list', $toolNames, true)
             && ! in_array('switch-workspace', $toolNames, true);
     });
 
