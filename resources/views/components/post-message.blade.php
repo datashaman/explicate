@@ -2,6 +2,7 @@
     'post',
     'showTopic' => true,
     'showReplyAffordance' => false,
+    'replyHref' => null,
 ])
 
 @php
@@ -20,6 +21,7 @@
     $timestampTitle = $timestamp->timezone($timezone)->isoFormat('LLLL');
     $hasActions = isset($actions) && trim($actions->toHtml()) !== '';
     $body = $post->body ?: __('No content.');
+    $hasExpandableBody = substr_count($body, "\n") >= 10 || Str::length($body) > 900;
     $mentionedAgentsBySlug = $post->mentionedAgents()->keyBy('slug');
     $bodyHtml = (function () use ($body, $mentionedAgentsBySlug): \Illuminate\Support\HtmlString {
         $pattern = '/(?<![\w@])@([a-z0-9][a-z0-9-]*)\b/i';
@@ -91,11 +93,47 @@
             @endif
         </div>
 
-        <div class="text-sm leading-[1.2] text-neutral-800 dark:text-neutral-200">
-            <div @class([
-                'whitespace-pre-wrap',
-                'text-neutral-400 dark:text-neutral-600' => ! $post->body,
-            ])>{!! $bodyHtml !!}</div>
+        <div
+            class="text-sm leading-[1.2] text-neutral-800 dark:text-neutral-200"
+            @if ($hasExpandableBody)
+                x-data="{
+                    expanded: false,
+                    canToggle: false,
+                    refresh() {
+                        this.$nextTick(() => {
+                            this.canToggle = this.$refs.body.scrollHeight > this.$refs.body.clientHeight + 1
+                        })
+                    },
+                }"
+                x-init="refresh()"
+                x-on:resize.window.debounce.150ms="refresh()"
+            @endif
+            data-test="post-message-body-wrapper"
+        >
+            <div
+                @if ($hasExpandableBody)
+                    x-ref="body"
+                    x-bind:class="{ 'max-h-[10.5rem] overflow-hidden': ! expanded }"
+                @endif
+                @class([
+                    'whitespace-pre-wrap',
+                    'text-neutral-400 dark:text-neutral-600' => ! $post->body,
+                ])
+                data-test="post-message-body"
+            >{!! $bodyHtml !!}</div>
+
+            @if ($hasExpandableBody)
+                <button
+                    type="button"
+                    class="mt-1 hidden cursor-pointer text-xs font-medium text-blue-700 hover:text-blue-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:text-blue-300 dark:hover:text-blue-200"
+                    x-bind:class="{ 'inline-flex': canToggle }"
+                    x-on:click.stop="expanded = ! expanded"
+                    data-test="post-message-body-toggle"
+                >
+                    <span x-show="! expanded">{{ __('Show more') }}</span>
+                    <span x-show="expanded">{{ __('Show less') }}</span>
+                </button>
+            @endif
         </div>
 
         @if ($post->attachments->isNotEmpty())
@@ -140,7 +178,17 @@
                 $lastReply = $replyPosts->sortByDesc('created_at')->first();
             @endphp
 
-            <div class="mt-3 flex items-center gap-2 text-sm" data-test="post-message-replies">
+            <a
+                @if ($replyHref)
+                    href="{{ $replyHref }}"
+                    wire:navigate
+                @endif
+                @class([
+                    'mt-3 inline-flex items-center gap-2 text-sm',
+                    'cursor-pointer rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500' => $replyHref,
+                ])
+                data-test="post-message-replies"
+            >
                 <div class="flex -space-x-1">
                     @foreach ($replyPosts->take(3) as $replyPost)
                         @php
@@ -172,7 +220,7 @@
                         {{ __('Last reply :time', ['time' => $lastReply->created_at->diffForHumans()]) }}
                     </span>
                 @endif
-            </div>
+            </a>
         @endif
 
     </div>

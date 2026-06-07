@@ -473,12 +473,20 @@ test('dashboard keeps thread replies out of top-level topic lists', function () 
         ->assertSee('data-test="folder-post-message"', escape: false);
 });
 
-test('dashboard post messages open from the row instead of a body link', function () {
+test('dashboard post messages open from the replies affordance instead of the whole row', function () {
     [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['name' => 'Selected Topic', 'slug' => 'selected-topic']);
     $post = Post::factory()->for($topic)->create([
         'body' => 'Open the thread panel from this row.',
+        'status' => PostStatus::Published,
+    ]);
+    $thread = Thread::factory()->for($topic)->create([
+        'parent_post_id' => $post->id,
+        'title' => 'Open the thread panel from this row.',
+    ]);
+    Post::factory()->for($topic)->for($thread)->create([
+        'body' => 'Thread reply',
         'status' => PostStatus::Published,
     ]);
 
@@ -488,10 +496,47 @@ test('dashboard post messages open from the row instead of a body link', functio
         ->get(route('dashboard', ['topic' => $topic->slug]))
         ->assertOk()
         ->assertSee('data-test="folder-post-message"', escape: false)
-        ->assertSee('cursor-pointer', escape: false)
         ->assertSee('data-href="'.e($postHref).'"', escape: false)
-        ->assertSee('$wire.openPost', escape: false)
+        ->assertSee('data-test="post-message-replies"', escape: false)
+        ->assertSee('href="'.e($postHref).'"', escape: false)
+        ->assertDontSee('cursor-pointer rounded-lg px-2 py-4', escape: false)
+        ->assertDontSee('$wire.openPost', escape: false)
         ->assertDontSee('block whitespace-pre-wrap hover:underline', escape: false);
+});
+
+test('post messages collapse bodies that are longer than ten lines', function () {
+    [$user, $workspace] = userWithWorkspace();
+
+    $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
+    Post::factory()->for($topic)->create([
+        'body' => collect(range(1, 11))->map(fn (int $line): string => "Line {$line}")->implode("\n"),
+        'status' => PostStatus::Published,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('dashboard', ['topic' => $topic->slug]))
+        ->assertOk()
+        ->assertSee('data-test="post-message-body-toggle"', escape: false)
+        ->assertSee('cursor-pointer text-xs font-medium', escape: false)
+        ->assertSee('max-h-[10.5rem] overflow-hidden', escape: false)
+        ->assertSee('Show more')
+        ->assertSee('Show less');
+});
+
+test('post messages do not render a collapse control for short bodies', function () {
+    [$user, $workspace] = userWithWorkspace();
+
+    $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
+    Post::factory()->for($topic)->create([
+        'body' => collect(range(1, 10))->map(fn (int $line): string => "Line {$line}")->implode("\n"),
+        'status' => PostStatus::Published,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('dashboard', ['topic' => $topic->slug]))
+        ->assertOk()
+        ->assertDontSee('data-test="post-message-body-toggle"', escape: false)
+        ->assertDontSee('max-h-[10.5rem] overflow-hidden', escape: false);
 });
 
 test('dashboard opens a post thread panel from the feed', function () {
