@@ -10,13 +10,12 @@ use App\Enums\PostListColumn;
 use App\Enums\PostStatus;
 use App\Enums\Provider;
 use App\Enums\ReasoningEffort;
-use App\Enums\WorkspaceFileType;
 use App\Models\Agent;
 use App\Models\Post;
 use App\Models\Principal;
+use App\Services\WorkspaceFilesystemService;
 use App\Models\Thread;
 use App\Models\Topic;
-use App\Models\WorkspaceFile;
 use Flux\Flux;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
@@ -47,7 +46,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
     public ?string $selectedAgentSlug = null;
 
     #[Url(as: 'file')]
-    public ?int $selectedWorkspaceFileId = null;
+    public ?string $selectedWorkspaceFilePath = null;
 
     #[Url(as: 'panel')]
     public string $mobilePanel = 'topics';
@@ -124,7 +123,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             $this->selectedTopicSlug = null;
             $this->selectedSystemFolderSlug = null;
             $this->selectedPostUlid = null;
-            $this->selectedWorkspaceFileId = null;
+            $this->selectedWorkspaceFilePath = null;
             $this->panelAction = null;
             $this->mobilePanel = 'posts';
         }
@@ -259,20 +258,34 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             ->first();
     }
 
-    public function selectedWorkspaceFile(): ?WorkspaceFile
+    /** @return array{name: string, path: string, type: string, content: string|null}|null */
+    public function selectedWorkspaceFile(): ?array
     {
         $workspace = $this->workspace();
 
-        if (! $workspace || ! $this->selectedWorkspaceFileId) {
+        if (! $workspace || ! $this->selectedWorkspaceFilePath) {
             return null;
         }
 
-        return $workspace->files()->with('children')->whereKey($this->selectedWorkspaceFileId)->first();
+        $fs = $workspace->filesystem();
+
+        if (! $fs->exists($this->selectedWorkspaceFilePath)) {
+            return null;
+        }
+
+        $isDirectory = $fs->isDirectory($this->selectedWorkspaceFilePath);
+
+        return [
+            'name' => basename($this->selectedWorkspaceFilePath),
+            'path' => $this->selectedWorkspaceFilePath,
+            'type' => $isDirectory ? 'folder' : 'file',
+            'content' => $isDirectory ? null : $fs->read($this->selectedWorkspaceFilePath),
+        ];
     }
 
     public function isFilesPanel(): bool
     {
-        return $this->panelAction === 'files' || $this->selectedWorkspaceFileId !== null;
+        return $this->panelAction === 'files' || $this->selectedWorkspaceFilePath !== null;
     }
 
     public function isCreatingPost(): bool
@@ -280,7 +293,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         return $this->creatingPostFromRoute || $this->panelAction === 'new-post';
     }
 
-    /** @return list<array{id: int, name: string, path: string, type: string, depth: int, href: string}> */
+    /** @return list<array{name: string, path: string, type: string, depth: int, href: string}> */
     public function workspaceFileItems(): array
     {
         $workspace = $this->workspace();
@@ -289,34 +302,31 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             return [];
         }
 
-        $files = $workspace->files()
-            ->get()
-            ->groupBy('parent_id');
+        $fs = $workspace->filesystem();
 
-        $flatten = function (?int $parentId, int $depth) use (&$flatten, $files): array {
-            return $files->get($parentId, collect())
-                ->flatMap(function (WorkspaceFile $file) use ($flatten, $depth): array {
-                    return [
-                        [
-                            'id' => $file->id,
-                            'name' => $file->name,
-                            'path' => $file->path,
-                            'type' => $file->type->value,
-                            'depth' => $depth,
-                            'href' => route('dashboard', [
-                                'action' => 'files',
-                                'file' => $file->id,
-                                'panel' => 'posts',
-                            ]),
-                        ],
-                        ...$flatten($file->id, $depth + 1),
-                    ];
-                })
-                ->values()
-                ->all();
+        $flatten = function (string $directory, int $depth) use (&$flatten, $fs): array {
+            $items = [];
+            foreach ($fs->list($directory) as $entry) {
+                $items[] = [
+                    'name' => $entry['name'],
+                    'path' => $entry['path'],
+                    'type' => $entry['type'],
+                    'depth' => $depth,
+                    'href' => route('dashboard', [
+                        'action' => 'files',
+                        'file' => $entry['path'],
+                        'panel' => 'posts',
+                    ]),
+                ];
+                if ($entry['type'] === 'folder') {
+                    $items = array_merge($items, $flatten($entry['path'], $depth + 1));
+                }
+            }
+
+            return $items;
         };
 
-        return $flatten(null, 0);
+        return $flatten('', 0);
     }
 
     #[Computed]
@@ -328,7 +338,20 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             return 0;
         }
 
-        return $workspace->files()->where('type', WorkspaceFileType::File)->count();
+        $fs = $workspace->filesystem();
+        $count = 0;
+        $countFiles = function (string $directory) use (&$countFiles, $fs, &$count): void {
+            foreach ($fs->list($directory) as $entry) {
+                if ($entry['type'] === 'file') {
+                    $count++;
+                } else {
+                    $countFiles($entry['path']);
+                }
+            }
+        };
+        $countFiles('');
+
+        return $count;
     }
 
     /** @return list<array{slug: string, name: string, icon: string, href: string, count: int}> */
@@ -610,7 +633,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         if ($this->selectedTopicSlug) {
             $this->selectedSystemFolderSlug = null;
             $this->selectedAgentSlug = null;
-            $this->selectedWorkspaceFileId = null;
+            $this->selectedWorkspaceFilePath = null;
             $this->panelAction = null;
         }
 
@@ -626,7 +649,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             $this->selectedTopicSlug = null;
             $this->selectedAgentSlug = null;
             $this->selectedPostUlid = null;
-            $this->selectedWorkspaceFileId = null;
+            $this->selectedWorkspaceFilePath = null;
             $this->panelAction = null;
             $this->mobilePanel = 'posts';
         }
@@ -646,7 +669,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
     public function updatedSelectedAgentSlug(): void
     {
         if ($this->selectedAgentSlug) {
-            $this->selectedWorkspaceFileId = null;
+            $this->selectedWorkspaceFilePath = null;
             $this->panelAction = null;
             $this->mobilePanel = 'posts';
         }
@@ -654,9 +677,9 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         $this->syncSelectedAgentFields();
     }
 
-    public function updatedSelectedWorkspaceFileId(): void
+    public function updatedSelectedWorkspaceFilePath(): void
     {
-        if ($this->selectedWorkspaceFileId) {
+        if ($this->selectedWorkspaceFilePath) {
             $this->selectedTopicSlug = null;
             $this->selectedSystemFolderSlug = null;
             $this->selectedAgentSlug = null;
@@ -940,15 +963,14 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         $this->mobilePanel = 'posts';
     }
 
-    public function openWorkspaceFile(int $fileId): void
+    public function openWorkspaceFile(string $path): void
     {
         $workspace = $this->workspace();
 
         abort_unless($workspace, 403);
+        abort_unless($workspace->filesystem()->exists($path), 404);
 
-        $file = $workspace->files()->whereKey($fileId)->firstOrFail();
-
-        $this->selectedWorkspaceFileId = $file->id;
+        $this->selectedWorkspaceFilePath = $path;
         $this->selectedTopicSlug = null;
         $this->selectedSystemFolderSlug = null;
         $this->selectedAgentSlug = null;
@@ -965,7 +987,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         abort_unless($workspace, 403);
 
         $validated = $this->validate([
-            'newWorkspaceFileType' => ['required', 'string', Rule::enum(WorkspaceFileType::class)],
+            'newWorkspaceFileType' => ['required', 'string', Rule::in(['file', 'folder'])],
             'newWorkspaceFileName' => ['required', 'string', 'max:255'],
         ], [], [
             'newWorkspaceFileType' => __('type'),
@@ -974,37 +996,42 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
         $parent = $this->selectedWorkspaceFile();
 
-        if ($parent && $parent->isFile()) {
-            $parent = $parent->parent;
+        if ($parent && $parent['type'] === 'file') {
+            $parentDir = dirname($parent['path']);
+            $parentPath = ($parentDir === '.' || $parentDir === '') ? '' : $parentDir;
+        } else {
+            $parentPath = $parent ? $parent['path'] : '';
         }
 
-        $file = $workspace->files()->create([
-            'parent_id' => $parent?->id,
-            'type' => WorkspaceFileType::from($validated['newWorkspaceFileType']),
-            'name' => $validated['newWorkspaceFileName'],
-            'content' => '',
-        ]);
+        $name = WorkspaceFilesystemService::normalizeName($validated['newWorkspaceFileName']);
+        $newPath = $parentPath === '' ? $name : "{$parentPath}/{$name}";
+        $isFolder = $validated['newWorkspaceFileType'] === 'folder';
+        $fs = $workspace->filesystem();
+
+        if ($isFolder) {
+            $fs->mkdir($newPath);
+        } else {
+            $fs->write($newPath, '');
+        }
 
         $this->reset('newWorkspaceFileName');
-        $this->selectedWorkspaceFileId = $file->id;
+        $this->selectedWorkspaceFilePath = $newPath;
         $this->syncSelectedWorkspaceFileFields();
 
-        Flux::toast(variant: 'success', text: $file->isFolder() ? __('Folder created.') : __('File created.'));
+        Flux::toast(variant: 'success', text: $isFolder ? __('Folder created.') : __('File created.'));
     }
 
     public function saveSelectedWorkspaceFile(): void
     {
         $file = $this->selectedWorkspaceFile();
 
-        abort_unless($file && $file->isFile(), 404);
+        abort_unless($file && $file['type'] === 'file', 404);
 
         $validated = $this->validate([
             'workspaceFileContent' => ['nullable', 'string'],
         ]);
 
-        $file->update([
-            'content' => $validated['workspaceFileContent'] ?? '',
-        ]);
+        $this->workspace()->filesystem()->write($file['path'], $validated['workspaceFileContent'] ?? '');
 
         Flux::toast(variant: 'success', text: __('File saved.'));
     }
@@ -1015,11 +1042,12 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
         abort_unless($file, 404);
 
-        $parentId = $file->parent_id;
+        $parentDir = dirname($file['path']);
+        $parentPath = ($parentDir === '.' || $parentDir === '') ? null : $parentDir;
 
-        $file->delete();
+        $this->workspace()->filesystem()->delete($file['path']);
 
-        $this->selectedWorkspaceFileId = $parentId;
+        $this->selectedWorkspaceFilePath = $parentPath;
         $this->syncSelectedWorkspaceFileFields();
 
         Flux::toast(variant: 'success', text: __('Deleted.'));
@@ -1284,7 +1312,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
     {
         $file = $this->selectedWorkspaceFile();
 
-        $this->workspaceFileContent = $file?->content ?? '';
+        $this->workspaceFileContent = ($file && $file['type'] === 'file') ? ($file['content'] ?? '') : '';
     }
 
     private function syncNewPostTopic(): void
@@ -1496,7 +1524,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                                     </div>
 
                                     <flux:button type="submit" icon="plus" size="xs" variant="primary" data-test="workspace-file-create">
-                                        {{ $selectedDashboardFile?->isFolder() ? __('Create inside') : __('Create') }}
+                                        {{ ($selectedDashboardFile['type'] ?? null) === 'folder' ? __('Create inside') : __('Create') }}
                                     </flux:button>
                                 </form>
 
@@ -1509,12 +1537,12 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                                         @foreach ($this->workspaceFileItems() as $fileItem)
                                             <button
                                                 type="button"
-                                                wire:click="openWorkspaceFile({{ $fileItem['id'] }})"
-                                                wire:key="workspace-file-{{ $fileItem['id'] }}"
+                                                wire:click="openWorkspaceFile('{{ $fileItem['path'] }}')"
+                                                wire:key="workspace-file-{{ md5($fileItem['path']) }}"
                                                 data-test="workspace-file-row-{{ $fileItem['path'] }}"
                                                 @class([
                                                     'flex w-full cursor-pointer items-center gap-2 px-4 py-2 text-left text-sm hover:bg-neutral-100 dark:hover:bg-white/5',
-                                                    'bg-violet-100/80 dark:bg-violet-500/15' => $selectedWorkspaceFileId === $fileItem['id'],
+                                                    'bg-violet-100/80 dark:bg-violet-500/15' => $selectedWorkspaceFilePath === $fileItem['path'],
                                                 ])
                                                 style="padding-left: {{ 1 + ($fileItem['depth'] * 1.25) }}rem"
                                             >
@@ -1530,8 +1558,8 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                                 @if ($selectedDashboardFile)
                                     <div class="flex items-center justify-between gap-3 border-b border-neutral-200 px-4 py-3 dark:border-white/10">
                                         <div class="min-w-0">
-                                            <div class="truncate text-sm font-medium text-neutral-800 dark:text-neutral-200">{{ $selectedDashboardFile->name }}</div>
-                                            <div class="truncate text-xs text-neutral-500 dark:text-neutral-500">{{ $selectedDashboardFile->path }}</div>
+                                            <div class="truncate text-sm font-medium text-neutral-800 dark:text-neutral-200">{{ $selectedDashboardFile['name'] }}</div>
+                                            <div class="truncate text-xs text-neutral-500 dark:text-neutral-500">{{ $selectedDashboardFile['path'] }}</div>
                                         </div>
 
                                         <flux:button wire:click="deleteSelectedWorkspaceFile" wire:confirm="{{ __('Delete this item and everything inside it?') }}" size="xs" variant="danger" icon="trash" data-test="workspace-file-delete">
@@ -1539,7 +1567,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                                         </flux:button>
                                     </div>
 
-                                    @if ($selectedDashboardFile->isFile())
+                                    @if ($selectedDashboardFile['type'] === 'file')
                                         <form wire:submit="saveSelectedWorkspaceFile" class="flex min-h-0 flex-1 flex-col overflow-hidden">
                                             <flux:textarea wire:model="workspaceFileContent" class="min-h-0 flex-1 resize-none overflow-auto border-0 font-mono text-sm" data-test="workspace-file-content" />
 

@@ -5,6 +5,7 @@ namespace App\Mcp\Tools;
 use App\Mcp\Concerns\FormatsMcpPayloads;
 use App\Mcp\TopicForgeContext;
 use App\Models\User;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -31,14 +32,25 @@ class DeleteFileTool extends Tool
 
         /** @var User $user */
         $user = $this->context->requireUser($request->user());
-        $file = $this->context->workspaceFileFor($user, $validated['path']);
-        $payload = $this->workspaceFilePayload($file);
+        $workspace = $this->context->workspaceFor($user);
+        $fs = $workspace->filesystem();
+        $path = $validated['path'];
 
-        $file->delete();
+        if (! $fs->exists($path)) {
+            throw new AuthorizationException('The requested workspace file is not accessible for the authenticated user.');
+        }
+
+        $entry = [
+            'name' => basename($path),
+            'path' => $path,
+            'type' => $fs->isDirectory($path) ? 'folder' : 'file',
+        ];
+
+        $fs->delete($path);
 
         return Response::structured([
-            'workspace' => $file->workspace->only(['id', 'name', 'slug']),
-            'file' => $payload,
+            'workspace' => $workspace->only(['id', 'name', 'slug']),
+            'file' => $this->workspaceFilePayload($entry, $workspace),
             'deleted' => true,
         ]);
     }

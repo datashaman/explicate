@@ -8,7 +8,6 @@ use App\Models\AgentTask;
 use App\Models\Post;
 use App\Models\Topic;
 use App\Models\Workspace;
-use App\Models\WorkspaceFile;
 
 final class TopicForgeUris
 {
@@ -53,11 +52,9 @@ final class TopicForgeUris
         return self::Workspaces.'/'.self::workspaceSlug($workspace).'/files';
     }
 
-    public static function workspaceFile(WorkspaceFile $file): string
+    public static function workspaceFile(Workspace $workspace, string $path): string
     {
-        $file->loadMissing('workspace');
-
-        return self::workspaceFiles($file->workspace).'/'.rawurlencode($file->path);
+        return self::workspaceFiles($workspace).'/'.rawurlencode($path);
     }
 
     public static function topic(Topic $topic): string

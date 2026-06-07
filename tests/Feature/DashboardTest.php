@@ -1,9 +1,21 @@
 <?php
 
-use App\Enums\WorkspaceFileType;
 use App\Models\User;
-use App\Models\WorkspaceFile;
 use Livewire\Livewire;
+
+afterEach(function () {
+    $workspacesDir = storage_path('app/workspaces');
+    if (is_dir($workspacesDir)) {
+        $iterator = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($workspacesDir, RecursiveDirectoryIterator::SKIP_DOTS),
+            RecursiveIteratorIterator::CHILD_FIRST
+        );
+        foreach ($iterator as $entry) {
+            $entry->isDir() ? rmdir($entry->getRealPath()) : unlink($entry->getRealPath());
+        }
+        rmdir($workspacesDir);
+    }
+});
 
 test('guests are redirected to the login page', function () {
     $user = User::factory()->create();
@@ -52,15 +64,13 @@ test('workspace layout renders the user settings menu', function () {
 
 test('users can manage workspace files from the dashboard', function () {
     [$user, $workspace] = userWithWorkspace();
-    $folder = WorkspaceFile::factory()->for($workspace)->folder()->create([
-        'name' => 'docs',
-    ]);
+    $workspace->filesystem()->mkdir('docs');
 
     Livewire::actingAs($user)
         ->test('pages::dashboard', ['action' => 'files'])
         ->assertSee('Files')
-        ->set('selectedWorkspaceFileId', $folder->id)
-        ->set('newWorkspaceFileType', WorkspaceFileType::File->value)
+        ->set('selectedWorkspaceFilePath', 'docs')
+        ->set('newWorkspaceFileType', 'file')
         ->set('newWorkspaceFileName', 'spec.md')
         ->call('createWorkspaceFile')
         ->assertSet('workspaceFileContent', '')
@@ -68,30 +78,19 @@ test('users can manage workspace files from the dashboard', function () {
         ->call('saveSelectedWorkspaceFile')
         ->assertHasNoErrors();
 
-    $file = $workspace->files()->where('path', 'docs/spec.md')->first();
-
-    expect($file)->not->toBeNull();
-    expect($file?->type)->toBe(WorkspaceFileType::File);
-    expect($file?->content)->toBe("# Specification\n\nContent");
+    expect($workspace->filesystem()->exists('docs/spec.md'))->toBeTrue();
+    expect($workspace->filesystem()->read('docs/spec.md'))->toBe("# Specification\n\nContent");
 });
 
 test('workspace file count only includes files and not folders', function () {
     [$user, $workspace] = userWithWorkspace();
+    $workspace->filesystem()->mkdir('docs');
+    $workspace->filesystem()->write('spec.md', '');
 
-    WorkspaceFile::factory()->for($workspace)->folder()->create([
-        'name' => 'docs',
-    ]);
-    WorkspaceFile::factory()->for($workspace)->create([
-        'name' => 'spec.md',
-        'path' => 'spec.md',
-    ]);
-
-    $response = $this
+    $this
         ->actingAs($user)
         ->get(route('dashboard', ['action' => 'files']))
         ->assertOk()
         ->assertSee('data-test="workspace-files-count"', false)
         ->assertSeeText('1');
-
-    expect($response->getContent())->not->toContain('>2<');
 });

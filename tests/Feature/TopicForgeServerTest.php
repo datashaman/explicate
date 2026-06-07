@@ -3,7 +3,6 @@
 use App\Enums\PostStatus;
 use App\Enums\Provider;
 use App\Enums\ReasoningEffort;
-use App\Enums\WorkspaceFileType;
 use App\Jobs\ProcessAgentTask;
 use App\Mcp\Resources\AgentResource;
 use App\Mcp\Resources\AgentTaskResource;
@@ -53,6 +52,20 @@ use Laravel\Mcp\Server\Transport\FakeTransporter;
 use Laravel\Mcp\Server\Transport\JsonRpcRequest;
 use Laravel\Mcp\Server\Transport\JsonRpcResponse;
 use Symfony\Component\Process\Process;
+
+afterEach(function () {
+    $workspacesDir = storage_path('app/workspaces');
+    if (is_dir($workspacesDir)) {
+        $iterator = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($workspacesDir, RecursiveDirectoryIterator::SKIP_DOTS),
+            RecursiveIteratorIterator::CHILD_FIRST
+        );
+        foreach ($iterator as $entry) {
+            $entry->isDir() ? rmdir($entry->getRealPath()) : unlink($entry->getRealPath());
+        }
+        rmdir($workspacesDir);
+    }
+});
 
 test('mcp uri literals are centralized', function () {
     $matches = collect(File::allFiles(app_path('Mcp')))
@@ -284,13 +297,10 @@ test('workspace file tools let agents manage the current workspace filesystem', 
         'content' => "# Specification\n",
     ]);
 
-    $file = $workspace->files()->where('path', 'docs/spec.md')->first();
-
-    expect($file)->not->toBeNull();
-    expect($file?->type)->toBe(WorkspaceFileType::File);
-    expect($file?->content)->toBe("# Specification\n");
-    expect($workspace->files()->where('path', 'docs')->first()?->type)->toBe(WorkspaceFileType::Folder);
-    expect($otherWorkspace->files()->count())->toBe(0);
+    expect($workspace->filesystem()->exists('docs/spec.md'))->toBeTrue();
+    expect($workspace->filesystem()->read('docs/spec.md'))->toBe("# Specification\n");
+    expect($workspace->filesystem()->isDirectory('docs'))->toBeTrue();
+    expect($otherWorkspace->filesystem()->exists('docs/spec.md'))->toBeFalse();
 
     $writeResponse
         ->assertOk()
@@ -300,7 +310,7 @@ test('workspace file tools let agents manage the current workspace filesystem', 
             ->where('file.content', "# Specification\n")
             ->where('file.dashboard_url', route('dashboard', [
                 'action' => 'files',
-                'file' => $file?->id,
+                'file' => 'docs/spec.md',
                 'panel' => 'posts',
             ]))
             ->etc()
@@ -314,7 +324,7 @@ test('workspace file tools let agents manage the current workspace filesystem', 
             ->where('files.1.path', 'docs/spec.md')
             ->where('files.1.dashboard_url', route('dashboard', [
                 'action' => 'files',
-                'file' => $file?->id,
+                'file' => 'docs/spec.md',
                 'panel' => 'posts',
             ]))
             ->etc()
@@ -329,7 +339,7 @@ test('workspace file tools let agents manage the current workspace filesystem', 
             ->where('file.content', "# Specification\n")
             ->where('file.dashboard_url', route('dashboard', [
                 'action' => 'files',
-                'file' => $file?->id,
+                'file' => 'docs/spec.md',
                 'panel' => 'posts',
             ]))
             ->etc()
@@ -345,7 +355,7 @@ test('workspace file tools let agents manage the current workspace filesystem', 
             ->etc()
         );
 
-    expect($workspace->files()->count())->toBe(0);
+    expect($workspace->filesystem()->exists('docs'))->toBeFalse();
 });
 
 test('create topic creates a topic in the current workspace', function () {

@@ -129,6 +129,11 @@ class WorkspaceFilesystemService
         }
     }
 
+    public static function normalizeName(string $name): string
+    {
+        return trim(preg_replace('/[\/\\\\]+/', '-', $name));
+    }
+
     /**
      * Normalize and resolve a workspace-relative path to an absolute path,
      * rejecting traversal attempts.
