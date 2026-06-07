@@ -14,6 +14,7 @@ use Flux\Flux;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
@@ -576,9 +577,9 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
         $validated = $this->validate([
             'agentName' => ['required', 'string', 'max:255'],
-            'provider' => ['required', 'string', 'in:'.implode(',', Provider::values())],
+            'provider' => ['required', 'string', Rule::enum(Provider::class)],
             'model' => ['required', 'string', 'max:255'],
-            'reasoningEffort' => ['nullable', 'string', 'in:'.implode(',', ReasoningEffort::values())],
+            'reasoningEffort' => ['nullable', 'string', Rule::enum(ReasoningEffort::class)],
             'prompt' => ['nullable', 'string'],
         ]);
 
@@ -727,9 +728,9 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         abort_unless($agent, 404);
 
         $validated = $this->validate([
-            'selectedAgentProvider' => ['required', 'string', 'in:'.implode(',', Provider::values())],
+            'selectedAgentProvider' => ['required', 'string', Rule::enum(Provider::class)],
             'selectedAgentModel' => ['required', 'string', 'max:255'],
-            'selectedAgentReasoningEffort' => ['nullable', 'string', 'in:'.implode(',', ReasoningEffort::values())],
+            'selectedAgentReasoningEffort' => ['nullable', 'string', Rule::enum(ReasoningEffort::class)],
             'selectedAgentPrompt' => ['nullable', 'string'],
         ]);
 

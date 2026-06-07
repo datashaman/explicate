@@ -9,6 +9,7 @@ use App\Models\Post;
 use App\Models\Topic;
 use Flux\Flux;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
@@ -154,9 +155,9 @@ new #[Layout('layouts::workspace'), Title('Topic')] class extends Component {
 
         $validated = $this->validate([
             'agentName' => ['required', 'string', 'max:255'],
-            'agentProvider' => ['required', 'string', 'in:'.implode(',', Provider::values())],
+            'agentProvider' => ['required', 'string', Rule::enum(Provider::class)],
             'agentModel' => ['required', 'string', 'max:255'],
-            'agentReasoningEffort' => ['nullable', 'string', 'in:'.implode(',', ReasoningEffort::values())],
+            'agentReasoningEffort' => ['nullable', 'string', Rule::enum(ReasoningEffort::class)],
             'agentPrompt' => ['nullable', 'string'],
         ]);
 

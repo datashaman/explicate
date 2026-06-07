@@ -9,6 +9,7 @@ use App\Mcp\TopicForgeUris;
 use App\Models\AgentTask;
 use App\Models\User;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Illuminate\Validation\Rule;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\ResponseFactory;
@@ -31,7 +32,7 @@ class CreatePostTool extends Tool
             'topic_slug' => ['required', 'string'],
             'title' => ['required', 'string', 'max:255'],
             'body' => ['nullable', 'string'],
-            'status' => ['nullable', 'string', 'in:'.implode(',', PostStatus::values())],
+            'status' => ['nullable', 'string', Rule::enum(PostStatus::class)],
             'agent_ids' => ['nullable', 'array'],
             'agent_ids.*' => ['integer'],
         ]);

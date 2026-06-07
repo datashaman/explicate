@@ -6,6 +6,7 @@ use App\Models\Agent;
 use App\Models\Workspace;
 use Flux\Flux;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
 use Livewire\Component;
@@ -77,9 +78,9 @@ new #[Title('Agents')] class extends Component {
 
         $validated = $this->validate([
             'agentName' => ['required', 'string', 'max:255'],
-            'provider' => ['required', 'string', 'in:'.implode(',', Provider::values())],
+            'provider' => ['required', 'string', Rule::enum(Provider::class)],
             'model' => ['required', 'string', 'max:255'],
-            'reasoningEffort' => ['nullable', 'string', 'in:'.implode(',', ReasoningEffort::values())],
+            'reasoningEffort' => ['nullable', 'string', Rule::enum(ReasoningEffort::class)],
             'prompt' => ['nullable', 'string'],
         ]);
 
