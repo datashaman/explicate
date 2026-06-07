@@ -2,6 +2,7 @@
 
 namespace App\Actions\Agents;
 
+use App\Actions\Posts\CreatePost;
 use App\Enums\AgentTaskStatus;
 use App\Enums\PostStatus;
 use App\Models\AgentTask;
@@ -14,6 +15,8 @@ use function Laravel\Ai\agent as laravelAiAgent;
 
 class ExecuteAgentTask
 {
+    public function __construct(private CreatePost $createPost) {}
+
     public function handle(AgentTask $task): ?Post
     {
         $task->loadMissing([
@@ -48,12 +51,14 @@ class ExecuteAgentTask
                     model: $version->model,
                 );
 
-            $reply = $task->post->topic->posts()->create([
-                'sender_principal_id' => $task->agent->workspace->principalForAgent($task->agent)->id,
-                'title' => __('Re: :title', ['title' => $task->post->title]),
-                'body' => $response->text,
-                'status' => PostStatus::Published,
-            ]);
+            $reply = $this->createPost->handle(
+                topic: $task->post->topic,
+                sender: $task->agent->workspace->principalForAgent($task->agent),
+                title: __('Re: :title', ['title' => $task->post->title]),
+                body: $response->text,
+                status: PostStatus::Published,
+                agentIds: [],
+            );
 
             $task->forceFill([
                 'status' => AgentTaskStatus::Completed,

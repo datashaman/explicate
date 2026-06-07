@@ -41,7 +41,7 @@ class CreatePostTool extends Tool
         $topic = $this->context->topicFor($user, $validated['topic_slug']);
         $post = app(CreatePost::class)->handle(
             topic: $topic,
-            user: $user,
+            sender: $topic->workspace->principalForUser($user),
             title: $validated['title'],
             body: $validated['body'] ?? null,
             status: PostStatus::from($validated['status'] ?? PostStatus::Draft->value),

@@ -5,8 +5,8 @@ namespace App\Actions\Posts;
 use App\Enums\PostStatus;
 use App\Models\Agent;
 use App\Models\Post;
+use App\Models\Principal;
 use App\Models\Topic;
-use App\Models\User;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 
 class CreatePost
@@ -19,7 +19,7 @@ class CreatePost
      */
     public function handle(
         Topic $topic,
-        User $user,
+        Principal $sender,
         string $title,
         ?string $body,
         PostStatus $status,
@@ -30,7 +30,7 @@ class CreatePost
             'title' => $title,
             'body' => $body ?: null,
             'status' => $status,
-            'sender_principal_id' => $topic->workspace->principalForUser($user)->id,
+            'sender_principal_id' => $sender->id,
         ]);
 
         $post->assignAgents($agentIds);

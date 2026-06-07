@@ -638,7 +638,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         $topic = $workspace->topics()->findOrFail($validated['newPostTopicId']);
         $post = app(CreatePost::class)->handle(
             topic: $topic,
-            user: Auth::user(),
+            sender: $workspace->principalForUser(Auth::user()),
             title: $validated['newPostTitle'],
             body: $validated['newPostBody'],
             status: $status,
