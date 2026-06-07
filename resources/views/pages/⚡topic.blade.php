@@ -154,9 +154,9 @@ new #[Layout('layouts::workspace'), Title('Topic')] class extends Component {
 
         $validated = $this->validate([
             'agentName' => ['required', 'string', 'max:255'],
-            'agentProvider' => ['required', 'string', 'in:'.implode(',', array_column(Provider::cases(), 'value'))],
+            'agentProvider' => ['required', 'string', 'in:'.implode(',', Provider::values())],
             'agentModel' => ['required', 'string', 'max:255'],
-            'agentReasoningEffort' => ['nullable', 'string', 'in:'.implode(',', array_column(ReasoningEffort::cases(), 'value'))],
+            'agentReasoningEffort' => ['nullable', 'string', 'in:'.implode(',', ReasoningEffort::values())],
             'agentPrompt' => ['nullable', 'string'],
         ]);
 

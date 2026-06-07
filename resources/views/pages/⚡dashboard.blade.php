@@ -575,9 +575,9 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
         $validated = $this->validate([
             'agentName' => ['required', 'string', 'max:255'],
-            'provider' => ['required', 'string', 'in:'.implode(',', array_column(Provider::cases(), 'value'))],
+            'provider' => ['required', 'string', 'in:'.implode(',', Provider::values())],
             'model' => ['required', 'string', 'max:255'],
-            'reasoningEffort' => ['nullable', 'string', 'in:'.implode(',', array_column(ReasoningEffort::cases(), 'value'))],
+            'reasoningEffort' => ['nullable', 'string', 'in:'.implode(',', ReasoningEffort::values())],
             'prompt' => ['nullable', 'string'],
         ]);
 
@@ -729,9 +729,9 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         abort_unless($agent, 404);
 
         $validated = $this->validate([
-            'selectedAgentProvider' => ['required', 'string', 'in:'.implode(',', array_column(Provider::cases(), 'value'))],
+            'selectedAgentProvider' => ['required', 'string', 'in:'.implode(',', Provider::values())],
             'selectedAgentModel' => ['required', 'string', 'max:255'],
-            'selectedAgentReasoningEffort' => ['nullable', 'string', 'in:'.implode(',', array_column(ReasoningEffort::cases(), 'value'))],
+            'selectedAgentReasoningEffort' => ['nullable', 'string', 'in:'.implode(',', ReasoningEffort::values())],
             'selectedAgentPrompt' => ['nullable', 'string'],
         ]);
 

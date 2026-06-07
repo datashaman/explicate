@@ -9,6 +9,12 @@ enum Provider: string
     case Gemini = 'gemini';
     case Groq = 'groq';
 
+    /** @return list<string> */
+    public static function values(): array
+    {
+        return array_column(self::cases(), 'value');
+    }
+
     public function label(): string
     {
         return match ($this) {

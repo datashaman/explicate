@@ -77,9 +77,9 @@ new #[Title('Agents')] class extends Component {
 
         $validated = $this->validate([
             'agentName' => ['required', 'string', 'max:255'],
-            'provider' => ['required', 'string', 'in:'.implode(',', array_column(Provider::cases(), 'value'))],
+            'provider' => ['required', 'string', 'in:'.implode(',', Provider::values())],
             'model' => ['required', 'string', 'max:255'],
-            'reasoningEffort' => ['nullable', 'string', 'in:'.implode(',', array_column(ReasoningEffort::cases(), 'value'))],
+            'reasoningEffort' => ['nullable', 'string', 'in:'.implode(',', ReasoningEffort::values())],
             'prompt' => ['nullable', 'string'],
         ]);
 
