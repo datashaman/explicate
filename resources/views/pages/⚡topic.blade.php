@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\Agents\CreateAgent;
 use App\Enums\PostStatus;
 use App\Enums\PostListColumn;
 use App\Enums\Provider;
@@ -161,14 +162,14 @@ new #[Layout('layouts::workspace'), Title('Topic')] class extends Component {
             'agentPrompt' => ['nullable', 'string'],
         ]);
 
-        $agent = $workspace->agents()->create(['name' => $validated['agentName']]);
-
-        $agent->versions()->create([
-            'provider' => $validated['agentProvider'],
-            'model' => $validated['agentModel'],
-            'reasoning_effort' => $validated['agentReasoningEffort'] ?: null,
-            'prompt' => $validated['agentPrompt'] ?: null,
-        ]);
+        $agent = app(CreateAgent::class)->handle(
+            workspace: $workspace,
+            name: $validated['agentName'],
+            provider: $validated['agentProvider'],
+            model: $validated['agentModel'],
+            reasoningEffort: $validated['agentReasoningEffort'],
+            prompt: $validated['agentPrompt'],
+        );
 
         $this->topic->agents()->syncWithoutDetaching($agent);
 

@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\Agents\CreateAgent;
 use App\Enums\Provider;
 use App\Enums\ReasoningEffort;
 use App\Models\Agent;
@@ -84,14 +85,14 @@ new #[Title('Agents')] class extends Component {
             'prompt' => ['nullable', 'string'],
         ]);
 
-        $agent = $workspace->agents()->create(['name' => $validated['agentName']]);
-
-        $agent->versions()->create([
-            'provider' => $validated['provider'],
-            'model' => $validated['model'],
-            'reasoning_effort' => $validated['reasoningEffort'] ?: null,
-            'prompt' => $validated['prompt'] ?: null,
-        ]);
+        app(CreateAgent::class)->handle(
+            workspace: $workspace,
+            name: $validated['agentName'],
+            provider: $validated['provider'],
+            model: $validated['model'],
+            reasoningEffort: $validated['reasoningEffort'],
+            prompt: $validated['prompt'],
+        );
 
         $this->reset('agentName', 'provider', 'model', 'reasoningEffort', 'prompt');
 
