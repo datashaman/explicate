@@ -7,6 +7,7 @@ use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 #[Signature('app:migrate-workspace-artifacts {--force : Overwrite existing disk files with DB content}')]
 #[Description('Copy existing workspace_files DB records to the real filesystem.')]
@@ -14,6 +15,12 @@ class MigrateWorkspaceArtifacts extends Command
 {
     public function handle(): int
     {
+        if (! Schema::hasTable('workspace_files')) {
+            $this->info('workspace_files table does not exist — nothing to migrate.');
+
+            return self::SUCCESS;
+        }
+
         $force = (bool) $this->option('force');
 
         $workspaces = Workspace::withTrashed()->get();
