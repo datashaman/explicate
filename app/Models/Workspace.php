@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Concerns\GeneratesUniqueWorkspaceSlugs;
+use App\Services\WorkspaceFilesystemService;
 use Database\Factories\WorkspaceFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -119,6 +120,16 @@ class Workspace extends Model
     public function team(): BelongsTo
     {
         return $this->belongsTo(Team::class);
+    }
+
+    public function filesystemRoot(): string
+    {
+        return storage_path("app/workspaces/{$this->id}");
+    }
+
+    public function filesystem(): WorkspaceFilesystemService
+    {
+        return new WorkspaceFilesystemService($this);
     }
 
     /**
