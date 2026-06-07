@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\Posts\StorePostAttachments;
 use App\Enums\PostFolder;
 use App\Enums\PostListColumn;
 use App\Enums\PostStatus;
@@ -12,7 +13,6 @@ use Flux\Flux;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Str;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
@@ -615,7 +615,6 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
         $this->normalizeNewPostTopic();
         $uploads = $this->newPostUploads;
-        $uploadMetadata = $this->postAttachmentMetadata($uploads);
 
         $validated = $this->validate([
             'newPostTitle' => ['required', 'string', 'max:255'],
@@ -646,7 +645,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         ]);
         $post->assignAgents($validated['newPostAgentIds']);
 
-        $this->storePostAttachments($post, $uploads, $uploadMetadata);
+        app(StorePostAttachments::class)->handle($post, $uploads);
 
         $this->selectedTopicSlug = $topic->slug;
         $this->selectedPostSlug = $post->slug;
@@ -756,7 +755,6 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         abort_unless($workspace, 403);
 
         $uploads = $this->postUploads;
-        $uploadMetadata = $this->postAttachmentMetadata($uploads);
 
         $validated = $this->validate([
             'postTitle' => ['required', 'string', 'max:255'],
@@ -779,7 +777,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             'body' => $validated['postBody'],
         ]);
         $post->assignAgents($validated['postAgentIds']);
-        $this->storePostAttachments($post, $uploads, $uploadMetadata);
+        app(StorePostAttachments::class)->handle($post, $uploads);
         $this->reset('postUploads');
 
         $this->selectedPostSlug = $post->fresh()->slug;
@@ -803,42 +801,6 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             'sender_principal_id' => $post->sender_principal_id ?: $workspace->principalForUser(Auth::user())->id,
             'status' => PostStatus::Published,
         ]);
-    }
-
-    /**
-     * @param  array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile>  $uploads
-     * @return array<int, array{filename: string, mime_type: string|null, size: int|null}>
-     */
-    private function postAttachmentMetadata(array $uploads): array
-    {
-        return array_map(fn ($upload): array => [
-            'filename' => $upload->getClientOriginalName(),
-            'mime_type' => $upload->getMimeType(),
-            'size' => $upload->getSize(),
-        ], $uploads);
-    }
-
-    /**
-     * @param  array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile>  $uploads
-     * @param  array<int, array{filename: string, mime_type: string|null, size: int|null}>  $metadata
-     */
-    private function storePostAttachments(Post $post, array $uploads, array $metadata): void
-    {
-        foreach ($uploads as $index => $upload) {
-            $attachmentMetadata = $metadata[$index];
-            $path = $upload->storeAs(
-                'attachments/'.Str::uuid(),
-                $attachmentMetadata['filename'],
-                'public'
-            );
-
-            $post->attachments()->create([
-                'filename' => $attachmentMetadata['filename'],
-                'path' => $path,
-                'mime_type' => $attachmentMetadata['mime_type'],
-                'size' => $attachmentMetadata['size'],
-            ]);
-        }
     }
 
     public function deleteSelectedPostAttachment(int $attachmentId): void

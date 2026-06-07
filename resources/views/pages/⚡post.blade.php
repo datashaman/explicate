@@ -1,7 +1,7 @@
 <?php
 
 use App\Enums\PostStatus;
-use App\Models\Attachment;
+use App\Actions\Posts\StorePostAttachments;
 use App\Models\Agent;
 use App\Models\Post;
 use App\Models\Topic;
@@ -9,7 +9,6 @@ use Flux\Flux;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Str;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
@@ -76,7 +75,6 @@ new #[Layout('layouts::workspace'), Title('Post')] class extends Component {
         abort_unless($workspace, 403);
 
         $uploads = $this->uploads;
-        $uploadMetadata = $this->attachmentMetadata($uploads);
 
         $validated = $this->validate([
             'title' => ['required', 'string', 'max:255'],
@@ -97,7 +95,7 @@ new #[Layout('layouts::workspace'), Title('Post')] class extends Component {
             'body' => $validated['body'],
         ]);
         $this->post->assignAgents($validated['agentIds']);
-        $this->storeAttachments($uploads, $uploadMetadata);
+        app(StorePostAttachments::class)->handle($this->post, $uploads);
         $this->reset('uploads');
 
         Flux::toast(variant: 'success', text: __('Saved.'));
@@ -112,7 +110,6 @@ new #[Layout('layouts::workspace'), Title('Post')] class extends Component {
         abort_unless($workspace, 403);
 
         $uploads = $this->uploads;
-        $uploadMetadata = $this->attachmentMetadata($uploads);
 
         $validated = $this->validate([
             'title' => ['required', 'string', 'max:255'],
@@ -135,7 +132,7 @@ new #[Layout('layouts::workspace'), Title('Post')] class extends Component {
             'status' => PostStatus::Published,
         ]);
         $this->post->assignAgents($validated['agentIds']);
-        $this->storeAttachments($uploads, $uploadMetadata);
+        app(StorePostAttachments::class)->handle($this->post, $uploads);
         $this->reset('uploads');
     }
 
@@ -168,42 +165,6 @@ new #[Layout('layouts::workspace'), Title('Post')] class extends Component {
             ->pluck('agent_id')
             ->map(fn ($id): int => (int) $id)
             ->all();
-    }
-
-    /**
-     * @param  array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile>  $uploads
-     * @return array<int, array{filename: string, mime_type: string|null, size: int|null}>
-     */
-    private function attachmentMetadata(array $uploads): array
-    {
-        return array_map(fn ($upload): array => [
-            'filename' => $upload->getClientOriginalName(),
-            'mime_type' => $upload->getMimeType(),
-            'size' => $upload->getSize(),
-        ], $uploads);
-    }
-
-    /**
-     * @param  array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile>  $uploads
-     * @param  array<int, array{filename: string, mime_type: string|null, size: int|null}>  $metadata
-     */
-    private function storeAttachments(array $uploads, array $metadata): void
-    {
-        foreach ($uploads as $index => $upload) {
-            $attachmentMetadata = $metadata[$index];
-            $path = $upload->storeAs(
-                'attachments/'.Str::uuid(),
-                $attachmentMetadata['filename'],
-                'public'
-            );
-
-            $this->post->attachments()->create([
-                'filename' => $attachmentMetadata['filename'],
-                'path' => $path,
-                'mime_type' => $attachmentMetadata['mime_type'],
-                'size' => $attachmentMetadata['size'],
-            ]);
-        }
     }
 
     public function deleteAttachment(int $attachmentId): void
