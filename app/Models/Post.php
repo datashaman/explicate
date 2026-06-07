@@ -2,10 +2,9 @@
 
 namespace App\Models;
 
-use App\Enums\AgentTaskStatus;
+use App\Actions\Agents\SyncAgentChatReplies;
 use App\Enums\PostListColumn;
 use App\Enums\PostStatus;
-use App\Jobs\ProcessAgentTask;
 use Database\Factories\PostFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -71,38 +70,7 @@ class Post extends Model
 
     public function syncMentionedAgentTasks(): void
     {
-        $mentionedAgentIds = $this->mentionedAgents()->pluck('id');
-
-        $tasksToRemove = $this->agentTasks()
-            ->where('event_type', AgentTask::EventPostMentioned);
-
-        if ($mentionedAgentIds->isNotEmpty()) {
-            $tasksToRemove->whereNotIn('agent_id', $mentionedAgentIds);
-        }
-
-        $tasksToRemove->get()->each->delete();
-
-        if ($this->status !== PostStatus::Published) {
-            return;
-        }
-
-        $mentionedAgentIds->each(function (int $agentId): void {
-            $task = $this->agentTasks()->firstOrCreate([
-                'agent_id' => $agentId,
-                'event_type' => AgentTask::EventPostMentioned,
-            ], [
-                'status' => AgentTaskStatus::Pending,
-                'available_at' => now(),
-            ]);
-
-            if ($task->status !== AgentTaskStatus::Completed || ! $task->status_post_id) {
-                $task->syncStatusPost();
-            }
-
-            if ($task->status === AgentTaskStatus::Pending) {
-                ProcessAgentTask::dispatch($task);
-            }
-        });
+        app(SyncAgentChatReplies::class)->handle($this);
     }
 
     /**

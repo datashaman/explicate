@@ -109,7 +109,7 @@ class DatabaseSeeder extends Seeder
         );
 
         $designPublishedPost = Post::factory()->for($topicsByName['Design'])->create([
-            'body' => "@reviewer Brand voice notes\n\nCapture phrases to avoid and preferred tone examples.",
+            'body' => "Reviewer brief: Brand voice notes\n\nCapture phrases to avoid and preferred tone examples.",
             'status' => PostStatus::Published,
             'sender_principal_id' => $senderPrincipal->id,
         ]);
@@ -133,7 +133,7 @@ class DatabaseSeeder extends Seeder
         ]);
 
         Post::factory()->for($topicsByName['Marketing'])->create([
-            'body' => "@seo-analyst Q3 campaign angles\n\nList campaign themes tied to the strongest product outcomes.",
+            'body' => "SEO analyst brief: Q3 campaign angles\n\nList campaign themes tied to the strongest product outcomes.",
             'status' => PostStatus::Published,
             'sender_principal_id' => $senderPrincipal->id,
         ]);

@@ -13,7 +13,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 #[Fillable(['agent_id', 'post_id', 'status_post_id', 'event_type', 'status', 'priority', 'available_at', 'locked_at', 'attempts', 'last_error'])]
 class AgentTask extends Model
 {
-    public const string EventPostMentioned = 'post_mentioned';
+    public const string EventChatSummoned = 'chat_summoned';
+
+    public const string EventThreadRouted = 'thread_routed';
+
+    public const string EventPostMentioned = self::EventChatSummoned;
 
     /** @use HasFactory<AgentTaskFactory> */
     use HasFactory;

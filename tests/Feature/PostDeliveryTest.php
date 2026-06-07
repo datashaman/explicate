@@ -1,14 +1,20 @@
 <?php
 
+use App\Actions\Agents\SyncAgentChatReplies;
+use App\Ai\Agents\TopicForgeAgentRouter;
 use App\Enums\AgentTaskStatus;
 use App\Enums\PostStatus;
 use App\Jobs\ProcessAgentTask;
+use App\Jobs\RouteThreadAgentReplies;
 use App\Models\Agent;
 use App\Models\AgentTask;
 use App\Models\Post;
+use App\Models\Thread;
 use App\Models\Topic;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Queue;
+use Laravel\Ai\Ai;
+use Laravel\Ai\Prompts\AgentPrompt;
 
 beforeEach(function () {
     [$this->user, $this->workspace] = userWithWorkspace();
@@ -139,4 +145,111 @@ test('mentions only create work for agents in the post workspace', function () {
 
     expect($post->agentTasks)->toHaveCount(1)
         ->and($post->agentTasks->first()->agent_id)->toBe($mentionedAgent->id);
+});
+
+test('an unmentioned thread reply asks the router which participating agent should respond', function () {
+    Ai::fakeAgent(TopicForgeAgentRouter::class, [[
+        'responses' => [
+            ['agent_slug' => 'researcher', 'reason' => 'The user answered the agent question.'],
+        ],
+    ]])->preventStrayPrompts();
+
+    $agent = Agent::factory()->for($this->workspace)->create(['name' => 'Researcher']);
+    $parentPost = Post::factory()->for($this->topic)->create([
+        'sender_principal_id' => $this->senderPrincipal->id,
+        'body' => 'Please inspect the brief.',
+        'status' => PostStatus::Published,
+    ]);
+    $thread = Thread::factory()->for($this->topic)->create([
+        'parent_post_id' => $parentPost->id,
+        'title' => 'Brief review',
+    ]);
+    Post::factory()->for($this->topic)->for($thread)->create([
+        'sender_principal_id' => $this->workspace->principalForAgent($agent)->id,
+        'body' => 'Should I include acceptance criteria?',
+        'status' => PostStatus::Published,
+    ]);
+
+    $reply = Post::factory()->for($this->topic)->for($thread)->create([
+        'sender_principal_id' => $this->senderPrincipal->id,
+        'body' => 'Yes, add acceptance criteria and edge cases.',
+        'status' => PostStatus::Published,
+    ]);
+
+    Queue::assertPushed(RouteThreadAgentReplies::class, fn (RouteThreadAgentReplies $job): bool => $job->post->is($reply));
+
+    app(SyncAgentChatReplies::class)->route($reply);
+
+    $task = AgentTask::query()
+        ->whereBelongsTo($agent)
+        ->whereBelongsTo($reply)
+        ->sole();
+
+    expect($task->event_type)->toBe(AgentTask::EventThreadRouted)
+        ->and($task->status)->toBe(AgentTaskStatus::Pending)
+        ->and($task->statusPost)->not->toBeNull()
+        ->and($task->statusPost->thread_id)->toBe($thread->id);
+
+    Queue::assertPushed(ProcessAgentTask::class, fn (ProcessAgentTask $job): bool => $job->task->is($task));
+
+    Ai::assertAgentWasPrompted(TopicForgeAgentRouter::class, function (AgentPrompt $prompt): bool {
+        $messages = collect($prompt->agent->messages());
+
+        return str_contains($prompt->agent->instructions(), 'Return no agents for acknowledgements')
+            && str_contains($prompt->prompt, 'Yes, add acceptance criteria and edge cases.')
+            && str_contains($prompt->prompt, 'Researcher (@researcher)')
+            && $messages->contains(fn ($message): bool => $message->content === 'Researcher (@researcher): Should I include acceptance criteria?');
+    });
+});
+
+test('the thread router may decide no participating agent should respond', function () {
+    Ai::fakeAgent(TopicForgeAgentRouter::class, [[
+        'responses' => [],
+    ]])->preventStrayPrompts();
+
+    $agent = Agent::factory()->for($this->workspace)->create(['name' => 'Researcher']);
+    $thread = Thread::factory()->for($this->topic)->create();
+    Post::factory()->for($this->topic)->for($thread)->create([
+        'sender_principal_id' => $this->workspace->principalForAgent($agent)->id,
+        'body' => 'I updated the brief.',
+        'status' => PostStatus::Published,
+    ]);
+
+    $reply = Post::factory()->for($this->topic)->for($thread)->create([
+        'sender_principal_id' => $this->senderPrincipal->id,
+        'body' => 'Thanks, looks good.',
+        'status' => PostStatus::Published,
+    ]);
+
+    Queue::assertPushed(RouteThreadAgentReplies::class, fn (RouteThreadAgentReplies $job): bool => $job->post->is($reply));
+
+    app(SyncAgentChatReplies::class)->route($reply);
+
+    expect(AgentTask::query()->whereBelongsTo($reply)->exists())->toBeFalse();
+
+    Ai::assertAgentWasPrompted(TopicForgeAgentRouter::class, fn (AgentPrompt $prompt): bool => str_contains($prompt->prompt, 'Thanks, looks good.'));
+    Queue::assertNotPushed(ProcessAgentTask::class);
+});
+
+test('an explicit agent mention in a thread bypasses the router', function () {
+    Ai::fakeAgent(TopicForgeAgentRouter::class)->preventStrayPrompts();
+
+    $agent = Agent::factory()->for($this->workspace)->create(['name' => 'Researcher']);
+    $thread = Thread::factory()->for($this->topic)->create();
+    Post::factory()->for($this->topic)->for($thread)->create([
+        'sender_principal_id' => $this->workspace->principalForAgent($agent)->id,
+        'body' => 'I can revise this if needed.',
+        'status' => PostStatus::Published,
+    ]);
+
+    $reply = Post::factory()->for($this->topic)->for($thread)->create([
+        'sender_principal_id' => $this->senderPrincipal->id,
+        'body' => '@researcher Please revise this.',
+        'status' => PostStatus::Published,
+    ]);
+
+    expect(AgentTask::query()->whereBelongsTo($reply)->sole()->event_type)->toBe(AgentTask::EventChatSummoned);
+
+    Queue::assertNotPushed(RouteThreadAgentReplies::class);
+    Ai::assertAgentNeverPrompted(TopicForgeAgentRouter::class);
 });
