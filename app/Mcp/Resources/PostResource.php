@@ -46,7 +46,7 @@ class PostResource extends Resource implements HasUriTemplate
                     ...$post->topic->only(['id', 'name', 'slug']),
                     'resource_uri' => TopicForgeUris::topic($post->topic),
                 ],
-                'post' => $this->postPayload($post, includeBody: true),
+                'post' => $this->postPayload($post),
                 'attachments' => $post->attachments
                     ->map(fn ($attachment) => [
                         'id' => $attachment->id,

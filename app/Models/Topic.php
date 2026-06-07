@@ -86,7 +86,7 @@ class Topic extends Model
      */
     public function posts(): HasMany
     {
-        return $this->hasMany(Post::class)->orderBy('title');
+        return $this->hasMany(Post::class)->orderBy('id');
     }
 
     /**

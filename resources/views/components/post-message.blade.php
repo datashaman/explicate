@@ -19,6 +19,7 @@
     $timestampLabel = $timestamp->diffForHumans();
     $timestampTitle = $timestamp->timezone($timezone)->isoFormat('LLLL');
     $hasActions = isset($actions) && trim($actions->toHtml()) !== '';
+    $body = $post->body ?: __('No content.');
 @endphp
 
 <article {{ $attributes->class('flex min-w-0 gap-3') }} data-test="post-message">
@@ -48,17 +49,17 @@
             @endif
         </div>
 
-        <div class="space-y-2 text-sm leading-6 text-neutral-800 dark:text-neutral-200">
+        <div class="text-sm leading-6 text-neutral-800 dark:text-neutral-200">
             @if ($href)
-                <a href="{{ $href }}" wire:navigate class="block font-semibold text-neutral-900 hover:underline dark:text-neutral-100">{{ $post->title }}</a>
+                <a href="{{ $href }}" wire:navigate @class([
+                    'block whitespace-pre-wrap hover:underline',
+                    'text-neutral-400 dark:text-neutral-600' => ! $post->body,
+                ])>{{ $body }}</a>
             @else
-                <div class="font-semibold">{{ $post->title }}</div>
-            @endif
-
-            @if ($post->body)
-                <div class="whitespace-pre-wrap">{{ $post->body }}</div>
-            @else
-                <div class="text-neutral-400 dark:text-neutral-600">{{ __('No content.') }}</div>
+                <div @class([
+                    'whitespace-pre-wrap',
+                    'text-neutral-400 dark:text-neutral-600' => ! $post->body,
+                ])>{{ $body }}</div>
             @endif
         </div>
 

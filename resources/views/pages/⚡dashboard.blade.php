@@ -34,7 +34,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
     public ?string $selectedSystemFolderSlug = null;
 
     #[Url(as: 'post')]
-    public ?string $selectedPostSlug = null;
+    public ?string $selectedPostUlid = null;
 
     #[Url(as: 'action')]
     public ?string $panelAction = null;
@@ -71,14 +71,10 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
     public bool $showArchived = false;
 
-    public string $postTitle = '';
-
     public string $postBody = '';
 
     /** @var list<int> */
     public array $postAgentIds = [];
-
-    public string $newPostTitle = '';
 
     public string $newPostBody = '';
 
@@ -144,13 +140,13 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
     {
         $topic = $this->selectedTopic();
 
-        if (! $topic || ! $this->selectedPostSlug) {
+        if (! $topic || ! $this->selectedPostUlid) {
             return null;
         }
 
         return $topic->posts()
             ->with(['assignedAgents', 'sender.user', 'sender.agent', 'topic'])
-            ->where('slug', $this->selectedPostSlug)
+            ->where('ulid', $this->selectedPostUlid)
             ->first();
     }
 
@@ -339,9 +335,9 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             ->orderBy('id')
             ->get()
             ->map(fn (Post $post) => [
-                'href' => route('dashboard', ['topic' => $topic->slug, 'post' => $post->slug, 'panel' => 'posts']),
+                'href' => route('dashboard', ['topic' => $topic->slug, 'post' => $post->ulid, 'panel' => 'posts']),
                 'post' => $post,
-                'name' => $post->title,
+                'name' => $post->preview(),
                 'meta' => $post->listMeta(showSender: true, timezone: Auth::user()->displayTimezone()),
                 'attachments_count' => $post->attachments_count,
                 'sort' => $post->listSortValues(dateKey: PostListColumn::Sent->value),
@@ -387,11 +383,11 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                 return [
                     'href' => $this->systemFolderRoute($folder, [
                         'topic' => $post->topic->slug,
-                        'post' => $post->slug,
+                        'post' => $post->ulid,
                         'panel' => 'posts',
                     ]),
                     'post' => $post,
-                    'name' => $post->title,
+                    'name' => $post->preview(),
                     'meta' => $post->listTopicMeta(showSender: ! $isDraftsFolder, timezone: $timezone),
                     'attachments_count' => $post->attachments_count,
                     'sort' => $sort,
@@ -411,19 +407,19 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
         if ($folder === PostFolder::Drafts) {
             $columns = [
-                PostListColumn::Name->toColumn(),
+                PostListColumn::Post->toColumn(),
                 PostListColumn::Topic->toColumn(),
             ];
         } elseif ($folder) {
             $columns = [
                 PostListColumn::Sender->toColumn(),
-                PostListColumn::Name->toColumn(),
+                PostListColumn::Post->toColumn(),
                 PostListColumn::Topic->toColumn(),
             ];
         } else {
             $columns = [
                 PostListColumn::Sender->toColumn(),
-                PostListColumn::Name->toColumn(),
+                PostListColumn::Post->toColumn(),
             ];
         }
 
@@ -522,8 +518,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             $this->selectedSystemFolderSlug = null;
         }
 
-        $this->selectedPostSlug = null;
-        $this->postTitle = '';
+        $this->selectedPostUlid = null;
         $this->postBody = '';
         $this->syncNewPostTopic();
         $this->normalizeMobilePanel();
@@ -533,7 +528,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
     {
         if ($this->selectedSystemFolderSlug) {
             $this->selectedTopicSlug = null;
-            $this->selectedPostSlug = null;
+            $this->selectedPostUlid = null;
             $this->panelAction = null;
             $this->mobilePanel = 'posts';
         }
@@ -543,7 +538,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
     public function updatedSelectedPostSlug(): void
     {
-        if ($this->selectedPostSlug) {
+        if ($this->selectedPostUlid) {
             $this->panelAction = null;
         }
 
@@ -562,7 +557,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
     public function updatedPanelAction(): void
     {
         if ($this->isCreatingPost()) {
-            $this->selectedPostSlug = null;
+            $this->selectedPostUlid = null;
             $this->syncNewPostTopic();
         }
     }
@@ -653,14 +648,12 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         $uploads = $this->newPostUploads;
 
         $validated = $this->validate([
-            'newPostTitle' => ['required', 'string', 'max:255'],
-            'newPostBody' => ['nullable', 'string'],
+            'newPostBody' => ['required', 'string'],
             'newPostTopicId' => ['required', 'integer'],
             'newPostAgentIds' => ['array'],
             'newPostAgentIds.*' => ['integer'],
         ], [], [
-            'newPostTitle' => __('title'),
-            'newPostBody' => __('body'),
+            'newPostBody' => __('post'),
             'newPostTopicId' => __('topic'),
             'newPostAgentIds' => __('requested agents'),
         ]);
@@ -674,7 +667,6 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         $post = app(CreatePost::class)->handle(
             topic: $topic,
             sender: $workspace->principalForUser(Auth::user()),
-            title: $validated['newPostTitle'],
             body: $validated['newPostBody'],
             status: $status,
             agentIds: $validated['newPostAgentIds'],
@@ -682,11 +674,11 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         );
 
         $this->selectedTopicSlug = $topic->slug;
-        $this->selectedPostSlug = $post->slug;
+        $this->selectedPostUlid = $post->ulid;
         $this->panelAction = null;
         $this->creatingPostFromRoute = false;
         $this->mobilePanel = 'posts';
-        $this->reset('newPostTitle', 'newPostBody', 'newPostAgentIds', 'newPostUploads');
+        $this->reset('newPostBody', 'newPostAgentIds', 'newPostUploads');
         $this->newPostTopicId = $topic->id;
         $this->syncSelectedPostFields();
 
@@ -792,13 +784,11 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         $uploads = $this->postUploads;
 
         $validated = $this->validate([
-            'postTitle' => ['required', 'string', 'max:255'],
-            'postBody' => ['nullable', 'string'],
+            'postBody' => ['required', 'string'],
             'postAgentIds' => ['array'],
             'postAgentIds.*' => ['integer'],
         ], [], [
-            'postTitle' => __('title'),
-            'postBody' => __('body'),
+            'postBody' => __('post'),
             'postAgentIds' => __('requested agents'),
         ]);
         Validator::make(['postUploads' => $uploads], [
@@ -811,14 +801,13 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             post: $post,
             workspace: $workspace,
             user: Auth::user(),
-            title: $validated['postTitle'],
             body: $validated['postBody'],
             agentIds: $validated['postAgentIds'],
             uploads: $uploads,
         );
         $this->reset('postUploads');
 
-        $this->selectedPostSlug = $post->slug;
+        $this->selectedPostUlid = $post->ulid;
 
         Flux::toast(variant: 'success', text: __('Saved.'));
     }
@@ -839,7 +828,6 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             post: $post->fresh(),
             workspace: $workspace,
             user: Auth::user(),
-            title: $this->postTitle,
             body: $this->postBody,
             agentIds: $this->postAgentIds,
             uploads: [],
@@ -940,7 +928,6 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
     {
         $post = $this->selectedPost();
 
-        $this->postTitle = $post?->title ?? '';
         $this->postBody = $post?->body ?? '';
         $this->postAgentIds = $post?->assignedAgentIds() ?? [];
     }
@@ -1092,8 +1079,6 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                         @include('partials.post-draft-form', [
                             'formId' => 'dashboard-new-post-form',
                             'submitAction' => 'createDashboardPost',
-                            'titleModel' => 'newPostTitle',
-                            'titleTest' => 'new-post-title',
                             'bodyModel' => 'newPostBody',
                             'bodyTest' => 'new-post-body',
                             'topicModel' => 'newPostTopicId',
@@ -1113,7 +1098,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                         ])
                     @elseif ($selectedDashboardPost)
                         <div class="flex items-center justify-between gap-3 border-b border-neutral-300 bg-emerald-50 px-4 py-3 dark:border-white/10 dark:bg-emerald-500/10">
-                            <flux:heading size="sm" class="min-w-0 flex-1 truncate">{{ $selectedDashboardPost->title }}</flux:heading>
+                            <flux:heading size="sm" class="min-w-0 flex-1 truncate">{{ __('Post') }}</flux:heading>
 
                             <flux:button :href="$this->postsPanelReturnRoute()" wire:navigate size="xs" variant="filled" icon="arrow-left" data-test="posts-panel-return">
                                 {{ $this->postsPanelReturnLabel() }}
@@ -1124,7 +1109,6 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                             @include('partials.post-draft-form', [
                                 'formId' => 'dashboard-selected-post-form',
                                 'submitAction' => 'saveSelectedPost',
-                                'titleModel' => 'postTitle',
                                 'bodyModel' => 'postBody',
                                 'topicName' => $selectedDashboardPost->topic->name,
                                 'agentIdsModel' => 'postAgentIds',

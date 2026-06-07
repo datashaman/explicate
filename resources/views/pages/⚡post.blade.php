@@ -22,8 +22,6 @@ new #[Layout('layouts::workspace'), Title('Post')] class extends Component {
 
     public Post $post;
 
-    public string $title = '';
-
     public string $body = '';
 
     /** @var list<int> */
@@ -43,7 +41,6 @@ new #[Layout('layouts::workspace'), Title('Post')] class extends Component {
 
         $this->topic = $topic;
         $this->post = $post->loadMissing(['assignedAgents', 'sender.user', 'sender.agent', 'topic']);
-        $this->title = $post->title;
         $this->body = $post->body ?? '';
         $this->agentIds = $post->assignedAgentIds();
     }
@@ -74,11 +71,11 @@ new #[Layout('layouts::workspace'), Title('Post')] class extends Component {
         $uploads = $this->uploads;
 
         $validated = $this->validate([
-            'title' => ['required', 'string', 'max:255'],
-            'body' => ['nullable', 'string'],
+            'body' => ['required', 'string'],
             'agentIds' => ['array'],
             'agentIds.*' => ['integer'],
         ], [], [
+            'body' => __('post'),
             'agentIds' => __('requested agents'),
         ]);
         Validator::make(['uploads' => $uploads], [
@@ -91,7 +88,6 @@ new #[Layout('layouts::workspace'), Title('Post')] class extends Component {
             post: $this->post,
             workspace: $workspace,
             user: Auth::user(),
-            title: $validated['title'],
             body: $validated['body'],
             agentIds: $validated['agentIds'],
             uploads: $uploads,
@@ -112,11 +108,11 @@ new #[Layout('layouts::workspace'), Title('Post')] class extends Component {
         $uploads = $this->uploads;
 
         $validated = $this->validate([
-            'title' => ['required', 'string', 'max:255'],
-            'body' => ['nullable', 'string'],
+            'body' => ['required', 'string'],
             'agentIds' => ['array'],
             'agentIds.*' => ['integer'],
         ], [], [
+            'body' => __('post'),
             'agentIds' => __('requested agents'),
         ]);
         Validator::make(['uploads' => $uploads], [
@@ -129,7 +125,6 @@ new #[Layout('layouts::workspace'), Title('Post')] class extends Component {
             post: $this->post,
             workspace: $workspace,
             user: Auth::user(),
-            title: $validated['title'],
             body: $validated['body'],
             agentIds: $validated['agentIds'],
             uploads: $uploads,
@@ -142,7 +137,6 @@ new #[Layout('layouts::workspace'), Title('Post')] class extends Component {
     {
         $this->post->moveToDraft();
 
-        $this->title = $this->post->title;
         $this->body = $this->post->body ?? '';
         $this->agentIds = $this->post->assignedAgentIds();
     }
@@ -156,7 +150,6 @@ new #[Layout('layouts::workspace'), Title('Post')] class extends Component {
     {
         $this->post->moveToDraft();
 
-        $this->title = $this->post->title;
         $this->body = $this->post->body ?? '';
         $this->agentIds = $this->post->assignedAgentIds();
     }
@@ -175,14 +168,13 @@ new #[Layout('layouts::workspace'), Title('Post')] class extends Component {
 <div class="flex h-full w-full flex-1 flex-col gap-3 xl:flex-1">
     <section class="flex min-h-[calc(100dvh-4rem)] flex-col overflow-hidden rounded-xl border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] xl:h-full xl:min-h-[24rem] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none" data-test="post-panel">
         <div class="flex items-center justify-between gap-3 border-b border-neutral-300 bg-emerald-50 px-4 py-3 dark:border-white/10 dark:bg-emerald-500/10">
-            <flux:heading size="sm" class="min-w-0 flex-1 truncate">{{ $post->title }}</flux:heading>
+            <flux:heading size="sm" class="min-w-0 flex-1 truncate">{{ __('Post') }}</flux:heading>
         </div>
 
         @if ($post->status === App\Enums\PostStatus::Draft)
             @include('partials.post-draft-form', [
                 'formId' => 'post-form',
                 'submitAction' => 'save',
-                'titleModel' => 'title',
                 'bodyModel' => 'body',
                 'topicName' => $topic->name,
                 'agentIdsModel' => 'agentIds',

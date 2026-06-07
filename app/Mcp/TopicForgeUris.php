@@ -59,7 +59,7 @@ final class TopicForgeUris
     {
         $post->loadMissing('topic.workspace');
 
-        return self::topic($post->topic)."/posts/{$post->slug}";
+        return self::topic($post->topic)."/posts/{$post->ulid}";
     }
 
     public static function agent(Agent $agent): string

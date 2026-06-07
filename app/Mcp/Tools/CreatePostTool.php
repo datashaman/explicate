@@ -29,8 +29,7 @@ class CreatePostTool extends Tool
     {
         $validated = $request->validate([
             'topic_slug' => ['required', 'string'],
-            'title' => ['required', 'string', 'max:255'],
-            'body' => ['nullable', 'string'],
+            'body' => ['required', 'string'],
             'status' => ['nullable', 'string', Rule::enum(PostStatus::class)],
             'agent_ids' => ['nullable', 'array'],
             'agent_ids.*' => ['integer'],
@@ -42,8 +41,7 @@ class CreatePostTool extends Tool
         $post = app(CreatePost::class)->handle(
             topic: $topic,
             sender: $topic->workspace->principalForUser($user),
-            title: $validated['title'],
-            body: $validated['body'] ?? null,
+            body: $validated['body'],
             status: PostStatus::from($validated['status'] ?? PostStatus::Draft->value),
             agentIds: $validated['agent_ids'] ?? [],
         );
@@ -56,8 +54,8 @@ class CreatePostTool extends Tool
             ],
             'post' => [
                 'id' => $post->id,
-                'title' => $post->title,
-                'slug' => $post->slug,
+                'ulid' => $post->ulid,
+                'preview' => $post->preview(),
                 'status' => $post->status->value,
                 'sender_principal_id' => $post->sender_principal_id,
                 'assigned_agent_ids' => $post->assignedAgentIds(),
@@ -77,12 +75,9 @@ class CreatePostTool extends Tool
             'topic_slug' => $schema->string()
                 ->description('The topic slug the post should be created in.')
                 ->required(),
-            'title' => $schema->string()
-                ->description('The post title.')
-                ->required(),
             'body' => $schema->string()
-                ->description('Optional post body.')
-                ->nullable(),
+                ->description('The post body.')
+                ->required(),
             'status' => $schema->string()
                 ->description('Optional post status.')
                 ->enum(PostStatus::class)

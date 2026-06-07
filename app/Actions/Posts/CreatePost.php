@@ -20,15 +20,13 @@ class CreatePost
     public function handle(
         Topic $topic,
         Principal $sender,
-        string $title,
-        ?string $body,
+        string $body,
         PostStatus $status,
         iterable $agentIds,
         array $uploads = [],
     ): Post {
         $post = $topic->posts()->create([
-            'title' => $title,
-            'body' => $body ?: null,
+            'body' => $body,
             'status' => $status,
             'sender_principal_id' => $sender->id,
         ]);

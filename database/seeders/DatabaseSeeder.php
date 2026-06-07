@@ -109,9 +109,7 @@ class DatabaseSeeder extends Seeder
         $attachAgents($topicsByName['Research'], ['Researcher']);
 
         $designDraft = Post::factory()->for($topicsByName['Design'])->create([
-            'title' => 'Homepage hero directions',
-            'slug' => 'homepage-hero-directions',
-            'body' => "Explore three tonal directions for the homepage hero.\n\n1. Product-led\n2. Proof-led\n3. Narrative-led",
+            'body' => "Homepage hero directions\n\nExplore three tonal directions for the homepage hero.\n\n1. Product-led\n2. Proof-led\n3. Narrative-led",
             'status' => PostStatus::Draft,
             'sender_principal_id' => $senderPrincipal->id,
         ]);
@@ -119,49 +117,37 @@ class DatabaseSeeder extends Seeder
         Attachment::factory()->count(2)->for($designDraft)->create();
 
         Post::factory()->for($topicsByName['Design'])->create([
-            'title' => 'Brand voice notes',
-            'slug' => 'brand-voice-notes',
-            'body' => 'Capture phrases to avoid and preferred tone examples.',
+            'body' => "Brand voice notes\n\nCapture phrases to avoid and preferred tone examples.",
             'status' => PostStatus::Published,
             'sender_principal_id' => $senderPrincipal->id,
         ]);
 
         Post::factory()->for($topicsByName['Engineering'])->create([
-            'title' => 'Agent orchestration outline',
-            'slug' => 'agent-orchestration-outline',
-            'body' => "Document the post lifecycle and queue boundaries.\n\nInclude failure handling and retry policy.",
+            'body' => "Agent orchestration outline\n\nDocument the post lifecycle and queue boundaries.\n\nInclude failure handling and retry policy.",
             'status' => PostStatus::Draft,
             'sender_principal_id' => $senderPrincipal->id,
         ]);
 
         Post::factory()->for($topicsByName['Engineering'])->create([
-            'title' => 'Model fallback strategy',
-            'slug' => 'model-fallback-strategy',
-            'body' => 'Compare provider fallback order and expected quality tradeoffs.',
+            'body' => "Model fallback strategy\n\nCompare provider fallback order and expected quality tradeoffs.",
             'status' => PostStatus::Archived,
             'sender_principal_id' => $senderPrincipal->id,
         ]);
 
         Post::factory()->for($topicsByName['Marketing'])->create([
-            'title' => 'Q3 campaign angles',
-            'slug' => 'q3-campaign-angles',
-            'body' => 'List campaign themes tied to the strongest product outcomes.',
+            'body' => "Q3 campaign angles\n\nList campaign themes tied to the strongest product outcomes.",
             'status' => PostStatus::Published,
             'sender_principal_id' => $senderPrincipal->id,
         ]);
 
         Post::factory()->for($topicsByName['Marketing'])->create([
-            'title' => 'Landing page test ideas',
-            'slug' => 'landing-page-test-ideas',
-            'body' => 'Propose headline, CTA, and proof-module experiments.',
+            'body' => "Landing page test ideas\n\nPropose headline, CTA, and proof-module experiments.",
             'status' => PostStatus::Draft,
             'sender_principal_id' => $senderPrincipal->id,
         ]);
 
         Post::factory()->for($topicsByName['Research'])->create([
-            'title' => 'Competitor workflow notes',
-            'slug' => 'competitor-workflow-notes',
-            'body' => 'Track workflow patterns from adjacent tools and notable gaps.',
+            'body' => "Competitor workflow notes\n\nTrack workflow patterns from adjacent tools and notable gaps.",
             'status' => PostStatus::Draft,
             'sender_principal_id' => $senderPrincipal->id,
         ]);

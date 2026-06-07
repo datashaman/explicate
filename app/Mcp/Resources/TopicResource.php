@@ -59,12 +59,11 @@ class TopicResource extends Resource implements HasUriTemplate
                     ->values()
                     ->all(),
                 'posts' => $topic->posts()
-                    ->orderBy('title')
                     ->get()
                     ->map(fn ($post) => [
                         'id' => $post->id,
-                        'title' => $post->title,
-                        'slug' => $post->slug,
+                        'ulid' => $post->ulid,
+                        'preview' => $post->preview(),
                         'status' => $post->status->value,
                         'body' => $post->body,
                         'resource_uri' => TopicForgeUris::post($post),

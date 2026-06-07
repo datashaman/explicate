@@ -31,7 +31,6 @@ test('it executes a pending agent task through an anonymous laravel ai agent', f
 
     $post = Post::factory()->for($this->topic)->create([
         'sender_principal_id' => $this->senderPrincipal->id,
-        'title' => 'Research this',
         'body' => 'Find the latest internal context.',
         'status' => PostStatus::Published,
     ]);
@@ -43,14 +42,13 @@ test('it executes a pending agent task through an anonymous laravel ai agent', f
     $reply = app(ExecuteAgentTask::class)->handle($task);
 
     Ai::assertAgentWasPrompted(AnonymousAgent::class, function (AgentPrompt $prompt): bool {
-        return $prompt->prompt === "# Research this\n\nFind the latest internal context."
+        return $prompt->prompt === 'Find the latest internal context.'
             && $prompt->model === 'gemini-2.5-flash'
             && $prompt->provider()->name() === 'gemini'
             && $prompt->agent->instructions() === 'Answer as a concise researcher.';
     });
 
     expect($reply)->not->toBeNull()
-        ->and($reply->title)->toBe('Re: Research this')
         ->and($reply->body)->toBe('The agent response.')
         ->and($reply->status)->toBe(PostStatus::Published)
         ->and($reply->sender_principal_id)->toBe($this->workspace->principalForAgent($agent)->id)

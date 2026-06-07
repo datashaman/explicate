@@ -80,11 +80,11 @@ class TopicForgeContext
         return $agent;
     }
 
-    public function postFor(User $user, string $topicSlug, string $postSlug, ?string $workspaceSlug = null): Post
+    public function postFor(User $user, string $topicSlug, string $postUlid, ?string $workspaceSlug = null): Post
     {
         $topic = $this->topicFor($user, $topicSlug, $workspaceSlug);
 
-        $post = $topic->posts()->where('slug', $postSlug)->first();
+        $post = $topic->posts()->where('ulid', $postUlid)->first();
 
         if (! $post instanceof Post) {
             throw new AuthorizationException('The requested post is not accessible for the authenticated user.');

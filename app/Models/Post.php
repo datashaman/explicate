@@ -16,7 +16,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
-#[Fillable(['topic_id', 'thread_id', 'sender_principal_id', 'title', 'slug', 'ulid', 'body', 'status'])]
+#[Fillable(['topic_id', 'thread_id', 'sender_principal_id', 'ulid', 'body', 'status'])]
 class Post extends Model
 {
     /** @use HasFactory<PostFactory> */
@@ -38,16 +38,6 @@ class Post extends Model
             if (empty($post->ulid)) {
                 $post->ulid = (string) Str::ulid();
             }
-
-            if (empty($post->slug)) {
-                $post->slug = static::generateUniqueSlug($post->topic_id, $post->title);
-            }
-        });
-
-        static::updating(function (Post $post) {
-            if ($post->isDirty('title')) {
-                $post->slug = static::generateUniqueSlug($post->topic_id, $post->title, $post->id);
-            }
         });
 
         static::updated(function (Post $post) {
@@ -55,38 +45,6 @@ class Post extends Model
                 $post->makeAssignedAgentTasksAvailable();
             }
         });
-    }
-
-    protected static function generateUniqueSlug(int $topicId, string $name, ?int $excludeId = null): string
-    {
-        $base = Str::slug($name);
-
-        $query = static::withTrashed()
-            ->where('topic_id', $topicId)
-            ->where(function ($q) use ($base) {
-                $q->where('slug', $base)->orWhere('slug', 'like', $base.'-%');
-            });
-
-        if ($excludeId) {
-            $query->where('id', '!=', $excludeId);
-        }
-
-        $existing = $query->pluck('slug');
-
-        $max = $existing
-            ->map(function (string $slug) use ($base): ?int {
-                if ($slug === $base) {
-                    return 0;
-                } elseif (preg_match('/^'.preg_quote($base, '/').'-(\d+)$/', $slug, $m)) {
-                    return (int) $m[1];
-                }
-
-                return null;
-            })
-            ->filter(fn (?int $n) => $n !== null)
-            ->max() ?? 0;
-
-        return $existing->isEmpty() ? $base : $base.'-'.($max + 1);
     }
 
     /**
@@ -249,7 +207,7 @@ class Post extends Model
     }
 
     /**
-     * @return array{name: string, sender: string, sent?: string, saved?: string, attachments: string, status: string}
+     * @return array{post: string, sender: string, sent?: string, saved?: string, attachments: string, status: string}
      */
     public function listSortValues(?string $dateKey = null): array
     {
@@ -257,7 +215,7 @@ class Post extends Model
         $dateKey ??= $this->dateListColumn()->value;
 
         $values = [
-            PostListColumn::Name->value => Str::lower($this->title),
+            PostListColumn::Post->value => Str::lower($this->preview()),
             PostListColumn::Sender->value => Str::lower($this->sender?->label() ?? ''),
             PostListColumn::Attachments->value => str_pad((string) $attachmentsCount, 10, '0', STR_PAD_LEFT),
             'status' => Str::lower($this->status->label()),
@@ -271,6 +229,15 @@ class Post extends Model
     public function dateListColumn(): PostListColumn
     {
         return $this->status === PostStatus::Draft ? PostListColumn::Saved : PostListColumn::Sent;
+    }
+
+    public function preview(): string
+    {
+        return Str::of($this->body ?? '')
+            ->squish()
+            ->limit(80, '...')
+            ->whenEmpty(fn () => __('No content.'))
+            ->toString();
     }
 
     public function getRouteKeyName(): string

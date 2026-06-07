@@ -334,7 +334,7 @@ test('get agent returns topics and version history for an accessible workspace',
         );
 });
 
-test('list posts returns topic posts ordered by title', function () {
+test('list posts returns topic posts in feed order', function () {
     $user = User::factory()->create();
     $workspace = Workspace::factory()->for($user->currentTeam)->create([
         'slug' => 'strategy',
@@ -345,16 +345,12 @@ test('list posts returns topic posts ordered by title', function () {
         'slug' => 'alpha-topic',
     ]);
     Post::factory()->for($topic)->create([
-        'title' => 'Zulu Note',
-        'slug' => 'zulu-note',
+        'body' => 'Zulu Note',
         'status' => PostStatus::Published,
-        'body' => 'Ready to ship.',
     ]);
     Post::factory()->for($topic)->create([
-        'title' => 'Alpha Draft',
-        'slug' => 'alpha-draft',
+        'body' => 'Alpha Draft',
         'status' => PostStatus::Draft,
-        'body' => null,
     ]);
 
     $response = TopicForgeServer::actingAs($user)->tool(ListPostsTool::class, [
@@ -367,13 +363,9 @@ test('list posts returns topic posts ordered by title', function () {
             ->where('workspace.slug', 'strategy')
             ->where('topic.slug', 'alpha-topic')
             ->where('topic.resource_uri', 'topic-forge://workspaces/strategy/topics/alpha-topic')
-            ->where('posts.0.title', 'Alpha Draft')
-            ->where('posts.0.has_body', false)
-            ->where('posts.0.resource_uri', 'topic-forge://workspaces/strategy/topics/alpha-topic/posts/alpha-draft')
-            ->where('posts.1.title', 'Zulu Note')
-            ->where('posts.1.status', 'published')
-            ->where('posts.1.has_body', true)
-            ->where('posts.1.resource_uri', 'topic-forge://workspaces/strategy/topics/alpha-topic/posts/zulu-note')
+            ->where('posts.0.preview', 'Zulu Note')
+            ->where('posts.0.status', 'published')
+            ->where('posts.1.preview', 'Alpha Draft')
             ->etc()
         );
 });
@@ -391,8 +383,7 @@ test('list posts includes sender context', function () {
     $senderPrincipal = $workspace->principalForUser($user);
 
     Post::factory()->for($topic)->create([
-        'title' => 'Topic Request',
-        'slug' => 'topic-request',
+        'body' => 'Topic Request',
         'status' => PostStatus::Published,
         'sender_principal_id' => $senderPrincipal->id,
     ]);
@@ -404,7 +395,7 @@ test('list posts includes sender context', function () {
     $response
         ->assertOk()
         ->assertStructuredContent(fn ($json) => $json
-            ->where('posts.0.slug', 'topic-request')
+            ->where('posts.0.preview', 'Topic Request')
             ->where('posts.0.sender.type', 'user')
             ->where('posts.0.sender.name', $user->name)
             ->etc()
@@ -423,11 +414,9 @@ test('get post returns the post body and attachment metadata', function () {
         'slug' => 'alpha-topic',
     ]);
     $post = Post::factory()->for($topic)->create([
-        'title' => 'Alpha Draft',
-        'slug' => 'alpha-draft',
+        'body' => 'Alpha Draft',
         'status' => PostStatus::Draft,
         'sender_principal_id' => $workspace->principalForUser($user)->id,
-        'body' => 'Draft body',
     ]);
     Attachment::factory()->for($post)->create([
         'filename' => 'report.pdf',
@@ -437,7 +426,7 @@ test('get post returns the post body and attachment metadata', function () {
 
     $response = TopicForgeServer::actingAs($user)->tool(GetPostTool::class, [
         'topic_slug' => 'alpha-topic',
-        'post_slug' => 'alpha-draft',
+        'post_ulid' => $post->ulid,
     ]);
 
     $response
@@ -446,10 +435,10 @@ test('get post returns the post body and attachment metadata', function () {
             ->where('workspace.slug', 'strategy')
             ->where('topic.slug', 'alpha-topic')
             ->where('topic.resource_uri', 'topic-forge://workspaces/strategy/topics/alpha-topic')
-            ->where('post.slug', 'alpha-draft')
+            ->where('post.ulid', $post->ulid)
             ->where('post.sender.name', $user->name)
-            ->where('post.body', 'Draft body')
-            ->where('post.resource_uri', 'topic-forge://workspaces/strategy/topics/alpha-topic/posts/alpha-draft')
+            ->where('post.body', 'Alpha Draft')
+            ->where('post.resource_uri', "topic-forge://workspaces/strategy/topics/alpha-topic/posts/{$post->ulid}")
             ->where('attachments.0.filename', 'report.pdf')
             ->where('attachments.0.mime_type', 'application/pdf')
             ->where('attachments.0.size', 4096)
@@ -472,8 +461,6 @@ test('list agent tasks returns post-derived work for an agent', function () {
         'slug' => 'research-agent',
     ]);
     $post = Post::factory()->for($topic)->create([
-        'title' => 'Agent Request',
-        'slug' => 'agent-request',
         'status' => PostStatus::Published,
         'sender_principal_id' => $workspace->principalForUser($user)->id,
         'body' => 'Please summarize.',
@@ -495,8 +482,7 @@ test('list agent tasks returns post-derived work for an agent', function () {
             ->where('tasks.0.id', $task->id)
             ->where('tasks.0.status', 'pending')
             ->where('tasks.0.event_type', AgentTask::EventPostAssigned)
-            ->where('tasks.0.post.slug', 'agent-request')
-            ->where('tasks.0.post.has_body', true)
+            ->where('tasks.0.post.ulid', $post->ulid)
             ->where('tasks.0.resource_uri', "topic-forge://workspaces/strategy/agents/research-agent/tasks/{$task->id}")
             ->etc()
         );
@@ -517,8 +503,6 @@ test('get agent task returns full post context for agent work', function () {
         'slug' => 'research-agent',
     ]);
     $post = Post::factory()->for($topic)->create([
-        'title' => 'Agent Request',
-        'slug' => 'agent-request',
         'status' => PostStatus::Published,
         'sender_principal_id' => $workspace->principalForUser($user)->id,
         'body' => 'Please summarize.',
@@ -538,7 +522,7 @@ test('get agent task returns full post context for agent work', function () {
             ->where('workspace.slug', 'strategy')
             ->where('agent.slug', 'research-agent')
             ->where('task.id', $task->id)
-            ->where('task.post.slug', 'agent-request')
+            ->where('task.post.ulid', $post->ulid)
             ->where('task.post.body', 'Please summarize.')
             ->where('task.post.assigned_agents.0.name', 'Research Agent')
             ->etc()
@@ -558,15 +542,13 @@ test('create post creates a draft by default', function () {
 
     $response = TopicForgeServer::actingAs($user)->tool(CreatePostTool::class, [
         'topic_slug' => 'alpha-topic',
-        'title' => 'New MCP Post',
         'body' => 'Created through the MCP server.',
     ]);
 
-    $post = $topic->posts()->where('title', 'New MCP Post')->first();
+    $post = $topic->posts()->where('body', 'Created through the MCP server.')->first();
 
     expect($post)->not->toBeNull();
     expect($post?->status)->toBe(PostStatus::Draft);
-    expect($post?->slug)->toBe('new-mcp-post');
 
     $response
         ->assertOk()
@@ -574,9 +556,9 @@ test('create post creates a draft by default', function () {
             ->where('workspace.slug', 'strategy')
             ->where('topic.slug', 'alpha-topic')
             ->where('topic.resource_uri', 'topic-forge://workspaces/strategy/topics/alpha-topic')
-            ->where('post.title', 'New MCP Post')
+            ->where('post.preview', 'Created through the MCP server.')
             ->where('post.status', 'draft')
-            ->where('post.resource_uri', 'topic-forge://workspaces/strategy/topics/alpha-topic/posts/new-mcp-post')
+            ->where('post.resource_uri', "topic-forge://workspaces/strategy/topics/alpha-topic/posts/{$post->ulid}")
             ->etc()
         );
 });
@@ -592,9 +574,7 @@ test('topic resource returns topic context by uri template', function () {
         'name' => 'Alpha Topic',
         'slug' => 'alpha-topic',
     ]);
-    Post::factory()->for($topic)->create([
-        'title' => 'Alpha Draft',
-        'slug' => 'alpha-draft',
+    $post = Post::factory()->for($topic)->create([
         'status' => PostStatus::Draft,
         'body' => 'Draft body',
     ]);
@@ -613,8 +593,8 @@ test('topic resource returns topic context by uri template', function () {
         ->assertOk()
         ->assertSee('"slug":"alpha-topic"')
         ->assertSee('"resource_uri":"topic-forge://workspaces/strategy/topics/alpha-topic"')
-        ->assertSee('"title":"Alpha Draft"')
-        ->assertSee('"resource_uri":"topic-forge://workspaces/strategy/topics/alpha-topic/posts/alpha-draft"')
+        ->assertSee('"preview":"Draft body"')
+        ->assertSee('"resource_uri":"topic-forge://workspaces/strategy/topics/alpha-topic/posts/'.$post->ulid.'"')
         ->assertSee('"body":"Draft body"');
 });
 
@@ -726,16 +706,12 @@ test('topic posts resource returns posts for a topic by uri template', function 
         'slug' => 'alpha-topic',
     ]);
     Post::factory()->for($topic)->create([
-        'title' => 'Zulu Note',
-        'slug' => 'zulu-note',
         'status' => PostStatus::Published,
         'body' => 'Ready to ship.',
     ]);
     Post::factory()->for($topic)->create([
-        'title' => 'Alpha Draft',
-        'slug' => 'alpha-draft',
+        'body' => 'Alpha Draft',
         'status' => PostStatus::Draft,
-        'body' => null,
     ]);
 
     $resource = new class(app(TopicForgeContext::class)) extends TopicPostsResource
@@ -751,10 +727,8 @@ test('topic posts resource returns posts for a topic by uri template', function 
     $response
         ->assertOk()
         ->assertSee('"slug":"alpha-topic"')
-        ->assertSee('"title":"Alpha Draft"')
-        ->assertSee('"has_body":false')
-        ->assertSee('"resource_uri":"topic-forge://workspaces/strategy/topics/alpha-topic/posts/alpha-draft"')
-        ->assertSee('"title":"Zulu Note"');
+        ->assertSee('"preview":"Alpha Draft"')
+        ->assertSee('"preview":"Ready to ship."');
 });
 
 test('post resource returns post context by uri template', function () {
@@ -769,8 +743,6 @@ test('post resource returns post context by uri template', function () {
         'slug' => 'alpha-topic',
     ]);
     $post = Post::factory()->for($topic)->create([
-        'title' => 'Alpha Draft',
-        'slug' => 'alpha-draft',
         'status' => PostStatus::Draft,
         'body' => 'Draft body',
     ]);
@@ -784,16 +756,18 @@ test('post resource returns post context by uri template', function () {
     {
         public function uri(): string
         {
-            return 'topic-forge://workspaces/strategy/topics/alpha-topic/posts/alpha-draft';
+            return 'topic-forge://workspaces/strategy/topics/alpha-topic/posts/'.$GLOBALS['postResourceUlid'];
         }
     };
+
+    $GLOBALS['postResourceUlid'] = $post->ulid;
 
     $response = TopicForgeServer::actingAs($user)->resource($resource);
 
     $response
         ->assertOk()
-        ->assertSee('"slug":"alpha-draft"')
-        ->assertSee('"resource_uri":"topic-forge://workspaces/strategy/topics/alpha-topic/posts/alpha-draft"')
+        ->assertSee('"ulid":"'.$post->ulid.'"')
+        ->assertSee('"resource_uri":"topic-forge://workspaces/strategy/topics/alpha-topic/posts/'.$post->ulid.'"')
         ->assertSee('"filename":"report.pdf"');
 });
 
@@ -812,8 +786,7 @@ test('agent tasks resource returns queued work by uri template', function () {
         'slug' => 'research-agent',
     ]);
     $post = Post::factory()->for($topic)->create([
-        'title' => 'Agent Request',
-        'slug' => 'agent-request',
+        'body' => 'Agent Request',
         'status' => PostStatus::Published,
         'sender_principal_id' => $workspace->principalForUser($user)->id,
     ]);
@@ -836,7 +809,7 @@ test('agent tasks resource returns queued work by uri template', function () {
         ->assertSee('"slug":"research-agent"')
         ->assertSee('"tasks_resource_uri":"topic-forge://workspaces/strategy/agents/research-agent/tasks"')
         ->assertSee('"id":'.$task->id)
-        ->assertSee('"slug":"agent-request"')
+        ->assertSee('"ulid":"'.$post->ulid.'"')
         ->assertSee('"resource_uri":"topic-forge://workspaces/strategy/agents/research-agent/tasks/'.$task->id.'"');
 });
 
@@ -855,8 +828,6 @@ test('agent task resource returns queued work by uri template', function () {
         'slug' => 'research-agent',
     ]);
     $post = Post::factory()->for($topic)->create([
-        'title' => 'Agent Request',
-        'slug' => 'agent-request',
         'status' => PostStatus::Published,
         'sender_principal_id' => $workspace->principalForUser($user)->id,
         'body' => 'Please summarize.',

@@ -67,7 +67,7 @@ test('publishing an assigned draft makes agent work available once', function ()
     expect($post->agentTasks()->sole()->available_at)->toBeNull();
 
     $post->update(['status' => PostStatus::Published]);
-    $post->update(['title' => 'Already sent']);
+    $post->update(['body' => 'Already sent']);
 
     $task = AgentTask::query()
         ->whereBelongsTo($agent)

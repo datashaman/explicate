@@ -18,16 +18,12 @@ class PostFactory extends Factory
      */
     public function definition(): array
     {
-        $name = fake()->unique()->words(3, true);
-
         return [
             'topic_id' => Topic::factory(),
             'thread_id' => null,
             'sender_principal_id' => null,
-            'title' => $name,
-            'slug' => fn (array $attributes): string => Str::slug($attributes['title']),
             'ulid' => fn (): string => (string) Str::ulid(),
-            'body' => fake()->optional()->paragraphs(3, true),
+            'body' => fake()->paragraphs(3, true),
             'status' => PostStatus::Draft,
         ];
     }

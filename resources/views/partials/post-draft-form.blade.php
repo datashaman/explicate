@@ -1,8 +1,6 @@
 @props([
     'formId',
     'submitAction',
-    'titleModel',
-    'titleTest' => null,
     'bodyModel',
     'bodyTest' => null,
     'topicModel' => null,
@@ -27,8 +25,6 @@
 
 <div class="flex flex-1 flex-col gap-6 overflow-auto px-4 py-4 xl:min-h-0" @if ($dataTest) data-test="{{ $dataTest }}" @endif>
     <form id="{{ $formId }}" wire:submit="{{ $submitAction }}" class="flex flex-col gap-6">
-        <flux:input wire:model="{{ $titleModel }}" :label="__('Title')" required data-test="{{ $titleTest }}" />
-
         @include('partials.post-routing-fields', [
             'topicModel' => $topicModel,
             'topicName' => $topicName,
@@ -39,7 +35,7 @@
             'testPrefix' => $testPrefix,
         ])
 
-        <flux:textarea wire:model="{{ $bodyModel }}" :label="__('Body')" :placeholder="__('Write something...')" rows="12" data-test="{{ $bodyTest }}" />
+        <flux:textarea wire:model="{{ $bodyModel }}" :label="__('Post')" :placeholder="__('Write something...')" rows="12" required data-test="{{ $bodyTest }}" />
     </form>
 
     @if ($post)

@@ -50,17 +50,16 @@ test('database seeder creates demo workspace content', function () {
     expect($writerAgent->latestVersion)->not->toBeNull();
 });
 
-test('factories derive slugs from overridden names and titles', function () {
+test('factories derive slugs from overridden names and post ulids', function () {
     $team = Team::factory()->create(['name' => 'Demo Team']);
     $workspace = Workspace::factory()->create(['name' => 'Context Proof']);
     $topic = Topic::factory()->for($workspace)->create(['name' => 'Product Strategy']);
     $agent = Agent::factory()->for($workspace)->create(['name' => 'SEO Analyst']);
-    $post = Post::factory()->for($topic)->create(['title' => 'Launch Plan']);
+    $post = Post::factory()->for($topic)->create(['body' => 'Launch Plan']);
 
     expect($team->slug)->toBe('demo-team')
         ->and($workspace->slug)->toBe('context-proof')
         ->and($topic->slug)->toBe('product-strategy')
         ->and($agent->slug)->toBe('seo-analyst')
-        ->and($post->slug)->toBe('launch-plan')
         ->and($post->ulid)->not->toBeNull();
 });

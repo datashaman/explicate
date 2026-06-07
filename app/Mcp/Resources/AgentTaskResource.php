@@ -49,7 +49,7 @@ class AgentTaskResource extends Resource implements HasUriTemplate
                     'resource_uri' => TopicForgeUris::agent($task->agent),
                     'tasks_resource_uri' => TopicForgeUris::agentTasks($task->agent),
                 ],
-                'task' => $this->agentTaskPayload($task, includePostBody: true),
+                'task' => $this->agentTaskWithPostPayload($task),
             ]);
         });
     }

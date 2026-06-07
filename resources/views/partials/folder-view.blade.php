@@ -1,10 +1,10 @@
 @php
-    $defaultListSort = $listDefaultSort ?? \App\Enums\PostListColumn::Name->value;
+    $defaultListSort = $listDefaultSort ?? \App\Enums\PostListColumn::Post->value;
     $dateListSortKeys = [
         \App\Enums\PostListColumn::Sent->value,
         \App\Enums\PostListColumn::Saved->value,
     ];
-    $nameColumnKey = \App\Enums\PostListColumn::Name->value;
+    $nameColumnKey = \App\Enums\PostListColumn::Post->value;
     $attachmentsColumnKey = \App\Enums\PostListColumn::Attachments->value;
 @endphp
 
@@ -291,7 +291,7 @@
                             wire:key="folder-post-message-{{ $itemKey }}"
                             class="py-4"
                             data-test="folder-post-message"
-                            data-post-title="{{ $post->title }}"
+                            data-post-preview="{{ $post->preview() }}"
                             data-sort-index="{{ $loop->index }}"
                             @foreach (($item['sort'] ?? []) as $sortKey => $sortValue)
                                 data-sort-{{ $sortKey }}="{{ $sortValue }}"

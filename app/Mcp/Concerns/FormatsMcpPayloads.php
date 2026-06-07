@@ -11,14 +11,14 @@ trait FormatsMcpPayloads
     /**
      * @return array<string, mixed>
      */
-    protected function postPayload(Post $post, bool $includeBody = false): array
+    protected function postSummaryPayload(Post $post): array
     {
         $post->loadMissing(['topic.workspace', 'sender.user', 'sender.agent', 'assignedAgents']);
 
-        $payload = [
+        return [
             'id' => $post->id,
-            'title' => $post->title,
-            'slug' => $post->slug,
+            'ulid' => $post->ulid,
+            'preview' => $post->preview(),
             'status' => $post->status->value,
             'sender_principal_id' => $post->sender_principal_id,
             'sender' => $post->sender ? [
@@ -36,20 +36,23 @@ trait FormatsMcpPayloads
                 ->all(),
             'resource_uri' => $this->postResourceUri($post),
         ];
-
-        if ($includeBody) {
-            $payload['body'] = $post->body;
-        } else {
-            $payload['has_body'] = filled($post->body);
-        }
-
-        return $payload;
     }
 
     /**
      * @return array<string, mixed>
      */
-    protected function agentTaskPayload(AgentTask $task, bool $includePostBody = false): array
+    protected function postPayload(Post $post): array
+    {
+        return [
+            ...$this->postSummaryPayload($post),
+            'body' => $post->body,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function agentTaskPayload(AgentTask $task): array
     {
         $task->loadMissing(['agent.workspace', 'post.topic.workspace', 'post.sender.user', 'post.sender.agent']);
 
@@ -63,7 +66,18 @@ trait FormatsMcpPayloads
             'attempts' => $task->attempts,
             'last_error' => $task->last_error,
             'resource_uri' => $this->agentTaskResourceUri($task),
-            'post' => $this->postPayload($task->post, includeBody: $includePostBody),
+            'post' => $this->postSummaryPayload($task->post),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function agentTaskWithPostPayload(AgentTask $task): array
+    {
+        return [
+            ...$this->agentTaskPayload($task),
+            'post' => $this->postPayload($task->post),
         ];
     }
 

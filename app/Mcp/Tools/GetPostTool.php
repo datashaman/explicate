@@ -33,7 +33,7 @@ class GetPostTool extends Tool
     {
         $validated = $request->validate([
             'topic_slug' => ['required', 'string'],
-            'post_slug' => ['required', 'string'],
+            'post_ulid' => ['required', 'string'],
         ]);
 
         /** @var User $user */
@@ -41,7 +41,7 @@ class GetPostTool extends Tool
         $post = $this->context->postFor(
             $user,
             $validated['topic_slug'],
-            $validated['post_slug'],
+            $validated['post_ulid'],
         );
         $post->load(['topic.workspace', 'attachments', 'sender.user', 'sender.agent']);
 
@@ -51,7 +51,7 @@ class GetPostTool extends Tool
                 ...$post->topic->only(['id', 'name', 'slug']),
                 'resource_uri' => TopicForgeUris::topic($post->topic),
             ],
-            'post' => $this->postPayload($post, includeBody: true),
+            'post' => $this->postPayload($post),
             'attachments' => $post->attachments
                 ->map(fn ($attachment) => [
                     'id' => $attachment->id,
@@ -75,8 +75,8 @@ class GetPostTool extends Tool
             'topic_slug' => $schema->string()
                 ->description('The topic slug that owns the post.')
                 ->required(),
-            'post_slug' => $schema->string()
-                ->description('The post slug to fetch.')
+            'post_ulid' => $schema->string()
+                ->description('The post ULID to fetch.')
                 ->required(),
         ];
     }

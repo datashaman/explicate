@@ -24,12 +24,12 @@ test('dashboard new post button opens canonical create URL and sends the form', 
         ->assertPathIs('/posts/new')
         ->assertQueryStringHas('topic', $topic->slug)
         ->assertSee('New post')
-        ->type('@new-post-title', 'TEST')
+        ->type('@new-post-body', 'TEST')
         ->press('@new-post-send')
         ->wait(0.5)
         ->assertNoJavaScriptErrors();
 
-    $post = $topic->posts()->where('title', 'TEST')->first();
+    $post = $topic->posts()->where('body', 'TEST')->first();
 
     expect($post)->not->toBeNull()
         ->and($post->sender_principal_id)->toBe($senderPrincipal->id)
@@ -56,15 +56,15 @@ test('new post query values become form defaults and form fields submit the post
         ->assertPathIs('/posts/new')
         ->assertQueryStringHas('topic', $design->slug)
         ->assertSelected('@new-post-topic', $design->id)
-        ->type('@new-post-title', 'Query default overridden')
+        ->type('@new-post-body', 'Query default overridden')
         ->select('@new-post-topic', $engineering->id)
         ->press('@new-post-send')
         ->wait(0.5)
         ->assertNoJavaScriptErrors();
 
-    expect($design->posts()->where('title', 'Query default overridden')->exists())->toBeFalse();
+    expect($design->posts()->where('body', 'Query default overridden')->exists())->toBeFalse();
 
-    $post = $engineering->posts()->where('title', 'Query default overridden')->first();
+    $post = $engineering->posts()->where('body', 'Query default overridden')->first();
 
     expect($post)->not->toBeNull()
         ->and($post->status)->toBe(PostStatus::Published);

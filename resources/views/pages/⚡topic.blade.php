@@ -74,7 +74,7 @@ new #[Layout('layouts::workspace'), Title('Topic')] class extends Component {
             ->map(fn (Post $post) => [
                 'href' => route('posts.show', ['post' => $post]),
                 'post' => $post,
-                'name' => $post->title,
+                'name' => $post->preview(),
                 'meta' => $post->listMeta(showSender: true, timezone: Auth::user()->displayTimezone()),
                 'attachments_count' => $post->attachments_count,
                 'sort' => $post->listSortValues(dateKey: PostListColumn::Sent->value),
@@ -254,7 +254,7 @@ new #[Layout('layouts::workspace'), Title('Topic')] class extends Component {
                 'showArchivedModel' => 'showArchived',
                 'listColumns' => [
                     PostListColumn::Sender->toColumn(),
-                    PostListColumn::Name->toColumn(),
+                    PostListColumn::Post->toColumn(),
                     PostListColumn::Sent->toColumn(),
                     PostListColumn::Attachments->toColumn(__('Attachments'), 'w-24 shrink-0'),
                 ],

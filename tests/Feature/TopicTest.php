@@ -46,7 +46,7 @@ test('a topic has many threads', function () {
 test('a thread belongs to a topic and holds posts', function () {
     $topic = Topic::factory()->create();
     $thread = Thread::factory()->for($topic)->create(['title' => 'Review artifact']);
-    $post = Post::factory()->for($topic)->for($thread)->create(['title' => 'Review note']);
+    $post = Post::factory()->for($topic)->for($thread)->create(['body' => 'Review note']);
 
     expect($thread->topic)->toBeInstanceOf(Topic::class)
         ->and($thread->posts()->pluck('posts.id')->all())->toBe([$post->id])
@@ -82,9 +82,9 @@ test('dashboard shows topics as folders for current workspace', function () {
     [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['name' => 'Design']);
-    $post = Post::factory()->for($topic)->create(['title' => 'Dashboard draft']);
+    $post = Post::factory()->for($topic)->create(['body' => 'Dashboard draft']);
     $publishedPost = Post::factory()->for($topic)->create([
-        'title' => 'Dashboard published',
+        'body' => 'Dashboard published',
         'status' => PostStatus::Published,
         'sender_principal_id' => $workspace->principalForUser($user)->id,
     ]);
@@ -97,8 +97,8 @@ test('dashboard shows topics as folders for current workspace', function () {
         ->assertSee('Drafts')
         ->assertSee('Archived')
         ->assertSee($topic->name)
-        ->assertSee($publishedPost->title)
-        ->assertDontSee($post->title)
+        ->assertSee($publishedPost->body)
+        ->assertDontSee($post->body)
         ->assertDontSee('Select a topic')
         ->assertDontSee('Choose a topic to view its feed.');
 });
@@ -136,13 +136,13 @@ test('dashboard system draft folder shows draft posts across topics', function (
     $userPrincipal = $workspace->principalForUser($user);
 
     $designDraft = Post::factory()->for($design)->create([
-        'title' => 'Working draft',
+        'body' => 'Working draft',
         'updated_at' => now()->subMinutes(7),
         'status' => PostStatus::Draft,
     ]);
 
     Post::factory()->for($engineering)->create([
-        'title' => 'Engineering sent',
+        'body' => 'Engineering sent',
         'status' => PostStatus::Published,
         'sender_principal_id' => $userPrincipal->id,
     ]);
@@ -155,7 +155,7 @@ test('dashboard system draft folder shows draft posts across topics', function (
         ->assertSee('Working draft')
         ->assertSee(e(route('posts.drafts', [
             'topic' => $design->slug,
-            'post' => $designDraft->slug,
+            'post' => $designDraft->ulid,
             'panel' => 'posts',
         ])), escape: false)
         ->assertSee('data-test="post-message"', escape: false)
@@ -181,12 +181,12 @@ test('dashboard feed folder does not show draft posts', function () {
     $userPrincipal = $workspace->principalForUser($user);
 
     Post::factory()->for($topic)->create([
-        'title' => 'Hidden draft',
+        'body' => 'Hidden draft',
         'status' => PostStatus::Draft,
     ]);
 
     Post::factory()->for($topic)->create([
-        'title' => 'Visible post',
+        'body' => 'Visible post',
         'status' => PostStatus::Published,
         'sender_principal_id' => $userPrincipal->id,
     ]);
@@ -205,7 +205,7 @@ test('dashboard feed folder shows all published topic posts', function () {
     $userPrincipal = $workspace->principalForUser($user);
 
     $firstPost = Post::factory()->for($topic)->create([
-        'title' => 'First topic post',
+        'body' => 'First topic post',
         'status' => PostStatus::Published,
         'sender_principal_id' => $userPrincipal->id,
     ]);
@@ -213,13 +213,13 @@ test('dashboard feed folder shows all published topic posts', function () {
     $firstPost->forceFill(['created_at' => now()->subMinutes(9)])->save();
 
     Post::factory()->for($topic)->create([
-        'title' => 'Second topic post',
+        'body' => 'Second topic post',
         'status' => PostStatus::Published,
         'sender_principal_id' => $userPrincipal->id,
     ]);
 
     Post::factory()->for($topic)->create([
-        'title' => 'Third topic post',
+        'body' => 'Third topic post',
         'status' => PostStatus::Published,
         'sender_principal_id' => $userPrincipal->id,
     ]);
@@ -246,7 +246,7 @@ test('dashboard post panel returns to the selected folder before the post topic'
 
     $topic = Topic::factory()->for($workspace)->create(['name' => 'Design', 'slug' => 'design']);
     $post = Post::factory()->for($topic)->create([
-        'title' => 'Feed post',
+        'body' => 'Feed post',
         'status' => PostStatus::Published,
         'sender_principal_id' => $workspace->principalForUser($user)->id,
     ]);
@@ -256,7 +256,7 @@ test('dashboard post panel returns to the selected folder before the post topic'
     $component = Livewire::test('pages::dashboard');
     $component->instance()->selectedSystemFolderSlug = 'feed';
     $component->instance()->selectedTopicSlug = $topic->slug;
-    $component->instance()->selectedPostSlug = $post->slug;
+    $component->instance()->selectedPostUlid = $post->ulid;
 
     expect($component->instance()->postsPanelReturnRoute())
         ->toBe(route('dashboard'))
@@ -269,12 +269,12 @@ test('dashboard post panel return label matches selected topic context', functio
 
     $topic = Topic::factory()->for($workspace)->create(['name' => 'Design', 'slug' => 'design']);
     $post = Post::factory()->for($topic)->create([
-        'title' => 'Design draft',
+        'body' => 'Design draft',
         'status' => PostStatus::Draft,
     ]);
 
     $this->actingAs($user)
-        ->get(route('dashboard', ['topic' => $topic->slug, 'post' => $post->slug, 'panel' => 'posts']))
+        ->get(route('dashboard', ['topic' => $topic->slug, 'post' => $post->ulid, 'panel' => 'posts']))
         ->assertOk()
         ->assertSee('data-test="posts-panel-return"', escape: false)
         ->assertSee(e(route('dashboard', ['topic' => $topic->slug, 'panel' => 'posts'])), escape: false)
@@ -288,7 +288,7 @@ test('dashboard archived folder shows archived feed', function () {
     $userPrincipal = $workspace->principalForUser($user);
 
     $archivedPost = Post::factory()->for($topic)->create([
-        'title' => 'Archived post',
+        'body' => 'Archived post',
         'status' => PostStatus::Archived,
         'sender_principal_id' => $userPrincipal->id,
     ]);
@@ -326,17 +326,17 @@ test('dashboard archived toggle only filters the selected posts list', function 
     ]);
 
     Post::factory()->for($design)->create([
-        'title' => 'Design draft',
+        'body' => 'Design draft',
         'status' => PostStatus::Draft,
     ]);
 
     Post::factory()->for($design)->create([
-        'title' => 'Design published',
+        'body' => 'Design published',
         'status' => PostStatus::Published,
     ]);
 
     Post::factory()->for($design)->create([
-        'title' => 'Design archived',
+        'body' => 'Design archived',
         'status' => PostStatus::Archived,
     ]);
 
@@ -408,12 +408,12 @@ test('dashboard shows selected topic in the main panel', function () {
     $otherTopic = Topic::factory()->for($workspace)->create(['name' => 'Other Topic', 'slug' => 'other-topic']);
 
     $selectedPost = Post::factory()->for($selectedTopic)->create([
-        'title' => 'Selected post',
+        'body' => 'Selected post',
         'status' => PostStatus::Published,
     ]);
-    Post::factory()->for($otherTopic)->create(['title' => 'Other post']);
+    Post::factory()->for($otherTopic)->create(['body' => 'Other post']);
     Post::factory()->for($selectedTopic)->create([
-        'title' => 'Another selected post',
+        'body' => 'Another selected post',
         'status' => PostStatus::Published,
     ]);
 
@@ -421,8 +421,8 @@ test('dashboard shows selected topic in the main panel', function () {
         ->get(route('dashboard', ['topic' => $selectedTopic->slug]))
         ->assertOk()
         ->assertSee('Selected Topic')
-        ->assertSee($selectedPost->title)
-        ->assertSee(e(route('dashboard', ['topic' => $selectedTopic->slug, 'post' => $selectedPost->slug, 'panel' => 'posts'])), escape: false)
+        ->assertSee($selectedPost->body)
+        ->assertSee(e(route('dashboard', ['topic' => $selectedTopic->slug, 'post' => $selectedPost->ulid, 'panel' => 'posts'])), escape: false)
         ->assertDontSee(route('posts.show', ['post' => $selectedPost]), escape: false)
         ->assertDontSee('data-test="folder-list-sort-topic"', escape: false)
         ->assertDontSeeText('Topic:')
@@ -435,20 +435,17 @@ test('dashboard shows selected draft post in the main panel', function () {
 
     $topic = Topic::factory()->for($workspace)->create(['name' => 'Design', 'slug' => 'design']);
     $post = Post::factory()->for($topic)->create([
-        'title' => 'Working brief',
         'body' => 'Working body',
         'status' => PostStatus::Draft,
     ]);
 
     $response = $this->actingAs($user)
-        ->get(route('dashboard', ['topic' => $topic->slug, 'post' => $post->slug, 'panel' => 'posts']))
+        ->get(route('dashboard', ['topic' => $topic->slug, 'post' => $post->ulid, 'panel' => 'posts']))
         ->assertOk()
         ->assertSee('data-test="dashboard-post-panel"', escape: false)
-        ->assertSee('Working brief')
         ->assertSee('Working body')
         ->assertDontSee('data-flux-breadcrumbs', escape: false)
-        ->assertSeeText('Title')
-        ->assertSeeText('Body')
+        ->assertSeeText('Post')
         ->assertSee('form="dashboard-selected-post-form"', escape: false)
         ->assertSee('Save draft')
         ->assertSee('Post');
@@ -461,7 +458,6 @@ test('dashboard can save selected draft post', function () {
 
     $topic = Topic::factory()->for($workspace)->create(['name' => 'Design', 'slug' => 'design']);
     $post = Post::factory()->for($topic)->create([
-        'title' => 'Draft brief',
         'body' => 'Draft body',
         'status' => PostStatus::Draft,
     ]);
@@ -470,15 +466,12 @@ test('dashboard can save selected draft post', function () {
 
     Livewire::test('pages::dashboard')
         ->set('selectedTopicSlug', $topic->slug)
-        ->set('selectedPostSlug', $post->slug)
-        ->set('postTitle', 'Updated brief')
+        ->set('selectedPostUlid', $post->ulid)
         ->set('postBody', 'Updated body')
         ->call('saveSelectedPost')
         ->assertHasNoErrors();
 
-    expect($post->fresh())
-        ->title->toBe('Updated brief')
-        ->body->toBe('Updated body');
+    expect($post->fresh()->body)->toBe('Updated body');
 });
 
 test('dashboard published post panel shows sender and topic', function () {
@@ -486,13 +479,13 @@ test('dashboard published post panel shows sender and topic', function () {
 
     $topic = Topic::factory()->for($workspace)->create(['name' => 'Design', 'slug' => 'design']);
     $post = Post::factory()->for($topic)->create([
-        'title' => 'Published note',
+        'body' => 'Published note',
         'status' => PostStatus::Published,
         'sender_principal_id' => $workspace->principalForUser($user)->id,
     ]);
 
     $this->actingAs($user)
-        ->get(route('dashboard', ['topic' => $topic->slug, 'post' => $post->slug, 'panel' => 'posts']))
+        ->get(route('dashboard', ['topic' => $topic->slug, 'post' => $post->ulid, 'panel' => 'posts']))
         ->assertOk()
         ->assertSee('data-test="post-message"', escape: false)
         ->assertSee('data-test="post-message-sender"', escape: false)
@@ -507,7 +500,7 @@ test('dashboard post panel shows attachments', function () {
 
     $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
     $post = Post::factory()->for($topic)->create([
-        'title' => 'Published note',
+        'body' => 'Published note',
         'status' => PostStatus::Published,
     ]);
     Attachment::factory()->for($post)->create([
@@ -516,7 +509,7 @@ test('dashboard post panel shows attachments', function () {
     ]);
 
     $this->actingAs($user)
-        ->get(route('dashboard', ['topic' => $topic->slug, 'post' => $post->slug, 'panel' => 'posts']))
+        ->get(route('dashboard', ['topic' => $topic->slug, 'post' => $post->ulid, 'panel' => 'posts']))
         ->assertOk()
         ->assertSee('Attachments')
         ->assertSee('roadmap.pdf')
@@ -531,7 +524,7 @@ test('dashboard saves pending attachments with selected draft post', function ()
 
     $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
     $post = Post::factory()->for($topic)->create([
-        'title' => 'Draft brief',
+        'body' => 'Draft brief',
         'status' => PostStatus::Draft,
     ]);
     $file = UploadedFile::fake()->create('brief.pdf', 128, 'application/pdf');
@@ -540,9 +533,8 @@ test('dashboard saves pending attachments with selected draft post', function ()
 
     Livewire::test('pages::dashboard')
         ->set('selectedTopicSlug', $topic->slug)
-        ->set('selectedPostSlug', $post->slug)
-        ->set('postTitle', 'Draft brief')
-        ->set('postBody', '')
+        ->set('selectedPostUlid', $post->ulid)
+        ->set('postBody', 'Draft body with attachment')
         ->set('postUploads', [$file])
         ->call('saveSelectedPost')
         ->assertHasNoErrors()
@@ -559,7 +551,7 @@ test('dashboard can delete attachments from selected draft post', function () {
 
     $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
     $post = Post::factory()->for($topic)->create([
-        'title' => 'Draft brief',
+        'body' => 'Draft brief',
         'status' => PostStatus::Draft,
     ]);
     $attachment = Attachment::factory()->for($post)->create([
@@ -572,7 +564,7 @@ test('dashboard can delete attachments from selected draft post', function () {
 
     Livewire::test('pages::dashboard')
         ->set('selectedTopicSlug', $topic->slug)
-        ->set('selectedPostSlug', $post->slug)
+        ->set('selectedPostUlid', $post->ulid)
         ->call('deleteSelectedPostAttachment', $attachment->id)
         ->assertHasNoErrors();
 
@@ -727,8 +719,7 @@ test('dashboard shows new post form in the main panel', function () {
         ->assertSee('id="dashboard-new-post-form"', escape: false)
         ->assertSee('form="dashboard-new-post-form"', escape: false)
         ->assertSee('New post')
-        ->assertSeeText('Title')
-        ->assertSeeText('Body')
+        ->assertSeeText('Post')
         ->assertSee('Save draft')
         ->assertSee('Post')
         ->assertSee('Design');
@@ -778,19 +769,17 @@ test('dashboard can create a draft post in the main panel', function () {
     Livewire::test('pages::dashboard')
         ->set('selectedTopicSlug', $topic->slug)
         ->set('panelAction', 'new-post')
-        ->set('newPostTitle', 'New draft')
         ->set('newPostBody', 'Draft body')
         ->set('newPostTopicId', $topic->id)
         ->call('createDashboardPost')
         ->assertHasNoErrors()
         ->assertSet('panelAction', null)
         ->assertSet('selectedTopicSlug', $topic->slug)
-        ->assertSet('selectedPostSlug', 'new-draft');
+        ->assertSet('selectedPostUlid', fn (?string $ulid): bool => filled($ulid));
 
-    $post = $topic->posts()->where('title', 'New draft')->first();
+    $post = $topic->posts()->where('body', 'Draft body')->first();
 
     expect($post)->not->toBeNull()
-        ->and($post->body)->toBe('Draft body')
         ->and($post->status)->toBe(PostStatus::Draft);
 });
 
@@ -804,20 +793,18 @@ test('dashboard can make a new post actionable in the main panel', function () {
     Livewire::test('pages::dashboard')
         ->set('selectedTopicSlug', $topic->slug)
         ->set('panelAction', 'new-post')
-        ->set('newPostTitle', 'Ready to send')
         ->set('newPostBody', 'Actionable body')
         ->set('newPostTopicId', $topic->id)
         ->call('sendDashboardPost')
         ->assertHasNoErrors()
         ->assertSet('panelAction', null)
         ->assertSet('selectedTopicSlug', $topic->slug)
-        ->assertSet('selectedPostSlug', 'ready-to-send');
+        ->assertSet('selectedPostUlid', fn (?string $ulid): bool => filled($ulid));
 
-    $post = $topic->posts()->where('title', 'Ready to send')->first();
+    $post = $topic->posts()->where('body', 'Actionable body')->first();
     $senderPrincipal = $workspace->principalForUser($user);
 
     expect($post)->not->toBeNull()
-        ->and($post->body)->toBe('Actionable body')
         ->and($post->sender_principal_id)->toBe($senderPrincipal->id)
         ->and($post->status)->toBe(PostStatus::Published);
 });
@@ -834,14 +821,13 @@ test('dashboard can assign agents when sending a new post', function () {
     Livewire::test('pages::dashboard')
         ->set('selectedTopicSlug', $topic->slug)
         ->set('panelAction', 'new-post')
-        ->set('newPostTitle', 'Agent assignment')
         ->set('newPostBody', 'Please both review this.')
         ->set('newPostTopicId', $topic->id)
         ->set('newPostAgentIds', $agents->pluck('id')->all())
         ->call('sendDashboardPost')
         ->assertHasNoErrors();
 
-    $post = $topic->posts()->where('title', 'Agent assignment')->first();
+    $post = $topic->posts()->where('body', 'Please both review this.')->first();
 
     expect($post)->not->toBeNull()
         ->and($post->agentTasks)->toHaveCount(2)
@@ -859,13 +845,12 @@ test('dashboard posts a new post to a topic', function () {
     Livewire::test('pages::dashboard')
         ->set('selectedTopicSlug', $topic->slug)
         ->set('panelAction', 'new-post')
-        ->set('newPostTitle', 'Topic note')
         ->set('newPostBody', 'For the topic')
         ->set('newPostTopicId', $topic->id)
         ->call('sendDashboardPost')
         ->assertHasNoErrors();
 
-    $post = $topic->posts()->where('title', 'Topic note')->first();
+    $post = $topic->posts()->where('body', 'For the topic')->first();
     $senderPrincipal = $workspace->principalForUser($user);
 
     expect($post)->not->toBeNull()
@@ -883,13 +868,12 @@ test('dashboard sets sender when posting a new post', function () {
     Livewire::test('pages::dashboard')
         ->set('selectedTopicSlug', $topic->slug)
         ->set('panelAction', 'new-post')
-        ->set('newPostTitle', 'Topic dashboard post')
         ->set('newPostBody', 'Topic body')
         ->set('newPostTopicId', $topic->id)
         ->call('sendDashboardPost')
         ->assertHasNoErrors();
 
-    $post = $topic->posts()->where('title', 'Topic dashboard post')->first();
+    $post = $topic->posts()->where('body', 'Topic body')->first();
 
     expect($post)->not->toBeNull()
         ->and($post->sender_principal_id)->toBe($senderPrincipal->id)
@@ -1008,22 +992,22 @@ test('topic post list uses insertion order for channel order', function () {
 
     $topic = Topic::factory()->for($workspace)->create();
     Post::factory()->for($topic)->create([
-        'title' => 'Older post',
+        'body' => 'Older post',
         'status' => PostStatus::Published,
     ]);
 
     $firstTie = Post::factory()->for($topic)->create([
-        'title' => 'First tied post',
+        'body' => 'First tied post',
         'status' => PostStatus::Published,
     ]);
 
     $secondTie = Post::factory()->for($topic)->create([
-        'title' => 'Second tied post',
+        'body' => 'Second tied post',
         'status' => PostStatus::Published,
     ]);
 
     Post::factory()->for($topic)->create([
-        'title' => 'Newest post',
+        'body' => 'Newest post',
         'status' => PostStatus::Published,
     ]);
 
@@ -1033,7 +1017,7 @@ test('topic post list uses insertion order for channel order', function () {
         ->get(route('topics.show', ['topic' => $topic->slug]))
         ->assertOk();
 
-    preg_match_all('/data-post-title="([^"]+)"/', $response->getContent(), $matches);
+    preg_match_all('/data-post-preview="([^"]+)"/', $response->getContent(), $matches);
 
     expect($matches[1])->toBe([
         'Older post',

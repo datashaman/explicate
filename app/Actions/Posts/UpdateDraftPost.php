@@ -21,14 +21,12 @@ class UpdateDraftPost
         Post $post,
         Workspace $workspace,
         User $user,
-        string $title,
-        ?string $body,
+        string $body,
         iterable $agentIds,
         array $uploads,
         bool $publish = false,
     ): Post {
         $attributes = [
-            'title' => $title,
             'body' => $body,
         ];
 

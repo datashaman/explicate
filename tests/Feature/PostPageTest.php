@@ -20,14 +20,13 @@ test('post page loads', function () {
     $this->actingAs($this->user)
         ->get(route('posts.show', ['post' => $this->post]))
         ->assertOk()
-        ->assertSee($this->post->title)
         ->assertSee('data-test="post-panel"', escape: false)
         ->assertSee('min-h-[calc(100dvh-4rem)]', escape: false)
         ->assertDontSee('data-flux-breadcrumbs', escape: false);
 });
 
 test('draft post page does not show redundant draft status', function () {
-    $this->post->update(['title' => 'Working note']);
+    $this->post->update(['body' => 'Working note']);
 
     $response = $this->actingAs($this->user)
         ->get(route('posts.show', ['post' => $this->post]))
@@ -188,14 +187,14 @@ test('post list sort values are normalized for deterministic column sorting', fu
 
     $this->post->timestamps = false;
     $this->post->forceFill([
-        'title' => 'Mixed Case Title',
+        'body' => 'Mixed Case Title',
         'status' => PostStatus::Draft,
         'sender_principal_id' => $senderPrincipal->id,
         'updated_at' => now()->setTimestamp(123),
     ])->save();
 
     expect($this->post->fresh()->loadCount('attachments')->load('sender.user')->listSortValues())->toMatchArray([
-        'name' => 'mixed case title',
+        'post' => 'mixed case title',
         'sender' => str($this->user->name)->lower()->toString(),
         'saved' => '00000000000000000123',
         'attachments' => '0000000002',
@@ -223,6 +222,7 @@ test('attachments are saved with a draft post', function () {
 
     Livewire::test('pages::post', ['post' => $this->post])
         ->set('uploads', [$file])
+        ->set('body', 'Attach this')
         ->call('save')
         ->assertHasNoErrors();
 
@@ -236,12 +236,12 @@ test('draft post publishes as a topic post', function () {
     $senderPrincipal = $this->workspace->principalForUser($this->user);
 
     Livewire::test('pages::post', ['post' => $this->post])
-        ->set('title', 'Topic post')
+        ->set('body', 'Topic post')
         ->call('publish')
         ->assertHasNoErrors();
 
     expect($this->post->fresh())
-        ->title->toBe('Topic post')
+        ->body->toBe('Topic post')
         ->sender_principal_id->toBe($senderPrincipal->id)
         ->status->toBe(PostStatus::Published);
 });

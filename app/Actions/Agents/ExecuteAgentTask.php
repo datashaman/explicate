@@ -54,7 +54,6 @@ class ExecuteAgentTask
             $reply = $this->createPost->handle(
                 topic: $task->post->topic,
                 sender: $task->agent->workspace->principalForAgent($task->agent),
-                title: __('Re: :title', ['title' => $task->post->title]),
                 body: $response->text,
                 status: PostStatus::Published,
                 agentIds: [],
@@ -80,9 +79,6 @@ class ExecuteAgentTask
 
     protected function promptFor(Post $post): string
     {
-        return trim(implode("\n\n", array_filter([
-            '# '.$post->title,
-            $post->body,
-        ])));
+        return trim($post->body);
     }
 }
