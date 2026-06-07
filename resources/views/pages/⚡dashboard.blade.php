@@ -1,6 +1,6 @@
 <?php
 
-use App\Actions\Posts\StorePostAttachments;
+use App\Actions\Posts\CreatePost;
 use App\Actions\Posts\UpdateDraftPost;
 use App\Enums\PostFolder;
 use App\Enums\PostListColumn;
@@ -636,17 +636,15 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         ])->validate();
 
         $topic = $workspace->topics()->findOrFail($validated['newPostTopicId']);
-        $senderPrincipal = $workspace->principalForUser(Auth::user());
-
-        $post = $topic->posts()->create([
-            'title' => $validated['newPostTitle'],
-            'body' => $validated['newPostBody'] ?: null,
-            'status' => $status,
-            'sender_principal_id' => $senderPrincipal->id,
-        ]);
-        $post->assignAgents($validated['newPostAgentIds']);
-
-        app(StorePostAttachments::class)->handle($post, $uploads);
+        $post = app(CreatePost::class)->handle(
+            topic: $topic,
+            user: Auth::user(),
+            title: $validated['newPostTitle'],
+            body: $validated['newPostBody'],
+            status: $status,
+            agentIds: $validated['newPostAgentIds'],
+            uploads: $uploads,
+        );
 
         $this->selectedTopicSlug = $topic->slug;
         $this->selectedPostSlug = $post->slug;

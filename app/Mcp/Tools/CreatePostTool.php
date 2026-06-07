@@ -2,11 +2,11 @@
 
 namespace App\Mcp\Tools;
 
+use App\Actions\Posts\CreatePost;
 use App\Enums\PostStatus;
 use App\Mcp\TopicForgeContext;
 use App\Mcp\TopicForgeUris;
 use App\Models\AgentTask;
-use App\Models\Post;
 use App\Models\User;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
@@ -31,7 +31,7 @@ class CreatePostTool extends Tool
             'topic_slug' => ['required', 'string'],
             'title' => ['required', 'string', 'max:255'],
             'body' => ['nullable', 'string'],
-            'status' => ['nullable', 'string', 'in:'.implode(',', array_column(PostStatus::cases(), 'value'))],
+            'status' => ['nullable', 'string', 'in:'.implode(',', PostStatus::values())],
             'agent_ids' => ['nullable', 'array'],
             'agent_ids.*' => ['integer'],
         ]);
@@ -39,17 +39,14 @@ class CreatePostTool extends Tool
         /** @var User $user */
         $user = $this->context->requireUser($request->user());
         $topic = $this->context->topicFor($user, $validated['topic_slug']);
-        $senderPrincipal = $topic->workspace->principalForUser($user);
-
-        $post = new Post([
-            'title' => $validated['title'],
-            'body' => $validated['body'] ?? null,
-            'status' => $validated['status'] ?? PostStatus::Draft->value,
-            'sender_principal_id' => $senderPrincipal->id,
-        ]);
-
-        $topic->posts()->save($post);
-        $post->assignAgents($validated['agent_ids'] ?? []);
+        $post = app(CreatePost::class)->handle(
+            topic: $topic,
+            user: $user,
+            title: $validated['title'],
+            body: $validated['body'] ?? null,
+            status: PostStatus::from($validated['status'] ?? PostStatus::Draft->value),
+            agentIds: $validated['agent_ids'] ?? [],
+        );
 
         return Response::structured([
             'workspace' => $topic->workspace->only(['id', 'name', 'slug']),
