@@ -14,6 +14,20 @@ use App\Models\Thread;
 use App\Models\Topic;
 use App\Models\Workspace;
 use Illuminate\Support\Facades\Queue;
+
+afterEach(function () {
+    $workspacesDir = storage_path('app/workspaces');
+    if (is_dir($workspacesDir)) {
+        $iterator = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($workspacesDir, RecursiveDirectoryIterator::SKIP_DOTS),
+            RecursiveIteratorIterator::CHILD_FIRST
+        );
+        foreach ($iterator as $entry) {
+            $entry->isDir() ? rmdir($entry->getRealPath()) : unlink($entry->getRealPath());
+        }
+        rmdir($workspacesDir);
+    }
+});
 use Laravel\Ai\Ai;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Tools\Request as AiToolRequest;
@@ -242,7 +256,7 @@ test('mention agent tools run against the task workspace context', function () {
     ]));
 
     expect((string) $response)->toContain('notes/context.md');
-    expect($this->workspace->files()->where('path', 'notes/context.md')->exists())->toBeTrue();
-    expect($otherWorkspace->files()->where('path', 'notes/context.md')->exists())->toBeFalse();
+    expect($this->workspace->filesystem()->exists('notes/context.md'))->toBeTrue();
+    expect($otherWorkspace->filesystem()->exists('notes/context.md'))->toBeFalse();
     expect($this->user->fresh()->current_workspace_id)->toBe($otherWorkspace->id);
 });

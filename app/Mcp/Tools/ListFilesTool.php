@@ -6,6 +6,7 @@ use App\Mcp\Concerns\FormatsMcpPayloads;
 use App\Mcp\TopicForgeContext;
 use App\Mcp\TopicForgeUris;
 use App\Models\User;
+use App\Services\WorkspaceFilesystemService;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -31,15 +32,15 @@ class ListFilesTool extends Tool
         /** @var User $user */
         $user = $this->context->requireUser($request->user());
         $workspace = $this->context->workspaceFor($user);
+        $fs = $workspace->filesystem();
 
         return Response::structured([
             'workspace' => [
                 ...$workspace->only(['id', 'name', 'slug']),
                 'resource_uri' => TopicForgeUris::workspaceFiles($workspace),
             ],
-            'files' => $workspace->files()
-                ->get()
-                ->map(fn ($file): array => $this->workspaceFilePayload($file))
+            'files' => collect($this->collectAllEntries($fs, ''))
+                ->map(fn (array $entry): array => $this->workspaceFilePayload($entry, $workspace))
                 ->values()
                 ->all(),
         ]);
@@ -51,5 +52,23 @@ class ListFilesTool extends Tool
     public function schema(JsonSchema $schema): array
     {
         return [];
+    }
+
+    /**
+     * @return array<int, array{name: string, path: string, type: string}>
+     */
+    private function collectAllEntries(WorkspaceFilesystemService $fs, string $directory): array
+    {
+        $entries = $fs->list($directory);
+        $all = [];
+
+        foreach ($entries as $entry) {
+            $all[] = $entry;
+            if ($entry['type'] === 'folder') {
+                $all = array_merge($all, $this->collectAllEntries($fs, $entry['path']));
+            }
+        }
+
+        return $all;
     }
 }

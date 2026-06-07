@@ -5,6 +5,7 @@ namespace App\Mcp\Tools;
 use App\Mcp\Concerns\FormatsMcpPayloads;
 use App\Mcp\TopicForgeContext;
 use App\Models\User;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -33,11 +34,25 @@ class GetFileTool extends Tool
 
         /** @var User $user */
         $user = $this->context->requireUser($request->user());
-        $file = $this->context->workspaceFileFor($user, $validated['path']);
+        $workspace = $this->context->workspaceFor($user);
+        $fs = $workspace->filesystem();
+        $path = $validated['path'];
+
+        if (! $fs->exists($path)) {
+            throw new AuthorizationException('The requested workspace file is not accessible for the authenticated user.');
+        }
+
+        $isDirectory = $fs->isDirectory($path);
+        $entry = [
+            'name' => basename($path),
+            'path' => $path,
+            'type' => $isDirectory ? 'folder' : 'file',
+            'content' => $isDirectory ? null : $fs->read($path),
+        ];
 
         return Response::structured([
-            'workspace' => $file->workspace->only(['id', 'name', 'slug']),
-            'file' => $this->workspaceFilePayload($file, includeContent: true),
+            'workspace' => $workspace->only(['id', 'name', 'slug']),
+            'file' => $this->workspaceFilePayload($entry, $workspace, includeContent: true),
         ]);
     }
 

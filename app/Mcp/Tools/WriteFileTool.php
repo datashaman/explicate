@@ -2,15 +2,10 @@
 
 namespace App\Mcp\Tools;
 
-use App\Enums\WorkspaceFileType;
 use App\Mcp\Concerns\FormatsMcpPayloads;
 use App\Mcp\TopicForgeContext;
 use App\Models\User;
-use App\Models\Workspace;
-use App\Models\WorkspaceFile;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\Rule;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\ResponseFactory;
@@ -30,40 +25,36 @@ class WriteFileTool extends Tool
     {
         $validated = $request->validate([
             'path' => ['required', 'string'],
-            'type' => ['nullable', 'string', Rule::enum(WorkspaceFileType::class)],
+            'type' => ['nullable', 'string', 'in:file,folder'],
             'content' => ['nullable', 'string'],
         ]);
 
         /** @var User $user */
         $user = $this->context->requireUser($request->user());
         $workspace = $this->context->workspaceFor($user);
-        $path = WorkspaceFile::normalizePath($validated['path']);
-        $type = WorkspaceFileType::from($validated['type'] ?? WorkspaceFileType::File->value);
+        $fs = $workspace->filesystem();
+        $path = $validated['path'];
+        $type = $validated['type'] ?? 'file';
 
-        $file = DB::transaction(function () use ($workspace, $path, $type, $validated): WorkspaceFile {
-            $parent = $this->ensureParentFolders($workspace, $path);
-            $name = basename($path);
+        if ($type === 'folder') {
+            $fs->mkdir($path);
+            $content = null;
+        } else {
+            $existingContent = ($fs->exists($path) && ! $fs->isDirectory($path)) ? $fs->read($path) : '';
+            $content = $validated['content'] ?? $existingContent;
+            $fs->write($path, $content);
+        }
 
-            $file = $workspace->files()->where('path', $path)->first();
-
-            if (! $file instanceof WorkspaceFile) {
-                $file = $workspace->files()->make();
-            }
-
-            $file->fill([
-                'parent_id' => $parent?->id,
-                'type' => $type,
-                'name' => $name,
-                'content' => $type === WorkspaceFileType::File ? ($validated['content'] ?? $file->content ?? '') : null,
-            ]);
-            $file->save();
-
-            return $file;
-        });
+        $entry = [
+            'name' => basename($path),
+            'path' => $path,
+            'type' => $type,
+            'content' => $content,
+        ];
 
         return Response::structured([
             'workspace' => $workspace->only(['id', 'name', 'slug']),
-            'file' => $this->workspaceFilePayload($file, includeContent: true),
+            'file' => $this->workspaceFilePayload($entry, $workspace, includeContent: true),
         ]);
     }
 
@@ -78,36 +69,11 @@ class WriteFileTool extends Tool
                 ->required(),
             'type' => $schema->string()
                 ->description('Entry type. Defaults to file.')
-                ->enum(WorkspaceFileType::class)
+                ->enum(['file', 'folder'])
                 ->nullable(),
             'content' => $schema->string()
                 ->description('File content. Ignored for folders.')
                 ->nullable(),
         ];
-    }
-
-    private function ensureParentFolders(Workspace $workspace, string $path): ?WorkspaceFile
-    {
-        $segments = explode('/', $path);
-        array_pop($segments);
-
-        $parent = null;
-
-        foreach ($segments as $segment) {
-            $folderPath = WorkspaceFile::buildPath($parent, $segment);
-            $folder = $workspace->files()->where('path', $folderPath)->first();
-
-            if (! $folder instanceof WorkspaceFile) {
-                $folder = $workspace->files()->create([
-                    'parent_id' => $parent?->id,
-                    'type' => WorkspaceFileType::Folder,
-                    'name' => $segment,
-                ]);
-            }
-
-            $parent = $folder;
-        }
-
-        return $parent;
     }
 }

@@ -5,7 +5,7 @@ namespace App\Mcp\Concerns;
 use App\Mcp\TopicForgeUris;
 use App\Models\AgentTask;
 use App\Models\Post;
-use App\Models\WorkspaceFile;
+use App\Models\Workspace;
 
 trait FormatsMcpPayloads
 {
@@ -75,28 +75,25 @@ trait FormatsMcpPayloads
     }
 
     /**
+     * @param  array{name: string, path: string, type: string, content?: string|null}  $entry
      * @return array<string, mixed>
      */
-    protected function workspaceFilePayload(WorkspaceFile $file, bool $includeContent = false): array
+    protected function workspaceFilePayload(array $entry, Workspace $workspace, bool $includeContent = false): array
     {
-        $file->loadMissing('workspace');
-
         $payload = [
-            'id' => $file->id,
-            'type' => $file->type->value,
-            'name' => $file->name,
-            'path' => $file->path,
-            'parent_id' => $file->parent_id,
-            'resource_uri' => TopicForgeUris::workspaceFile($file),
+            'type' => $entry['type'],
+            'name' => $entry['name'],
+            'path' => $entry['path'],
+            'resource_uri' => TopicForgeUris::workspaceFile($workspace, $entry['path']),
             'dashboard_url' => route('dashboard', [
                 'action' => 'files',
-                'file' => $file->id,
+                'file' => $entry['path'],
                 'panel' => 'posts',
             ]),
         ];
 
         if ($includeContent) {
-            $payload['content'] = $file->content;
+            $payload['content'] = $entry['content'] ?? null;
         }
 
         return $payload;
