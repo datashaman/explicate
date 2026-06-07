@@ -60,7 +60,7 @@ class GitRepositoryService
 
     private function pull(string $path): void
     {
-        $this->runGit(['git', 'pull', '--ff-only'], workingDir: $path);
+        $this->runGit(['git', 'pull', '--ff-only', 'origin', $this->repository->branch], workingDir: $path);
     }
 
     /**
