@@ -92,18 +92,6 @@
                 </div>
 
                 <div class="hidden shrink-0 items-center gap-3 md:flex">
-                    @isset($showArchivedModel)
-                        <div x-data="{
-                            init() {
-                                const stored = localStorage.getItem('show-archived');
-                                if (stored !== null) $wire.set('{{ $showArchivedModel }}', stored === 'true');
-                                $watch('$wire.{{ $showArchivedModel }}', v => localStorage.setItem('show-archived', v));
-                            }
-                        }">
-                            <flux:checkbox wire:model.live="{{ $showArchivedModel }}" :label="__('Show archived')" />
-                        </div>
-                    @endisset
-
                     @unless ($usesPostMessages)
                     <div class="flex items-center rounded-md border border-neutral-200 dark:border-white/10">
                         <button @click="setView('icons')" title="{{ __('Icon view') }}"
@@ -137,18 +125,6 @@
                 class="flex w-full flex-wrap items-center justify-between gap-2 md:hidden"
                 data-test="folder-controls-drawer"
             >
-                @isset($showArchivedModel)
-                    <div x-data="{
-                        init() {
-                            const stored = localStorage.getItem('show-archived');
-                            if (stored !== null) $wire.set('{{ $showArchivedModel }}', stored === 'true');
-                            $watch('$wire.{{ $showArchivedModel }}', v => localStorage.setItem('show-archived', v));
-                        }
-                    }">
-                        <flux:checkbox wire:model.live="{{ $showArchivedModel }}" :label="__('Show archived')" />
-                    </div>
-                @endisset
-
                 @unless ($usesPostMessages)
                 <div class="flex items-center rounded-md border border-neutral-200 dark:border-white/10">
                     <button @click="setView('icons')" title="{{ __('Icon view') }}"
@@ -223,18 +199,6 @@
             </div>
 
             <div class="flex w-full flex-wrap items-center justify-between gap-2 sm:w-auto sm:shrink-0 sm:flex-nowrap sm:justify-end sm:gap-3">
-                @isset($showArchivedModel)
-                    <div x-data="{
-                        init() {
-                            const stored = localStorage.getItem('show-archived');
-                            if (stored !== null) $wire.set('{{ $showArchivedModel }}', stored === 'true');
-                            $watch('$wire.{{ $showArchivedModel }}', v => localStorage.setItem('show-archived', v));
-                        }
-                    }">
-                        <flux:checkbox wire:model.live="{{ $showArchivedModel }}" :label="__('Show archived')" />
-                    </div>
-                @endisset
-
                 @unless ($usesPostMessages)
                 <div class="flex items-center rounded-md border border-neutral-200 dark:border-white/10">
                     <button @click="setView('icons')" title="{{ __('Icon view') }}"
@@ -298,22 +262,38 @@
                                 data-sort-{{ $sortKey }}="{{ $sortValue }}"
                             @endforeach
                         >
-                            <x-post-message :post="$post" :show-topic="$showPostMessageTopic ?? true" :show-reply-affordance="true" :reply-href="$item['href']">
-                                <x-slot:actions>
-                                    @if ($post->status === \App\Enums\PostStatus::Published)
-                                        @isset($moveToDraftAction)
-                                            <flux:menu.item wire:click="{{ $moveToDraftAction }}({{ $post->id }})" icon="pencil-square">{{ __('Move to drafts') }}</flux:menu.item>
-                                        @endisset
-                                        @isset($archiveAction)
-                                            <flux:menu.item wire:click="{{ $archiveAction }}({{ $post->id }})" icon="archive-box">{{ __('Archive') }}</flux:menu.item>
-                                        @endisset
-                                    @elseif ($post->status === \App\Enums\PostStatus::Archived)
-                                        @isset($unarchiveAction)
-                                            <flux:menu.item wire:click="{{ $unarchiveAction }}({{ $post->id }})" icon="archive-box-x-mark">{{ __('Unarchive') }}</flux:menu.item>
-                                        @endisset
-                                    @endif
-                                </x-slot:actions>
-                            </x-post-message>
+                            @if (($editingPostId ?? null) === $post->id)
+                                <form wire:submit="{{ $saveEditingPostAction }}" class="ml-13 space-y-3" data-test="post-inline-edit-form">
+                                    <flux:textarea wire:model="{{ $editingPostBodyModel }}" rows="6" required data-test="post-inline-edit-body" />
+
+                                    <div class="flex justify-end gap-2">
+                                        <flux:button type="button" variant="filled" size="sm" wire:click="{{ $cancelEditingPostAction }}">{{ __('Cancel') }}</flux:button>
+                                        <flux:button type="submit" variant="primary" size="sm">{{ __('Save') }}</flux:button>
+                                    </div>
+                                </form>
+                            @else
+                                <x-post-message :post="$post" :show-topic="$showPostMessageTopic ?? true" :show-reply-affordance="! ($item['can_restore'] ?? false)" :reply-href="$item['href']">
+                                    <x-slot:actions>
+                                        @if ($item['can_restore'] ?? false)
+                                            @isset($restorePostAction)
+                                                <flux:menu.item wire:click="{{ $restorePostAction }}({{ $post->id }})" icon="arrow-uturn-left">{{ __('Restore') }}</flux:menu.item>
+                                            @endisset
+
+                                            @isset($permanentlyDeletePostAction)
+                                                <flux:menu.item wire:click="{{ $permanentlyDeletePostAction }}({{ $post->id }})" wire:confirm.prompt="{{ __('This cannot be undone.') }}&#10;&#10;{{ __('Type DELETE to confirm') }}|DELETE" icon="trash" variant="danger">{{ __('Delete permanently') }}</flux:menu.item>
+                                            @endisset
+                                        @elseif ($item['can_modify'] ?? false)
+                                            @isset($editPostAction)
+                                                <flux:menu.item wire:click="{{ $editPostAction }}({{ $post->id }})" icon="pencil-square">{{ __('Edit') }}</flux:menu.item>
+                                            @endisset
+
+                                            @isset($deletePostAction)
+                                                <flux:menu.item wire:click="{{ $deletePostAction }}({{ $post->id }})" wire:confirm="{{ __('Delete this post?') }}" icon="trash">{{ __('Delete') }}</flux:menu.item>
+                                            @endisset
+                                        @endif
+                                    </x-slot:actions>
+                                </x-post-message>
+                            @endif
                         </div>
                     @endforeach
                 </div>

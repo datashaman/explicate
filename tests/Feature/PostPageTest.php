@@ -93,7 +93,10 @@ test('published post page shows sender and topic', function () {
         ->assertSee(e($postedAt->timezone($this->user->displayTimezone())->isoFormat('LLLL')), escape: false)
         ->assertSee($this->user->name)
         ->assertSee('#'.$this->topic->name)
-        ->assertSee('Move to drafts')
+        ->assertSee('Edit')
+        ->assertSee('Delete')
+        ->assertDontSee('Archive')
+        ->assertDontSee('Move to drafts')
         ->assertDontSee('Return to draft');
 });
 

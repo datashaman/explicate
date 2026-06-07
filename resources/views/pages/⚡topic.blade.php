@@ -7,6 +7,7 @@ use App\Enums\Provider;
 use App\Enums\ReasoningEffort;
 use App\Models\Agent;
 use App\Models\Post;
+use App\Models\Principal;
 use App\Models\Topic;
 use Flux\Flux;
 use Illuminate\Support\Facades\Auth;
@@ -31,7 +32,9 @@ new #[Layout('layouts::workspace'), Title('Topic')] class extends Component {
 
     public string $agentPrompt = '';
 
-    public bool $showArchived = false;
+    public ?int $editingPostId = null;
+
+    public string $editingPostBody = '';
 
     public function mount(Topic $topic): void
     {
@@ -66,7 +69,6 @@ new #[Layout('layouts::workspace'), Title('Topic')] class extends Component {
             ->with(['agentTasks.agent', 'attachments', 'sender.user', 'sender.agent', 'topic'])
             ->withCount('attachments')
             ->reorder()
-            ->when(! $this->showArchived, fn ($q) => $q->where('status', '!=', PostStatus::Archived))
             ->where('status', '!=', PostStatus::Draft)
             ->orderBy('id')
             ->get()
@@ -77,6 +79,8 @@ new #[Layout('layouts::workspace'), Title('Topic')] class extends Component {
                 'meta' => $post->listMeta(showSender: true, timezone: Auth::user()->displayTimezone()),
                 'attachments_count' => $post->attachments_count,
                 'sort' => $post->listSortValues(dateKey: PostListColumn::Sent->value),
+                'can_modify' => $this->canModifyPost($post),
+                'can_restore' => false,
                 'badge' => $post->status === PostStatus::Published ? null : [
                     'label' => $post->status->label(),
                     'color' => $post->status->color(),
@@ -94,22 +98,63 @@ new #[Layout('layouts::workspace'), Title('Topic')] class extends Component {
         Flux::toast(variant: 'success', text: __('Moved to drafts.'));
     }
 
-    public function archivePost(int $postId): void
+    public function canModifyPost(Post $post): bool
     {
-        $post = $this->topic->posts()->findOrFail($postId);
-
-        $post->archive();
-
-        Flux::toast(variant: 'success', text: __('Archived.'));
+        return $post->sender?->type === Principal::TypeUser
+            && $post->sender?->user_id === Auth::id()
+            && ! $post->trashed();
     }
 
-    public function unarchivePost(int $postId): void
+    public function beginEditingPost(int $postId): void
     {
         $post = $this->topic->posts()->findOrFail($postId);
 
-        $post->moveToDraft();
+        abort_unless($this->canModifyPost($post), 403);
 
-        Flux::toast(variant: 'success', text: __('Moved to drafts.'));
+        $this->editingPostId = $post->id;
+        $this->editingPostBody = $post->body ?? '';
+    }
+
+    public function cancelEditingPost(): void
+    {
+        $this->reset('editingPostId', 'editingPostBody');
+    }
+
+    public function saveEditingPost(): void
+    {
+        abort_unless($this->editingPostId, 404);
+
+        $post = $this->topic->posts()->findOrFail($this->editingPostId);
+
+        abort_unless($this->canModifyPost($post), 403);
+
+        $validated = $this->validate([
+            'editingPostBody' => ['required', 'string'],
+        ], [], [
+            'editingPostBody' => __('post'),
+        ]);
+
+        $post->update(['body' => $validated['editingPostBody']]);
+
+        $this->cancelEditingPost();
+
+        Flux::toast(variant: 'success', text: __('Post updated.'));
+    }
+
+    public function deletePost(int $postId): void
+    {
+        $post = $this->topic->posts()->findOrFail($postId);
+
+        abort_unless($this->canModifyPost($post), 403);
+
+        $post->forceFill(['deleted_by_user_id' => Auth::id()])->save();
+        $post->delete();
+
+        if ($this->editingPostId === $post->id) {
+            $this->cancelEditingPost();
+        }
+
+        Flux::toast(variant: 'success', text: __('Post deleted.'));
     }
 
     /**
@@ -204,7 +249,6 @@ new #[Layout('layouts::workspace'), Title('Topic')] class extends Component {
                 'createHref' => route('posts.create', ['topic' => $topic->slug]),
                 'createLabel' => __('New post'),
                 'createTest' => 'topic-new-post-button',
-                'showArchivedModel' => 'showArchived',
                 'listColumns' => [
                     PostListColumn::Sender->toColumn(),
                     PostListColumn::Post->toColumn(),
@@ -213,9 +257,12 @@ new #[Layout('layouts::workspace'), Title('Topic')] class extends Component {
                 ],
                 'listDefaultSort' => PostListColumn::Sent->value,
                 'listDefaultSortDirection' => 'desc',
-                'moveToDraftAction' => 'movePostToDraft',
-                'archiveAction' => 'archivePost',
-                'unarchiveAction' => 'unarchivePost',
+                'editingPostId' => $editingPostId,
+                'editingPostBodyModel' => 'editingPostBody',
+                'editPostAction' => 'beginEditingPost',
+                'saveEditingPostAction' => 'saveEditingPost',
+                'cancelEditingPostAction' => 'cancelEditingPost',
+                'deletePostAction' => 'deletePost',
                 'toolbarClass' => 'border-b border-neutral-300 bg-emerald-50 px-4 py-3 dark:border-white/10 dark:bg-emerald-500/10',
                 'rootClass' => 'flex flex-col xl:h-full',
                 'contentClass' => 'overflow-auto px-4 py-4 xl:flex-1 xl:min-h-0',

@@ -99,7 +99,9 @@ test('dashboard shows topics as folders for current workspace', function () {
         ->assertSee('Topics')
         ->assertSee('Feed')
         ->assertSee('Drafts')
-        ->assertSee('Archived')
+        ->assertSee('Bin')
+        ->assertDontSee('Archived')
+        ->assertDontSee('Show archived')
         ->assertSee($topic->name)
         ->assertSee($publishedPost->body)
         ->assertDontSee($post->body)
@@ -127,7 +129,7 @@ test('dashboard shows system folders with workspace post counts', function () {
         ->assertOk()
         ->assertSee(e(route('dashboard')), escape: false)
         ->assertSee(e(route('posts.drafts')), escape: false)
-        ->assertSee(e(route('posts.archived')), escape: false)
+        ->assertSee(e(route('posts.bin')), escape: false)
         ->assertSee('data-test="system-folder-feed-count"', escape: false)
         ->assertSee('data-test="system-folder-drafts-count"', escape: false);
 });
@@ -334,90 +336,110 @@ test('dashboard post panel return label matches selected topic context', functio
         ->assertSeeText('Design');
 });
 
-test('dashboard archived folder shows archived feed', function () {
+test('dashboard bin folder shows current user deleted posts', function () {
     [$user, $workspace] = userWithWorkspace();
+    [$member, $memberPrincipal] = teamMemberPrincipal($user, $workspace);
 
     $topic = Topic::factory()->for($workspace)->create(['name' => 'Design', 'slug' => 'design']);
     $userPrincipal = $workspace->principalForUser($user);
 
-    $archivedPost = Post::factory()->for($topic)->create([
-        'body' => 'Archived post',
-        'status' => PostStatus::Archived,
+    $deletedPost = Post::factory()->trashed()->for($topic)->create([
+        'body' => 'Deleted post',
+        'status' => PostStatus::Published,
         'sender_principal_id' => $userPrincipal->id,
+        'deleted_by_user_id' => $user->id,
     ]);
-    $archivedPost->timestamps = false;
-    $archivedPost->forceFill(['created_at' => now()->subMinutes(11)])->save();
+    $deletedPost->timestamps = false;
+    $deletedPost->forceFill(['updated_at' => now()->subMinutes(11)])->save();
+
+    Post::factory()->trashed()->for($topic)->create([
+        'body' => 'Member deleted post',
+        'status' => PostStatus::Published,
+        'sender_principal_id' => $memberPrincipal->id,
+        'deleted_by_user_id' => $member->id,
+    ]);
 
     $response = $this->actingAs($user)
-        ->get(route('posts.archived'))
+        ->get(route('posts.bin'))
         ->assertOk()
         ->assertSee('data-test="folder-title"', escape: false)
-        ->assertSeeText('Archived')
-        ->assertSee('Archived post')
+        ->assertSeeText('Bin')
+        ->assertSee('Deleted post')
+        ->assertDontSee('Member deleted post')
         ->assertDontSeeText('Author')
         ->assertSee('data-test="post-message"', escape: false)
         ->assertSee('data-test="post-message-actions"', escape: false)
         ->assertDontSee('data-test="folder-list-sort-header"', escape: false)
         ->assertSeeText($user->name)
         ->assertSee('#Design')
-        ->assertSeeText('11 minutes ago');
+        ->assertSee('Restore')
+        ->assertSee('Delete permanently');
 
     $response->assertDontSee('data-test="folder-item-badge"', escape: false);
 });
 
-test('dashboard archived toggle only filters the selected posts list', function () {
+test('dashboard restores posts from the bin', function () {
     [$user, $workspace] = userWithWorkspace();
 
-    $design = Topic::factory()->for($workspace)->create([
-        'name' => 'Design',
-        'slug' => 'design',
-    ]);
-
-    $engineering = Topic::factory()->for($workspace)->create([
-        'name' => 'Engineering',
-        'slug' => 'engineering',
-    ]);
-
-    Post::factory()->for($design)->create([
-        'body' => 'Design draft',
-        'status' => PostStatus::Draft,
-    ]);
-
-    Post::factory()->for($design)->create([
-        'body' => 'Design published',
+    $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
+    $post = Post::factory()->trashed()->for($topic)->create([
+        'body' => 'Deleted post',
         'status' => PostStatus::Published,
+        'sender_principal_id' => $workspace->principalForUser($user)->id,
+        'deleted_by_user_id' => $user->id,
     ]);
-
-    Post::factory()->for($design)->create([
-        'body' => 'Design archived',
-        'status' => PostStatus::Archived,
-    ]);
-
-    Post::factory()->count(9)->for($engineering)->create([
-        'status' => PostStatus::Archived,
-    ]);
-
-    $this->actingAs($user)
-        ->get(route('dashboard', ['topic' => $design->slug]))
-        ->assertOk()
-        ->assertDontSee('Design draft')
-        ->assertDontSee('data-test="topic-design-draft-count"', escape: false)
-        ->assertDontSee('title="Draft posts"', escape: false)
-        ->assertSee('data-test="topic-design-published-count"', escape: false)
-        ->assertSee('title="Feed"', escape: false)
-        ->assertDontSee('Design archived')
-        ->assertDontSee('data-test="topic-design-archived-count"', escape: false)
-        ->assertDontSee('data-test="topic-engineering-archived-count"', escape: false);
 
     Livewire::actingAs($user)
         ->test('pages::dashboard')
-        ->set('selectedTopicSlug', $design->slug)
-        ->set('showArchived', true)
-        ->assertSee('Design archived')
-        ->assertSee('data-test="topic-design-archived-count"', escape: false)
-        ->assertSee('title="Archived posts"', escape: false)
-        ->assertSee('data-count="1"', escape: false)
-        ->assertDontSee('data-test="topic-engineering-archived-count"', escape: false);
+        ->set('selectedSystemFolderSlug', 'bin')
+        ->call('restorePost', $post->id)
+        ->assertHasNoErrors();
+
+    expect($post->fresh()->trashed())->toBeFalse()
+        ->and($post->fresh()->deleted_by_user_id)->toBeNull();
+});
+
+test('dashboard permanently deletes posts from the bin', function () {
+    [$user, $workspace] = userWithWorkspace();
+
+    $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
+    $post = Post::factory()->trashed()->for($topic)->create([
+        'body' => 'Delete forever',
+        'status' => PostStatus::Published,
+        'sender_principal_id' => $workspace->principalForUser($user)->id,
+        'deleted_by_user_id' => $user->id,
+    ]);
+
+    Livewire::actingAs($user)
+        ->test('pages::dashboard')
+        ->set('selectedSystemFolderSlug', 'bin')
+        ->set('selectedPostUlid', $post->ulid)
+        ->call('permanentlyDeletePost', $post->id)
+        ->assertHasNoErrors()
+        ->assertSet('selectedPostUlid', null);
+
+    expect(Post::withTrashed()->find($post->id))->toBeNull();
+});
+
+test('dashboard only lets the deleting user permanently delete a bin post', function () {
+    [$user, $workspace] = userWithWorkspace();
+    [$member, $memberPrincipal] = teamMemberPrincipal($user, $workspace);
+
+    $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
+    $post = Post::factory()->trashed()->for($topic)->create([
+        'body' => 'Member deleted post',
+        'status' => PostStatus::Published,
+        'sender_principal_id' => $memberPrincipal->id,
+        'deleted_by_user_id' => $member->id,
+    ]);
+
+    Livewire::actingAs($user)
+        ->test('pages::dashboard')
+        ->set('selectedSystemFolderSlug', 'bin')
+        ->call('permanentlyDeletePost', $post->id)
+        ->assertForbidden();
+
+    expect(Post::withTrashed()->find($post->id))->not->toBeNull();
 });
 
 test('dashboard routes do not include team or workspace slugs', function () {
@@ -917,6 +939,82 @@ test('dashboard can save selected draft post', function () {
     expect($post->fresh()->body)->toBe('Updated body');
 });
 
+test('dashboard creator can edit a published post inline', function () {
+    [$user, $workspace] = userWithWorkspace();
+
+    $topic = Topic::factory()->for($workspace)->create(['name' => 'Design', 'slug' => 'design']);
+    $post = Post::factory()->for($topic)->create([
+        'body' => 'Original note',
+        'status' => PostStatus::Published,
+        'sender_principal_id' => $workspace->principalForUser($user)->id,
+    ]);
+
+    Livewire::actingAs($user)
+        ->test('pages::dashboard')
+        ->set('selectedTopicSlug', $topic->slug)
+        ->call('beginEditingPost', $post->id)
+        ->assertSet('editingPostId', $post->id)
+        ->assertSet('editingPostBody', 'Original note')
+        ->assertSee('data-test="post-inline-edit-body"', escape: false)
+        ->set('editingPostBody', 'Updated published note')
+        ->call('saveEditingPost')
+        ->assertHasNoErrors()
+        ->assertSet('editingPostId', null);
+
+    expect($post->fresh()->body)->toBe('Updated published note');
+});
+
+test('dashboard creator can delete a published post into the bin', function () {
+    [$user, $workspace] = userWithWorkspace();
+
+    $topic = Topic::factory()->for($workspace)->create(['name' => 'Design', 'slug' => 'design']);
+    $post = Post::factory()->for($topic)->create([
+        'body' => 'Delete me',
+        'status' => PostStatus::Published,
+        'sender_principal_id' => $workspace->principalForUser($user)->id,
+    ]);
+
+    Livewire::actingAs($user)
+        ->test('pages::dashboard')
+        ->set('selectedTopicSlug', $topic->slug)
+        ->set('selectedPostUlid', $post->ulid)
+        ->call('deletePost', $post->id)
+        ->assertHasNoErrors()
+        ->assertSet('selectedPostUlid', null);
+
+    $trashedPost = Post::withTrashed()->find($post->id);
+
+    expect($trashedPost)->not->toBeNull()
+        ->and($trashedPost->trashed())->toBeTrue()
+        ->and($trashedPost->deleted_by_user_id)->toBe($user->id);
+});
+
+test('dashboard only lets the post creator edit or delete a post', function () {
+    [$user, $workspace] = userWithWorkspace();
+    [, $memberPrincipal] = teamMemberPrincipal($user, $workspace);
+
+    $topic = Topic::factory()->for($workspace)->create(['name' => 'Design', 'slug' => 'design']);
+    $post = Post::factory()->for($topic)->create([
+        'body' => 'Member note',
+        'status' => PostStatus::Published,
+        'sender_principal_id' => $memberPrincipal->id,
+    ]);
+
+    Livewire::actingAs($user)
+        ->test('pages::dashboard')
+        ->set('selectedTopicSlug', $topic->slug)
+        ->call('beginEditingPost', $post->id)
+        ->assertForbidden();
+
+    Livewire::actingAs($user)
+        ->test('pages::dashboard')
+        ->set('selectedTopicSlug', $topic->slug)
+        ->call('deletePost', $post->id)
+        ->assertForbidden();
+
+    expect($post->fresh()->trashed())->toBeFalse();
+});
+
 test('dashboard published post panel shows sender and topic', function () {
     [$user, $workspace] = userWithWorkspace();
 
@@ -934,7 +1032,10 @@ test('dashboard published post panel shows sender and topic', function () {
         ->assertSee('data-test="post-message-sender"', escape: false)
         ->assertSee($user->name)
         ->assertDontSee('#Design')
-        ->assertSee('Move to drafts')
+        ->assertSee('Edit')
+        ->assertSee('Delete')
+        ->assertDontSee('Archive')
+        ->assertDontSee('Move to drafts')
         ->assertDontSee('Return to draft');
 });
 

@@ -16,7 +16,6 @@
     'saveTest' => null,
     'publishAction',
     'publishTest' => null,
-    'archiveAction' => null,
     'loadingTarget',
     'dataTest' => null,
 ])
@@ -69,10 +68,6 @@
             <flux:button :href="$returnHref" wire:navigate variant="filled">
                 {{ __('Cancel') }}
             </flux:button>
-        @endif
-
-        @if ($archiveAction)
-            <flux:button wire:click="{{ $archiveAction }}" type="button" variant="filled" icon="archive-box" icon:variant="outline">{{ __('Archive') }}</flux:button>
         @endif
 
         <flux:button type="submit" form="{{ $formId }}" variant="filled" data-test="{{ $saveTest }}" wire:loading.attr="disabled" wire:target="{{ $loadingTarget }}">{{ __('Save draft') }}</flux:button>

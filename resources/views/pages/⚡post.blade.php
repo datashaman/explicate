@@ -4,6 +4,7 @@ use App\Actions\Posts\DeletePostAttachment;
 use App\Actions\Posts\UpdateDraftPost;
 use App\Enums\PostStatus;
 use App\Models\Post;
+use App\Models\Principal;
 use App\Models\Topic;
 use Flux\Flux;
 use Illuminate\Support\Facades\Auth;
@@ -22,6 +23,10 @@ new #[Layout('layouts::workspace'), Title('Post')] class extends Component {
     public Post $post;
 
     public string $body = '';
+
+    public ?int $editingPostId = null;
+
+    public string $editingPostBody = '';
 
     /** @var array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile> */
     public array $uploads = [];
@@ -112,16 +117,68 @@ new #[Layout('layouts::workspace'), Title('Post')] class extends Component {
         $this->body = $this->post->body ?? '';
     }
 
-    public function archive(): void
+    public function canModifyPost(Post $post): bool
     {
-        $this->post->archive();
+        return $post->sender?->type === Principal::TypeUser
+            && $post->sender?->user_id === Auth::id()
+            && ! $post->trashed();
     }
 
-    public function unarchive(): void
+    public function beginEditingPost(int $postId): void
     {
-        $this->post->moveToDraft();
+        $post = $this->topic->posts()->findOrFail($postId);
 
-        $this->body = $this->post->body ?? '';
+        abort_unless($this->canModifyPost($post), 403);
+
+        $this->editingPostId = $post->id;
+        $this->editingPostBody = $post->body ?? '';
+    }
+
+    public function cancelEditingPost(): void
+    {
+        $this->reset('editingPostId', 'editingPostBody');
+    }
+
+    public function saveEditingPost(): void
+    {
+        abort_unless($this->editingPostId, 404);
+
+        $post = $this->topic->posts()->findOrFail($this->editingPostId);
+
+        abort_unless($this->canModifyPost($post), 403);
+
+        $validated = $this->validate([
+            'editingPostBody' => ['required', 'string'],
+        ], [], [
+            'editingPostBody' => __('post'),
+        ]);
+
+        $post->update(['body' => $validated['editingPostBody']]);
+        $this->post = $this->post->fresh(['agentTasks.agent', 'attachments', 'sender.user', 'sender.agent', 'topic']);
+
+        $this->cancelEditingPost();
+
+        Flux::toast(variant: 'success', text: __('Post updated.'));
+    }
+
+    public function deletePost(int $postId): void
+    {
+        $post = $this->topic->posts()->findOrFail($postId);
+
+        abort_unless($this->canModifyPost($post), 403);
+
+        $post->forceFill(['deleted_by_user_id' => Auth::id()])->save();
+        $post->delete();
+
+        if ($post->is($this->post)) {
+            $this->redirectRoute('dashboard', ['topic' => $this->topic->slug, 'panel' => 'posts'], navigate: true);
+        }
+
+        if ($this->editingPostId === $post->id) {
+            $this->cancelEditingPost();
+        }
+
+        Flux::toast(variant: 'success', text: __('Post deleted.'));
     }
 
     public function deleteAttachment(int $attachmentId): void
@@ -153,7 +210,6 @@ new #[Layout('layouts::workspace'), Title('Post')] class extends Component {
                 'uploadModel' => 'uploads',
                 'uploadError' => 'uploads.*',
                 'deleteAction' => 'deleteAttachment',
-                'archiveAction' => 'archive',
                 'publishAction' => 'publish',
                 'loadingTarget' => 'uploads',
             ])
@@ -164,18 +220,25 @@ new #[Layout('layouts::workspace'), Title('Post')] class extends Component {
                 @endphp
 
                 @foreach ($threadPosts as $threadPost)
+                    @if ($editingPostId === $threadPost->id)
+                        <form wire:submit="saveEditingPost" class="ml-13 space-y-3" data-test="post-inline-edit-form">
+                            <flux:textarea wire:model="editingPostBody" rows="6" required data-test="post-inline-edit-body" />
+
+                            <div class="flex justify-end gap-2">
+                                <flux:button type="button" variant="filled" size="sm" wire:click="cancelEditingPost">{{ __('Cancel') }}</flux:button>
+                                <flux:button type="submit" variant="primary" size="sm">{{ __('Save') }}</flux:button>
+                            </div>
+                        </form>
+                    @else
 	                    <x-post-message :post="$threadPost">
-                        @if ($threadPost->is($post))
                             <x-slot:actions>
-                                @if ($post->status === App\Enums\PostStatus::Published)
-                                    <flux:menu.item wire:click="unpublish" icon="pencil-square">{{ __('Move to drafts') }}</flux:menu.item>
-                                    <flux:menu.item wire:click="archive" icon="archive-box">{{ __('Archive') }}</flux:menu.item>
-                                @elseif ($post->status === App\Enums\PostStatus::Archived)
-                                    <flux:menu.item wire:click="unarchive" icon="archive-box-x-mark">{{ __('Unarchive') }}</flux:menu.item>
+                                @if ($this->canModifyPost($threadPost))
+                                    <flux:menu.item wire:click="beginEditingPost({{ $threadPost->id }})" icon="pencil-square">{{ __('Edit') }}</flux:menu.item>
+                                    <flux:menu.item wire:click="deletePost({{ $threadPost->id }})" wire:confirm="{{ __('Delete this post?') }}" icon="trash">{{ __('Delete') }}</flux:menu.item>
                                 @endif
                             </x-slot:actions>
-	                        @endif
 	                    </x-post-message>
+                    @endif
 
 	                    @if ($loop->first && ! $loop->last)
 	                        <div class="ml-13 border-t border-neutral-200 dark:border-white/10" data-test="thread-op-replies-divider"></div>

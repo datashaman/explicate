@@ -128,8 +128,10 @@ class DatabaseSeeder extends Seeder
 
         Post::factory()->for($topicsByName['Engineering'])->create([
             'body' => "Model fallback strategy\n\nCompare provider fallback order and expected quality tradeoffs.",
-            'status' => PostStatus::Archived,
+            'status' => PostStatus::Published,
             'sender_principal_id' => $senderPrincipal->id,
+            'deleted_by_user_id' => $user->id,
+            'deleted_at' => now()->subMinutes(20),
         ]);
 
         Post::factory()->for($topicsByName['Marketing'])->create([

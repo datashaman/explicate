@@ -18,7 +18,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
-#[Fillable(['topic_id', 'thread_id', 'sender_principal_id', 'ulid', 'body', 'status'])]
+#[Fillable(['topic_id', 'thread_id', 'sender_principal_id', 'ulid', 'body', 'status', 'deleted_by_user_id'])]
 class Post extends Model
 {
     /** @use HasFactory<PostFactory> */
@@ -52,12 +52,16 @@ class Post extends Model
                 $post->syncMentionedAgentTasks();
             }
 
-            if ($post->wasChanged(['status', 'body', 'thread_id', 'sender_principal_id'])) {
+            if ($post->wasChanged(['status', 'body', 'thread_id', 'sender_principal_id', 'deleted_by_user_id'])) {
                 $post->broadcastWorkspaceChange();
             }
         });
 
         static::deleted(function (Post $post) {
+            $post->broadcastWorkspaceChange();
+        });
+
+        static::restored(function (Post $post) {
             $post->broadcastWorkspaceChange();
         });
     }
@@ -103,11 +107,6 @@ class Post extends Model
     public function moveToDraft(): void
     {
         $this->update(['status' => PostStatus::Draft]);
-    }
-
-    public function archive(): void
-    {
-        $this->update(['status' => PostStatus::Archived]);
     }
 
     /**
@@ -200,6 +199,14 @@ class Post extends Model
     public function sender(): BelongsTo
     {
         return $this->belongsTo(Principal::class, 'sender_principal_id');
+    }
+
+    /**
+     * @return BelongsTo<User, $this>
+     */
+    public function deletedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'deleted_by_user_id');
     }
 
     /**

@@ -24,7 +24,7 @@ test('database seeder creates demo workspace content', function () {
     expect($user->currentWorkspace->agents)->toHaveCount(4);
 
     $senderPrincipal = $user->currentWorkspace->principalForUser($user);
-    $workspacePosts = Post::query()
+    $workspacePosts = Post::withTrashed()
         ->whereHas('topic', fn ($query) => $query->whereBelongsTo($user->currentWorkspace))
         ->get();
 
@@ -42,8 +42,9 @@ test('database seeder creates demo workspace content', function () {
 
     expect($engineeringTopic)->not->toBeNull();
     expect($engineeringTopic->slug)->toBe('engineering');
-    expect($engineeringTopic->posts()->count())->toBeGreaterThanOrEqual(2);
-    expect($engineeringTopic->posts()->whereNotNull('ulid')->count())->toBe($engineeringTopic->posts()->count());
+    expect($engineeringTopic->posts()->withTrashed()->count())->toBeGreaterThanOrEqual(2);
+    expect($engineeringTopic->posts()->withTrashed()->whereNotNull('ulid')->count())->toBe($engineeringTopic->posts()->withTrashed()->count());
+    expect($engineeringTopic->posts()->onlyTrashed()->where('deleted_by_user_id', $user->id)->count())->toBe(1);
 
     $writerAgent = $user->currentWorkspace->agents()->where('name', 'Writer')->first();
 

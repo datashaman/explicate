@@ -13,6 +13,7 @@ use App\Enums\ReasoningEffort;
 use App\Enums\WorkspaceFileType;
 use App\Models\Agent;
 use App\Models\Post;
+use App\Models\Principal;
 use App\Models\Thread;
 use App\Models\Topic;
 use App\Models\WorkspaceFile;
@@ -75,9 +76,11 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
     public string $selectedAgentPrompt = '';
 
-    public bool $showArchived = false;
-
     public string $postBody = '';
+
+    public ?int $editingPostId = null;
+
+    public string $editingPostBody = '';
 
     public string $newPostBody = '';
 
@@ -192,11 +195,16 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             return null;
         }
 
-        return Post::query()
+        $query = Post::query()
             ->with(['agentTasks.agent', 'attachments', 'sender.user', 'sender.agent', 'topic'])
             ->whereHas('topic', fn ($query) => $query->where('workspace_id', $workspace->id))
-            ->where('ulid', $this->selectedPostUlid)
-            ->first();
+            ->where('ulid', $this->selectedPostUlid);
+
+        if ($this->selectedSystemFolder() === PostFolder::Bin) {
+            $query->onlyTrashed()->where('deleted_by_user_id', Auth::id());
+        }
+
+        return $query->first();
     }
 
     public function postsPanelReturnRoute(): string
@@ -233,7 +241,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         return match ($folder) {
             PostFolder::Feed => route('dashboard', $parameters),
             PostFolder::Drafts => route('posts.drafts', $parameters),
-            PostFolder::Archived => route('posts.archived', $parameters),
+            PostFolder::Bin => route('posts.bin', $parameters),
         };
     }
 
@@ -320,12 +328,18 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             return [];
         }
 
-        $counts = Post::query()
+        $statusCounts = Post::query()
             ->topLevel()
             ->whereHas('topic', fn ($query) => $query->where('workspace_id', $workspace->id))
             ->selectRaw('status, count(*) as total')
             ->groupBy('status')
             ->pluck('total', 'status');
+
+        $binCount = Post::onlyTrashed()
+            ->topLevel()
+            ->where('deleted_by_user_id', Auth::id())
+            ->whereHas('topic', fn ($query) => $query->where('workspace_id', $workspace->id))
+            ->count();
 
         return collect(PostFolder::cases())
             ->map(fn (PostFolder $folder): array => [
@@ -333,7 +347,9 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                 'name' => $folder->label(),
                 'icon' => $folder->icon(),
                 'href' => $this->systemFolderRoute($folder),
-                'count' => (int) ($counts[$folder->status()->value] ?? 0),
+                'count' => $folder === PostFolder::Bin
+                    ? $binCount
+                    : (int) ($statusCounts[$folder->status()?->value] ?? 0),
             ])
             ->all();
     }
@@ -367,7 +383,6 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             ->withCount([
                 'posts as draft_count' => fn ($q) => $q->topLevel()->where('status', PostStatus::Draft),
                 'posts as published_count' => fn ($q) => $q->topLevel()->where('status', PostStatus::Published),
-                'posts as archived_count' => fn ($q) => $q->topLevel()->where('status', PostStatus::Archived),
             ])
             ->get();
     }
@@ -388,7 +403,6 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             ->with(['agentTasks.agent', 'attachments', 'sender.user', 'sender.agent', 'topic'])
             ->withCount('attachments')
             ->reorder()
-            ->when(! $this->showArchived, fn ($query) => $query->where('status', '!=', PostStatus::Archived))
             ->where('status', '!=', PostStatus::Draft)
             ->orderBy('id')
             ->get()
@@ -399,6 +413,8 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                 'meta' => $post->listMeta(showSender: true, timezone: Auth::user()->displayTimezone()),
                 'attachments_count' => $post->attachments_count,
                 'sort' => $post->listSortValues(dateKey: PostListColumn::Sent->value),
+                'can_modify' => $this->canModifyPost($post),
+                'can_restore' => false,
                 'badge' => $post->status === PostStatus::Published ? null : [
                     'label' => $post->status->label(),
                     'color' => $post->status->color(),
@@ -419,17 +435,23 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             return [];
         }
 
-        return Post::query()
+        $query = $folder === PostFolder::Bin ? Post::onlyTrashed() : Post::query();
+
+        return $query
             ->topLevel()
             ->with(['agentTasks.agent', 'attachments', 'topic', 'sender.user', 'sender.agent'])
             ->withCount('attachments')
             ->whereHas('topic', fn ($query) => $query->where('workspace_id', $workspace->id))
-            ->where('status', $folder->status())
-            ->when($folder !== PostFolder::Archived && ! $this->showArchived, fn ($query) => $query->where('status', '!=', PostStatus::Archived))
+            ->when(
+                $folder === PostFolder::Bin,
+                fn ($query) => $query->where('deleted_by_user_id', Auth::id()),
+                fn ($query) => $query->where('status', $folder->status()),
+            )
             ->orderBy('id')
             ->get()
             ->map(function (Post $post) use ($folder): array {
                 $isDraftsFolder = $folder === PostFolder::Drafts;
+                $isBinFolder = $folder === PostFolder::Bin;
                 $timezone = Auth::user()->displayTimezone();
 
                 $sort = $isDraftsFolder
@@ -450,6 +472,8 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                     'meta' => $post->listTopicMeta(showSender: ! $isDraftsFolder, timezone: $timezone),
                     'attachments_count' => $post->attachments_count,
                     'sort' => $sort,
+                    'can_modify' => $this->canModifyPost($post),
+                    'can_restore' => $isBinFolder && $post->deleted_by_user_id === Auth::id(),
                     'badge' => null,
                 ];
             })
@@ -1107,13 +1131,104 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         Flux::toast(variant: 'success', text: __('Attachment deleted.'));
     }
 
-    public function archiveSelectedPost(): void
+    public function canModifyPost(Post $post): bool
     {
-        $post = $this->selectedPost();
+        return $post->sender?->type === Principal::TypeUser
+            && $post->sender?->user_id === Auth::id()
+            && ! $post->trashed();
+    }
+
+    public function beginEditingPost(int $postId): void
+    {
+        $post = $this->workspacePost($postId);
 
         abort_unless($post, 404);
+        abort_unless($this->canModifyPost($post), 403);
 
-        $post->archive();
+        $this->editingPostId = $post->id;
+        $this->editingPostBody = $post->body ?? '';
+    }
+
+    public function cancelEditingPost(): void
+    {
+        $this->reset('editingPostId', 'editingPostBody');
+    }
+
+    public function saveEditingPost(): void
+    {
+        abort_unless($this->editingPostId, 404);
+
+        $post = $this->workspacePost($this->editingPostId);
+
+        abort_unless($post, 404);
+        abort_unless($this->canModifyPost($post), 403);
+
+        $validated = $this->validate([
+            'editingPostBody' => ['required', 'string'],
+        ], [], [
+            'editingPostBody' => __('post'),
+        ]);
+
+        $post->update(['body' => $validated['editingPostBody']]);
+
+        $this->cancelEditingPost();
+
+        Flux::toast(variant: 'success', text: __('Post updated.'));
+    }
+
+    public function deletePost(int $postId): void
+    {
+        $post = $this->workspacePost($postId);
+
+        abort_unless($post, 404);
+        abort_unless($this->canModifyPost($post), 403);
+
+        $post->forceFill(['deleted_by_user_id' => Auth::id()])->save();
+        $post->delete();
+
+        if ($this->selectedPostUlid === $post->ulid) {
+            $this->selectedPostUlid = null;
+            $this->postBody = '';
+        }
+
+        if ($this->editingPostId === $post->id) {
+            $this->cancelEditingPost();
+        }
+
+        Flux::toast(variant: 'success', text: __('Post deleted.'));
+    }
+
+    public function restorePost(int $postId): void
+    {
+        $post = $this->workspacePost($postId, withTrashed: true);
+
+        abort_unless($post && $post->trashed(), 404);
+        abort_unless($post->deleted_by_user_id === Auth::id(), 403);
+
+        $post->restore();
+        $post->forceFill(['deleted_by_user_id' => null])->save();
+
+        if ($this->selectedPostUlid === $post->ulid) {
+            $this->selectedPostUlid = null;
+        }
+
+        Flux::toast(variant: 'success', text: __('Post restored.'));
+    }
+
+    public function permanentlyDeletePost(int $postId): void
+    {
+        $post = $this->workspacePost($postId, withTrashed: true);
+
+        abort_unless($post && $post->trashed(), 404);
+        abort_unless($post->deleted_by_user_id === Auth::id(), 403);
+
+        if ($this->selectedPostUlid === $post->ulid) {
+            $this->selectedPostUlid = null;
+        }
+
+        $post->forceDelete();
+
+        Flux::toast(variant: 'success', text: __('Post permanently deleted.'));
     }
 
     public function movePostToDraft(int $postId): void
@@ -1127,51 +1242,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         Flux::toast(variant: 'success', text: __('Moved to drafts.'));
     }
 
-    public function archivePost(int $postId): void
-    {
-        $post = $this->workspacePost($postId);
-
-        abort_unless($post, 404);
-
-        $post->archive();
-
-        Flux::toast(variant: 'success', text: __('Archived.'));
-    }
-
-    public function unarchivePost(int $postId): void
-    {
-        $post = $this->workspacePost($postId);
-
-        abort_unless($post, 404);
-
-        $post->moveToDraft();
-
-        Flux::toast(variant: 'success', text: __('Moved to drafts.'));
-    }
-
-    public function unpublishSelectedPost(): void
-    {
-        $post = $this->selectedPost();
-
-        abort_unless($post && $post->status === PostStatus::Published, 403);
-
-        $post->moveToDraft();
-
-        $this->syncSelectedPostFields();
-    }
-
-    public function unarchiveSelectedPost(): void
-    {
-        $post = $this->selectedPost();
-
-        abort_unless($post && $post->status === PostStatus::Archived, 403);
-
-        $post->moveToDraft();
-
-        $this->syncSelectedPostFields();
-    }
-
-    private function workspacePost(int $postId): ?Post
+    private function workspacePost(int $postId, bool $withTrashed = false): ?Post
     {
         $workspace = $this->workspace();
 
@@ -1179,7 +1250,13 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             return null;
         }
 
-        return Post::query()
+        $query = Post::query();
+
+        if ($withTrashed) {
+            $query->withTrashed();
+        }
+
+        return $query
             ->whereKey($postId)
             ->whereHas('topic', fn ($query) => $query->where('workspace_id', $workspace->id))
             ->first();
@@ -1315,9 +1392,6 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                                 <div class="flex shrink-0 items-center gap-1">
                                     @if ($topic->published_count > 0)
                                         <flux:badge color="green" size="sm" title="{{ __('Feed') }}" data-test="topic-{{ $topic->slug }}-published-count" data-count="{{ $topic->published_count }}">{{ $topic->published_count }}</flux:badge>
-                                    @endif
-                                    @if ($showArchived && $selectedTopicSlug === $topic->slug && $topic->archived_count > 0)
-                                        <flux:badge color="yellow" size="sm" title="{{ __('Archived posts') }}" data-test="topic-{{ $topic->slug }}-archived-count" data-count="{{ $topic->archived_count }}">{{ $topic->archived_count }}</flux:badge>
                                     @endif
                                 </div>
                             </a>
@@ -1538,13 +1612,17 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                                 'createHref' => $selectedDashboardTopic ? route('posts.create', ['topic' => $selectedDashboardTopic->slug]) : route('posts.create'),
                                 'createLabel' => __('New post'),
                                 'createTest' => 'dashboard-new-post-button',
-                                'showArchivedModel' => 'showArchived',
                                 'listColumns' => $this->selectedPostListColumns(),
                                 'listDefaultSort' => $selectedDashboardFolder?->dateKey() ?? PostListColumn::Sent->value,
                                 'listDefaultSortDirection' => 'desc',
-                                'moveToDraftAction' => 'movePostToDraft',
-                                'archiveAction' => 'archivePost',
-                                'unarchiveAction' => 'unarchivePost',
+                                'editingPostId' => $editingPostId,
+                                'editingPostBodyModel' => 'editingPostBody',
+                                'editPostAction' => 'beginEditingPost',
+                                'saveEditingPostAction' => 'saveEditingPost',
+                                'cancelEditingPostAction' => 'cancelEditingPost',
+                                'deletePostAction' => 'deletePost',
+                                'restorePostAction' => 'restorePost',
+                                'permanentlyDeletePostAction' => 'permanentlyDeletePost',
                                 'toolbarClass' => 'border-b border-neutral-300 bg-emerald-50 px-4 py-3 dark:border-white/10 dark:bg-emerald-500/10',
                                 'rootClass' => 'flex min-h-0 flex-1 flex-col overflow-hidden xl:h-full',
                                 'contentClass' => 'min-h-0 flex-1 overflow-auto px-4 py-4',
@@ -1621,7 +1699,6 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                             'uploadModel' => 'postUploads',
                             'uploadError' => 'postUploads.*',
                             'deleteAction' => 'deleteSelectedPostAttachment',
-                            'archiveAction' => 'archiveSelectedPost',
                             'publishAction' => 'publishSelectedPost',
                             'loadingTarget' => 'postUploads',
                             'dataTest' => 'dashboard-post-panel',
@@ -1633,18 +1710,28 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                             @endphp
 
                             @foreach ($selectedDashboardThreadPosts as $threadPost)
-                                <x-post-message :post="$threadPost" :show-topic="$selectedDashboardFolder !== null">
-                                    @if ($threadPost->is($selectedDashboardPost))
+                                @if ($editingPostId === $threadPost->id)
+                                    <form wire:submit="saveEditingPost" class="ml-13 space-y-3" data-test="post-inline-edit-form">
+                                        <flux:textarea wire:model="editingPostBody" rows="6" required data-test="post-inline-edit-body" />
+
+                                        <div class="flex justify-end gap-2">
+                                            <flux:button type="button" variant="filled" size="sm" wire:click="cancelEditingPost">{{ __('Cancel') }}</flux:button>
+                                            <flux:button type="submit" variant="primary" size="sm">{{ __('Save') }}</flux:button>
+                                        </div>
+                                    </form>
+                                @else
+                                    <x-post-message :post="$threadPost" :show-topic="$selectedDashboardFolder !== null">
                                         <x-slot:actions>
-                                            @if ($selectedDashboardPost->status === PostStatus::Published)
-                                                <flux:menu.item wire:click="unpublishSelectedPost" icon="pencil-square">{{ __('Move to drafts') }}</flux:menu.item>
-                                                <flux:menu.item wire:click="archiveSelectedPost" icon="archive-box">{{ __('Archive') }}</flux:menu.item>
-                                            @elseif ($selectedDashboardPost->status === PostStatus::Archived)
-                                                <flux:menu.item wire:click="unarchiveSelectedPost" icon="archive-box-x-mark">{{ __('Unarchive') }}</flux:menu.item>
+                                            @if ($threadPost->trashed() && $threadPost->deleted_by_user_id === Auth::id())
+                                                <flux:menu.item wire:click="restorePost({{ $threadPost->id }})" icon="arrow-uturn-left">{{ __('Restore') }}</flux:menu.item>
+                                                <flux:menu.item wire:click="permanentlyDeletePost({{ $threadPost->id }})" wire:confirm.prompt="{{ __('This cannot be undone.') }}&#10;&#10;{{ __('Type DELETE to confirm') }}|DELETE" icon="trash" variant="danger">{{ __('Delete permanently') }}</flux:menu.item>
+                                            @elseif ($this->canModifyPost($threadPost))
+                                                <flux:menu.item wire:click="beginEditingPost({{ $threadPost->id }})" icon="pencil-square">{{ __('Edit') }}</flux:menu.item>
+                                                <flux:menu.item wire:click="deletePost({{ $threadPost->id }})" wire:confirm="{{ __('Delete this post?') }}" icon="trash">{{ __('Delete') }}</flux:menu.item>
                                             @endif
                                         </x-slot:actions>
-                                    @endif
-                                </x-post-message>
+                                    </x-post-message>
+                                @endif
 
                                 @if ($loop->first && ! $loop->last)
                                     <div class="ml-13 border-t border-neutral-200 dark:border-white/10" data-test="thread-op-replies-divider"></div>

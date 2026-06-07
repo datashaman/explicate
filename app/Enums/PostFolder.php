@@ -6,14 +6,14 @@ enum PostFolder: string
 {
     case Feed = 'feed';
     case Drafts = 'drafts';
-    case Archived = 'archived';
+    case Bin = 'bin';
 
     public function label(): string
     {
         return match ($this) {
             self::Feed => __('Feed'),
             self::Drafts => __('Drafts'),
-            self::Archived => __('Archived'),
+            self::Bin => __('Bin'),
         };
     }
 
@@ -22,16 +22,16 @@ enum PostFolder: string
         return match ($this) {
             self::Feed => 'rss',
             self::Drafts => 'document',
-            self::Archived => 'archive-box',
+            self::Bin => 'trash',
         };
     }
 
-    public function status(): PostStatus
+    public function status(): ?PostStatus
     {
         return match ($this) {
             self::Feed => PostStatus::Published,
             self::Drafts => PostStatus::Draft,
-            self::Archived => PostStatus::Archived,
+            self::Bin => null,
         };
     }
 
