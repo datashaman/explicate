@@ -1,14 +1,25 @@
+@php
+    $defaultListSort = $listDefaultSort ?? \App\Enums\PostListColumn::Name->value;
+    $dateListSortKeys = [
+        \App\Enums\PostListColumn::Sent->value,
+        \App\Enums\PostListColumn::Saved->value,
+    ];
+    $nameColumnKey = \App\Enums\PostListColumn::Name->value;
+    $attachmentsColumnKey = \App\Enums\PostListColumn::Attachments->value;
+@endphp
+
 <div x-data="{
     view: localStorage.getItem('folder-view-mode') || 'icons',
     setView(v) { this.view = v; localStorage.setItem('folder-view-mode', v); },
-    listSortKey: '{{ $listDefaultSort ?? 'name' }}',
+    listSortKey: '{{ $defaultListSort }}',
     listSortDirection: '{{ $listDefaultSortDirection ?? 'asc' }}',
+    dateListSortKeys: @js($dateListSortKeys),
     sortList(key) {
         if (this.listSortKey === key) {
             this.listSortDirection = this.listSortDirection === 'asc' ? 'desc' : 'asc';
         } else {
             this.listSortKey = key;
-            this.listSortDirection = ['sent', 'saved'].includes(key) ? 'desc' : 'asc';
+            this.listSortDirection = this.dateListSortKeys.includes(key) ? 'desc' : 'asc';
         }
 
         this.$nextTick(() => this.sortListRows());
@@ -334,7 +345,7 @@
                            class="flex min-h-12 items-center gap-3 rounded-lg px-2 py-2 hover:bg-neutral-100 dark:hover:bg-white/5">
                             @if (!empty($listColumns))
                                 @foreach ($listColumns as $column)
-                                    @if ($column['key'] === 'name')
+                                    @if ($column['key'] === $nameColumnKey)
                                         <span @class(['min-w-0', $column['class'] ?? 'flex-1'])>
                                             <span class="block truncate text-sm text-neutral-700 dark:text-neutral-300">{{ $item['name'] }}</span>
                                             @if (!empty($item['meta']))
@@ -348,7 +359,7 @@
                                                 </span>
                                             @endif
                                         </span>
-                                    @elseif ($column['key'] === 'attachments')
+                                    @elseif ($column['key'] === $attachmentsColumnKey)
                                         <span @class(['hidden text-xs text-neutral-500 sm:flex sm:items-center dark:text-neutral-400', $column['class'] ?? 'w-12 shrink-0 justify-center'])>
                                             @if (!empty($item['attachments_count']))
                                                 <span class="flex size-6 items-center justify-center text-neutral-400 dark:text-neutral-500" title="{{ trans_choice(':count attachment|:count attachments', $item['attachments_count'], ['count' => $item['attachments_count']]) }}" data-test="folder-item-attachments">
