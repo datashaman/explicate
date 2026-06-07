@@ -133,6 +133,24 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         $this->syncSelectedAgentFields();
     }
 
+    /** @return array<string, string> */
+    public function getListeners(): array
+    {
+        $workspaceId = Auth::user()->current_workspace_id;
+
+        if (! $workspaceId) {
+            return [];
+        }
+
+        return [
+            "echo-private:workspaces.{$workspaceId},.posts.changed" => 'refreshWorkspacePosts',
+        ];
+    }
+
+    public function refreshWorkspacePosts(): void
+    {
+    }
+
     public function workspace(): ?\App\Models\Workspace
     {
         return Auth::user()->currentWorkspace;

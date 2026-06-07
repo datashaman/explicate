@@ -1,8 +1,10 @@
 <?php
 
+use App\Broadcasting\WorkspaceChannel;
 use App\Enums\PostStatus;
 use App\Enums\Provider;
 use App\Enums\ReasoningEffort;
+use App\Events\WorkspacePostsChanged;
 use App\Models\Agent;
 use App\Models\AgentTask;
 use App\Models\AgentVersion;
@@ -14,6 +16,7 @@ use App\Models\User;
 use App\Models\Workspace;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
@@ -127,6 +130,50 @@ test('dashboard shows system folders with workspace post counts', function () {
         ->assertSee(e(route('posts.archived')), escape: false)
         ->assertSee('data-test="system-folder-feed-count"', escape: false)
         ->assertSee('data-test="system-folder-drafts-count"', escape: false);
+});
+
+test('post changes broadcast to the post workspace', function () {
+    Event::fake([WorkspacePostsChanged::class]);
+
+    [$user, $workspace] = userWithWorkspace();
+    $topic = Topic::factory()->for($workspace)->create();
+
+    $post = Post::factory()->for($topic)->create([
+        'status' => PostStatus::Published,
+        'sender_principal_id' => $workspace->principalForUser($user)->id,
+    ]);
+    $post->update(['body' => 'Updated over websockets.']);
+    $post->delete();
+
+    Event::assertDispatched(
+        WorkspacePostsChanged::class,
+        fn (WorkspacePostsChanged $event): bool => $event->workspaceId === $workspace->id
+            && $event->postId === $post->id,
+    );
+    Event::assertDispatchedTimes(WorkspacePostsChanged::class, 3);
+});
+
+test('workspace post broadcast channels are scoped to team members', function () {
+    [$user, $workspace] = userWithWorkspace();
+    [$otherUser] = userWithWorkspace();
+
+    $channel = app(WorkspaceChannel::class);
+
+    expect($channel->join($user, $workspace->id))->toBeTrue()
+        ->and($channel->join($otherUser, $workspace->id))->toBeFalse()
+        ->and($channel->join($user, 999_999))->toBeFalse();
+});
+
+test('dashboard listens for workspace post broadcasts', function () {
+    [$user, $workspace] = userWithWorkspace();
+
+    $this->actingAs($user);
+
+    $component = Livewire::test('pages::dashboard');
+
+    expect($component->instance()->getListeners())->toBe([
+        "echo-private:workspaces.{$workspace->id},.posts.changed" => 'refreshWorkspacePosts',
+    ]);
 });
 
 test('dashboard system draft folder shows draft posts across topics', function () {

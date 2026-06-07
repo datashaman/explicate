@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Actions\Agents\SyncAgentChatReplies;
 use App\Enums\PostListColumn;
 use App\Enums\PostStatus;
+use App\Events\WorkspacePostsChanged;
 use Database\Factories\PostFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -43,12 +44,21 @@ class Post extends Model
 
         static::created(function (Post $post) {
             $post->syncMentionedAgentTasks();
+            $post->broadcastWorkspaceChange();
         });
 
         static::updated(function (Post $post) {
             if ($post->wasChanged('status') || $post->wasChanged('body')) {
                 $post->syncMentionedAgentTasks();
             }
+
+            if ($post->wasChanged(['status', 'body', 'thread_id', 'sender_principal_id'])) {
+                $post->broadcastWorkspaceChange();
+            }
+        });
+
+        static::deleted(function (Post $post) {
+            $post->broadcastWorkspaceChange();
         });
     }
 
@@ -71,6 +81,15 @@ class Post extends Model
     public function syncMentionedAgentTasks(): void
     {
         app(SyncAgentChatReplies::class)->handle($this);
+    }
+
+    public function broadcastWorkspaceChange(): void
+    {
+        $this->loadMissing('topic');
+
+        if ($this->topic?->workspace_id) {
+            WorkspacePostsChanged::dispatch($this->topic->workspace_id, $this->id);
+        }
     }
 
     /**
