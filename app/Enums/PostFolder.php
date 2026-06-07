@@ -37,7 +37,7 @@ enum PostFolder: string
 
     public function dateKey(): string
     {
-        return $this === self::Drafts ? 'saved' : 'sent';
+        return $this === self::Drafts ? PostListColumn::Saved->value : PostListColumn::Sent->value;
     }
 
     public function dateLabel(): string

@@ -314,7 +314,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                 'name' => $post->title,
                 'meta' => $post->listMeta(showSender: true, showRecipient: false, timezone: Auth::user()->displayTimezone()),
                 'attachments_count' => $post->attachments_count,
-                'sort' => $post->listSortValues(dateKey: 'sent'),
+                'sort' => $post->listSortValues(dateKey: PostListColumn::Sent->value),
                 'badge' => $post->status === PostStatus::Published ? null : [
                     'label' => $post->status->label(),
                     'color' => $post->status->color(),
@@ -350,12 +350,12 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
                 $sort = $isDraftsFolder
                     ? [
-                        ...$post->listSortValues(dateKey: 'saved'),
-                        'topic' => Str::lower($post->topic->name),
+                        ...$post->listSortValues(dateKey: PostListColumn::Saved->value),
+                        PostListColumn::Topic->value => Str::lower($post->topic->name),
                     ]
                     : $post->listSortValues(
                         recipientFallback: $post->topic->name,
-                        dateKey: 'sent',
+                        dateKey: PostListColumn::Sent->value,
                     );
 
                 return [
@@ -1160,7 +1160,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                             'createTest' => 'dashboard-new-post-button',
                             'showArchivedModel' => 'showArchived',
                             'listColumns' => $this->selectedPostListColumns(),
-                            'listDefaultSort' => $selectedDashboardFolder?->dateKey() ?? 'sent',
+                            'listDefaultSort' => $selectedDashboardFolder?->dateKey() ?? PostListColumn::Sent->value,
                             'listDefaultSortDirection' => 'desc',
                             'toolbarClass' => 'border-b border-neutral-300 bg-emerald-50 px-4 py-3 dark:border-white/10 dark:bg-emerald-500/10',
                             'rootClass' => 'flex flex-col xl:h-full',

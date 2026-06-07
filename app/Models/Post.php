@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\AgentTaskStatus;
+use App\Enums\PostListColumn;
 use App\Enums\PostStatus;
 use App\Events\PostSent;
 use Database\Factories\PostFactory;
@@ -207,7 +208,7 @@ class Post extends Model
         $meta = [];
 
         if ($showSender && $this->sender) {
-            $meta[] = ['key' => 'sender', 'label' => __('Sender'), 'value' => $this->sender->label()];
+            $meta[] = ['key' => PostListColumn::Sender->value, 'label' => __('Sender'), 'value' => $this->sender->label()];
         }
 
         if ($showRecipient) {
@@ -219,7 +220,7 @@ class Post extends Model
         }
 
         $meta[] = [
-            'key' => $this->status === PostStatus::Draft ? 'saved' : 'sent',
+            'key' => $this->dateListColumn()->value,
             'label' => $this->status === PostStatus::Draft ? __('Saved') : __('Sent'),
             'value' => $this->updated_at->diffForHumans(),
             'title' => $this->updated_at->timezone($timezone ?: config('app.timezone'))->isoFormat('LLLL'),
@@ -236,13 +237,13 @@ class Post extends Model
         $meta = [];
 
         if ($showSender && $this->sender) {
-            $meta[] = ['key' => 'sender', 'label' => __('Sender'), 'value' => $this->sender->label()];
+            $meta[] = ['key' => PostListColumn::Sender->value, 'label' => __('Sender'), 'value' => $this->sender->label()];
         }
 
-        $meta[] = ['key' => 'topic', 'label' => __('Topic'), 'value' => $this->topic->name];
+        $meta[] = ['key' => PostListColumn::Topic->value, 'label' => __('Topic'), 'value' => $this->topic->name];
 
         $meta[] = [
-            'key' => $this->status === PostStatus::Draft ? 'saved' : 'sent',
+            'key' => $this->dateListColumn()->value,
             'label' => $this->status === PostStatus::Draft ? __('Saved') : __('Sent'),
             'value' => $this->updated_at->diffForHumans(),
             'title' => $this->updated_at->timezone($timezone ?: config('app.timezone'))->isoFormat('LLLL'),
@@ -257,19 +258,24 @@ class Post extends Model
     public function listSortValues(?string $recipientFallback = null, ?string $dateKey = null): array
     {
         $attachmentsCount = (int) ($this->attachments_count ?? $this->attachments()->count());
-        $dateKey ??= $this->status === PostStatus::Draft ? 'saved' : 'sent';
+        $dateKey ??= $this->dateListColumn()->value;
 
         $values = [
-            'name' => Str::lower($this->title),
-            'sender' => Str::lower($this->sender?->label() ?? ''),
+            PostListColumn::Name->value => Str::lower($this->title),
+            PostListColumn::Sender->value => Str::lower($this->sender?->label() ?? ''),
             'to' => Str::lower($this->recipient?->label() ?? $recipientFallback ?? ''),
-            'attachments' => str_pad((string) $attachmentsCount, 10, '0', STR_PAD_LEFT),
+            PostListColumn::Attachments->value => str_pad((string) $attachmentsCount, 10, '0', STR_PAD_LEFT),
             'status' => Str::lower($this->status->label()),
         ];
 
         $values[$dateKey] = str_pad((string) $this->updated_at->timestamp, 20, '0', STR_PAD_LEFT);
 
         return $values;
+    }
+
+    public function dateListColumn(): PostListColumn
+    {
+        return $this->status === PostStatus::Draft ? PostListColumn::Saved : PostListColumn::Sent;
     }
 
     public function getRouteKeyName(): string

@@ -74,7 +74,7 @@ new #[Layout('layouts::workspace'), Title('Topic')] class extends Component {
                 'name' => $post->title,
                 'meta' => $post->listMeta(showSender: true, showRecipient: false, timezone: Auth::user()->displayTimezone()),
                 'attachments_count' => $post->attachments_count,
-                'sort' => $post->listSortValues(dateKey: 'sent'),
+                'sort' => $post->listSortValues(dateKey: PostListColumn::Sent->value),
                 'badge' => $post->status === PostStatus::Published ? null : [
                     'label' => $post->status->label(),
                     'color' => $post->status->color(),
@@ -227,7 +227,7 @@ new #[Layout('layouts::workspace'), Title('Topic')] class extends Component {
                     PostListColumn::Sent->toColumn(),
                     PostListColumn::Attachments->toColumn(__('Attachments'), 'w-24 shrink-0'),
                 ],
-                'listDefaultSort' => 'sent',
+                'listDefaultSort' => PostListColumn::Sent->value,
                 'listDefaultSortDirection' => 'desc',
                 'toolbarClass' => 'border-b border-neutral-300 bg-emerald-50 px-4 py-3 dark:border-white/10 dark:bg-emerald-500/10',
                 'rootClass' => 'flex flex-col xl:h-full',
