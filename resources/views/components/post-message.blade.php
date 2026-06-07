@@ -184,7 +184,7 @@
                     wire:navigate
                 @endif
                 @class([
-                    'mt-3 inline-flex items-center gap-2 text-sm',
+                    'mt-2.5 inline-flex items-center gap-1.5 text-xs',
                     'cursor-pointer rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500' => $replyHref,
                 ])
                 data-test="post-message-replies"
@@ -202,7 +202,7 @@
                         @endphp
 
                         <span
-                            class="flex size-6 items-center justify-center rounded-md border-2 border-white bg-neutral-200 text-[0.65rem] font-semibold leading-none text-neutral-700 dark:border-zinc-900 dark:bg-zinc-700 dark:text-neutral-100"
+                            class="flex size-5 items-center justify-center rounded border-2 border-white bg-neutral-200 text-[0.58rem] font-semibold leading-none text-neutral-700 dark:border-zinc-900 dark:bg-zinc-700 dark:text-neutral-100"
                             title="{{ $replySenderName }}"
                             data-test="post-message-reply-avatar"
                         >

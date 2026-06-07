@@ -925,7 +925,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
     }
 }; ?>
 
-<div class="flex min-h-0 w-full flex-1">
+<div class="flex min-h-0 w-full flex-1 overflow-hidden">
     @if ($this->workspace())
         @php
             $selectedDashboardAgent = $this->selectedAgent();
@@ -936,7 +936,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         @endphp
 
         <div @class([
-            'grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)] items-stretch gap-2 xl:auto-rows-fr',
+            'grid h-full min-h-0 min-w-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)] items-stretch gap-2 overflow-hidden xl:auto-rows-fr',
             'xl:grid-cols-[16rem_minmax(0,0.9fr)_minmax(24rem,1.1fr)]' => $hasThreadPanel,
             'xl:grid-cols-[16rem_minmax(0,1fr)]' => ! $hasThreadPanel,
         ])>
@@ -944,7 +944,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                 id="topics-panel"
                 data-mobile-panel="topics"
                 @class([
-                    'scroll-mt-4 flex h-full min-h-0 flex-col gap-2',
+                    'scroll-mt-4 flex h-full min-h-0 min-w-0 flex-col gap-2 overflow-hidden',
                     'hidden xl:flex' => $this->mobilePanel !== 'topics',
                 ])
             >
@@ -961,7 +961,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                         <flux:text class="text-sm text-neutral-400 dark:text-neutral-600">{{ __('No topics') }}</flux:text>
                     </div>
                 @else
-                    <div class="divide-y divide-neutral-200 bg-white xl:flex-1 xl:overflow-auto dark:divide-white/5 dark:bg-zinc-900/20">
+                    <div class="min-h-0 flex-1 divide-y divide-neutral-200 overflow-auto bg-white dark:divide-white/5 dark:bg-zinc-900/20">
                         @php
                             $selectedFolder = $this->selectedSystemFolder();
                         @endphp
@@ -1009,7 +1009,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                 @endif
                 </section>
 
-                <section class="flex min-h-0 flex-col overflow-hidden rounded-lg border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none">
+                <section class="flex max-h-[45%] min-h-0 shrink-0 flex-col overflow-hidden rounded-lg border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none">
                     <div class="border-b border-neutral-300 bg-amber-50 px-4 py-3 dark:border-white/10 dark:bg-amber-500/10">
                         <div class="flex items-center justify-between gap-3">
                             <flux:heading size="sm">{{ __('Agents') }}</flux:heading>
@@ -1020,11 +1020,11 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                     </div>
 
                     @if ($this->agents()->isEmpty())
-                        <div class="px-4 py-4">
+                        <div class="min-h-0 flex-1 overflow-auto px-4 py-4">
                             <flux:text class="text-sm text-neutral-400 dark:text-neutral-600">{{ __('No agents in this workspace.') }}</flux:text>
                         </div>
                     @else
-                        <div class="divide-y divide-neutral-200 bg-white dark:divide-white/5 dark:bg-zinc-900/20">
+                        <div class="min-h-0 flex-1 divide-y divide-neutral-200 overflow-auto bg-white dark:divide-white/5 dark:bg-zinc-900/20">
                             @foreach ($this->agents() as $agent)
                             <button
                                 type="button"
@@ -1054,7 +1054,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                     id="posts-panel"
                     data-mobile-panel="posts"
                     @class([
-                        'scroll-mt-4 flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none',
+                        'scroll-mt-4 flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none',
                         'hidden xl:flex' => $this->mobilePanel !== 'posts',
                     ])
                 >
@@ -1118,8 +1118,8 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                             'archiveAction' => 'archivePost',
                             'unarchiveAction' => 'unarchivePost',
                             'toolbarClass' => 'border-b border-neutral-300 bg-emerald-50 px-4 py-3 dark:border-white/10 dark:bg-emerald-500/10',
-                            'rootClass' => 'flex flex-col xl:h-full',
-                            'contentClass' => 'overflow-auto px-4 py-4 xl:flex-1 xl:min-h-0',
+                            'rootClass' => 'flex min-h-0 flex-1 flex-col overflow-hidden xl:h-full',
+                            'contentClass' => 'min-h-0 flex-1 overflow-auto px-4 py-4',
                         ])
                     @endif
                 </section>
@@ -1128,7 +1128,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                     id="posts-panel"
                     data-mobile-panel="posts"
                     @class([
-                        'scroll-mt-4 flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none',
+                        'scroll-mt-4 flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none',
                         'hidden xl:flex' => $this->mobilePanel !== 'posts',
                     ])
                 >
@@ -1154,7 +1154,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                 <section
                     id="thread-panel"
                     data-mobile-panel="posts"
-                    class="scroll-mt-4 flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none"
+                    class="scroll-mt-4 flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none"
                 >
                     <div class="flex items-center justify-between gap-3 border-b border-neutral-300 bg-emerald-50 px-4 py-3 dark:border-white/10 dark:bg-emerald-500/10">
                         <flux:heading size="sm" class="min-w-0 flex-1 truncate">{{ __('Thread') }}</flux:heading>
@@ -1182,7 +1182,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                             'dataTest' => 'dashboard-post-panel',
                         ])
                     @else
-                        <div class="flex flex-1 flex-col gap-6 overflow-auto px-4 py-4 xl:min-h-0" data-test="dashboard-post-panel">
+                        <div class="flex min-h-0 flex-1 flex-col gap-6 overflow-auto px-4 py-4" data-test="dashboard-post-panel">
                             @php
                                 $selectedDashboardThreadPosts = $selectedDashboardPost->conversationPosts();
                             @endphp

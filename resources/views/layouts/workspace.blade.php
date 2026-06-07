@@ -3,8 +3,8 @@
     <head>
         @include('partials.head')
     </head>
-    <body class="min-h-dvh bg-white dark:bg-zinc-800">
-        <main class="flex min-h-dvh w-full flex-col gap-2 p-2">
+    <body class="h-dvh overflow-hidden bg-white dark:bg-zinc-800">
+        <main class="flex h-dvh min-h-0 w-full flex-col gap-2 overflow-hidden p-2">
             <header class="flex items-center justify-between gap-3 rounded-lg border border-neutral-300 bg-white px-3 py-2 shadow-sm shadow-black/[0.04] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none">
                 <a href="{{ route('dashboard') }}" wire:navigate class="flex min-w-0 items-center gap-2 text-sm font-semibold text-neutral-800 dark:text-neutral-100">
                     <flux:icon name="layout-grid" class="size-4 shrink-0 text-neutral-500 dark:text-neutral-400" />

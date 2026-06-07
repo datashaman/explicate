@@ -289,7 +289,7 @@
 
                         <div
                             wire:key="folder-post-message-{{ $itemKey }}"
-                            class="rounded-lg px-2 py-4"
+                            class="rounded-lg py-4 first:pt-0 last:pb-0"
                             data-href="{{ $item['href'] }}"
                             data-test="folder-post-message"
                             data-post-preview="{{ $post->preview() }}"

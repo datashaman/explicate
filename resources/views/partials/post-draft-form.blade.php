@@ -21,7 +21,7 @@
     'dataTest' => null,
 ])
 
-<div class="flex flex-1 flex-col gap-6 overflow-auto px-4 py-4 xl:min-h-0" @if ($dataTest) data-test="{{ $dataTest }}" @endif>
+<div class="flex min-h-0 flex-1 flex-col gap-6 overflow-auto px-4 py-4" @if ($dataTest) data-test="{{ $dataTest }}" @endif>
     <form id="{{ $formId }}" wire:submit="{{ $submitAction }}" class="flex flex-col gap-6">
         @include('partials.post-routing-fields', [
             'topicModel' => $topicModel,

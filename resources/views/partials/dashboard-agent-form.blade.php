@@ -1,4 +1,4 @@
-<div class="flex flex-1 flex-col gap-4 overflow-auto px-4 py-4 xl:min-h-0" data-test="dashboard-agent-panel">
+<div class="flex min-h-0 flex-1 flex-col gap-4 overflow-auto px-4 py-4" data-test="dashboard-agent-panel">
     @if ($selectedDashboardAgent->latestVersion)
         <div class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm dark:border-amber-300/20 dark:bg-amber-500/10">
             <div class="font-medium text-amber-950 dark:text-amber-100">{{ __('Current') }}: v{{ $selectedDashboardAgent->latestVersion->version }}</div>
