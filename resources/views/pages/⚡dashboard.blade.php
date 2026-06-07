@@ -319,6 +319,18 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         return $flatten(null, 0);
     }
 
+    #[Computed]
+    public function workspaceFileCount(): int
+    {
+        $workspace = $this->workspace();
+
+        if (! $workspace) {
+            return 0;
+        }
+
+        return $workspace->files()->where('type', WorkspaceFileType::File)->count();
+    }
+
     /** @return list<array{slug: string, name: string, icon: string, href: string, count: int}> */
     public function systemFolders(): array
     {
@@ -1411,8 +1423,8 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                         <div class="min-w-0 flex-1">
                             <div class="truncate text-sm font-medium text-neutral-700 dark:text-neutral-300">{{ __('Files') }}</div>
                         </div>
-                        @if (count($this->workspaceFileItems()) > 0)
-                            <flux:badge color="zinc" size="sm" data-test="workspace-files-count">{{ count($this->workspaceFileItems()) }}</flux:badge>
+                        @if ($this->workspaceFileCount() > 0)
+                            <flux:badge color="zinc" size="sm" data-test="workspace-files-count">{{ $this->workspaceFileCount() }}</flux:badge>
                         @endif
                     </a>
                 </section>

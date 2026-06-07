@@ -74,3 +74,24 @@ test('users can manage workspace files from the dashboard', function () {
     expect($file?->type)->toBe(WorkspaceFileType::File);
     expect($file?->content)->toBe("# Specification\n\nContent");
 });
+
+test('workspace file count only includes files and not folders', function () {
+    [$user, $workspace] = userWithWorkspace();
+
+    WorkspaceFile::factory()->for($workspace)->folder()->create([
+        'name' => 'docs',
+    ]);
+    WorkspaceFile::factory()->for($workspace)->create([
+        'name' => 'spec.md',
+        'path' => 'spec.md',
+    ]);
+
+    $response = $this
+        ->actingAs($user)
+        ->get(route('dashboard', ['action' => 'files']))
+        ->assertOk()
+        ->assertSee('data-test="workspace-files-count"', false)
+        ->assertSeeText('1');
+
+    expect($response->getContent())->not->toContain('>2<');
+});
