@@ -90,25 +90,23 @@ class DatabaseSeeder extends Seeder
         });
 
         $topicsByName = $topics->keyBy('name');
+        $agentsByName = $agents->keyBy('name');
+        $attachAgents = function (Topic $topic, array $agentNames) use ($agentsByName): void {
+            $topic->agents()->attach(
+                collect($agentNames)
+                    ->mapWithKeys(function (string $agentName) use ($agentsByName): array {
+                        $agent = $agentsByName[$agentName];
 
-        $topicsByName['Design']->agents()->attach([
-            $agents[0]->id => ['agent_version_id' => $agents[0]->latestVersion->id],
-            $agents[3]->id => ['agent_version_id' => $agents[3]->latestVersion->id],
-        ]);
+                        return [$agent->id => ['agent_version_id' => $agent->latestVersion->id]];
+                    })
+                    ->all()
+            );
+        };
 
-        $topicsByName['Engineering']->agents()->attach([
-            $agents[1]->id => ['agent_version_id' => $agents[1]->latestVersion->id],
-            $agents[3]->id => ['agent_version_id' => $agents[3]->latestVersion->id],
-        ]);
-
-        $topicsByName['Marketing']->agents()->attach([
-            $agents[0]->id => ['agent_version_id' => $agents[0]->latestVersion->id],
-            $agents[2]->id => ['agent_version_id' => $agents[2]->latestVersion->id],
-        ]);
-
-        $topicsByName['Research']->agents()->attach([
-            $agents[1]->id => ['agent_version_id' => $agents[1]->latestVersion->id],
-        ]);
+        $attachAgents($topicsByName['Design'], ['Writer', 'Reviewer']);
+        $attachAgents($topicsByName['Engineering'], ['Researcher', 'Reviewer']);
+        $attachAgents($topicsByName['Marketing'], ['Writer', 'SEO Analyst']);
+        $attachAgents($topicsByName['Research'], ['Researcher']);
 
         $designDraft = Post::factory()->for($topicsByName['Design'])->create([
             'title' => 'Homepage hero directions',
