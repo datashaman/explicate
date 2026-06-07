@@ -24,28 +24,31 @@
     $hasExpandableBody = substr_count($body, "\n") >= 10 || Str::length($body) > 900;
     $mentionedAgentsBySlug = $post->mentionedAgents()->keyBy('slug');
     $bodyHtml = (function () use ($body, $mentionedAgentsBySlug): \Illuminate\Support\HtmlString {
+        $markdown = Str::markdown($body, [
+            'html_input' => 'strip',
+            'allow_unsafe_links' => false,
+        ]);
         $pattern = '/(?<![\w@])@([a-z0-9][a-z0-9-]*)\b/i';
-        $offset = 0;
-        $html = '';
 
-        preg_match_all($pattern, $body, $matches, PREG_OFFSET_CAPTURE);
+        $html = collect(preg_split('/(<[^>]+>)/', $markdown, flags: PREG_SPLIT_DELIM_CAPTURE | PREG_SPLIT_NO_EMPTY))
+            ->map(function (string $segment) use ($pattern, $mentionedAgentsBySlug): string {
+                if (str_starts_with($segment, '<')) {
+                    return $segment;
+                }
 
-        foreach ($matches[0] as $index => [$mention, $position]) {
-            $html .= e(substr($body, $offset, $position - $offset));
+                return preg_replace_callback($pattern, function (array $matches) use ($mentionedAgentsBySlug): string {
+                    $mention = $matches[0];
+                    $slug = Str::lower($matches[1]);
+                    $agent = $mentionedAgentsBySlug->get($slug);
 
-            $slug = Str::lower($matches[1][$index][0]);
-            $agent = $mentionedAgentsBySlug->get($slug);
+                    if (! $agent) {
+                        return $mention;
+                    }
 
-            if ($agent) {
-                $html .= '<a href="'.e(route('dashboard', ['agent' => $agent->slug])).'" wire:navigate class="font-medium text-amber-700 hover:underline dark:text-amber-300" data-test="post-message-agent-mention">'.e($mention).'</a>';
-            } else {
-                $html .= e($mention);
-            }
-
-            $offset = $position + strlen($mention);
-        }
-
-        $html .= e(substr($body, $offset));
+                    return '<a href="'.e(route('dashboard', ['agent' => $agent->slug])).'" wire:navigate class="font-medium text-amber-700 hover:underline dark:text-amber-300" data-test="post-message-agent-mention">'.e($mention).'</a>';
+                }, $segment);
+            })
+            ->implode('');
 
         return new \Illuminate\Support\HtmlString($html);
     })();
@@ -116,7 +119,7 @@
                     x-bind:class="{ 'max-h-[10.5rem] overflow-hidden': ! expanded }"
                 @endif
                 @class([
-                    'whitespace-pre-wrap',
+                    'space-y-2 [&_a]:font-medium [&_a]:text-blue-700 [&_a]:hover:underline [&_a]:dark:text-blue-300 [&_blockquote]:border-l-2 [&_blockquote]:border-neutral-200 [&_blockquote]:pl-3 [&_blockquote]:text-neutral-600 [&_blockquote]:dark:border-white/10 [&_blockquote]:dark:text-neutral-300 [&_code]:rounded [&_code]:bg-neutral-100 [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-[0.82em] [&_code]:dark:bg-white/10 [&_ol]:list-decimal [&_ol]:space-y-1 [&_ol]:pl-5 [&_p]:m-0 [&_pre]:overflow-auto [&_pre]:rounded-md [&_pre]:bg-neutral-100 [&_pre]:p-3 [&_pre]:dark:bg-white/10 [&_ul]:list-disc [&_ul]:space-y-1 [&_ul]:pl-5',
                     'text-neutral-400 dark:text-neutral-600' => ! $post->body,
                 ])
                 data-test="post-message-body"

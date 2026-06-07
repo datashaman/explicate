@@ -727,6 +727,43 @@ test('dashboard feed post messages link agent mentions to agent panel', function
         ->assertSee(route('dashboard', ['agent' => $agent->slug]), escape: false);
 });
 
+test('dashboard feed post messages render markdown safely', function () {
+    Queue::fake();
+
+    [$user, $workspace] = userWithWorkspace();
+
+    $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
+    Agent::factory()->for($workspace)->create([
+        'name' => 'Reviewer',
+        'slug' => 'reviewer',
+    ]);
+
+    Post::factory()->for($topic)->create([
+        'body' => implode("\n", [
+            '## Specification',
+            '',
+            '@reviewer please review **bold text**.',
+            '',
+            '- First item',
+            '- Second item',
+            '',
+            '<script>alert("bad")</script>',
+        ]),
+        'status' => PostStatus::Published,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('dashboard', ['topic' => $topic->slug, 'panel' => 'posts']))
+        ->assertOk()
+        ->assertSee('<h2>Specification</h2>', escape: false)
+        ->assertSee('<strong>bold text</strong>', escape: false)
+        ->assertSee('<ul>', escape: false)
+        ->assertSee('<li>First item</li>', escape: false)
+        ->assertSee('data-test="post-message-agent-mention"', escape: false)
+        ->assertSee('>@reviewer</a>', escape: false)
+        ->assertDontSee('<script>alert', escape: false);
+});
+
 test('attachment route serves image files inline', function () {
     Storage::fake('public');
 
