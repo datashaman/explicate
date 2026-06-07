@@ -93,8 +93,13 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
     /** @var array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile> */
     public array $postUploads = [];
 
-    public function mount(): void
+    public function mount(?string $folder = null): void
     {
+        if (! $this->selectedSystemFolderSlug && $folder && PostFolder::tryFrom($folder)) {
+            $this->selectedSystemFolderSlug = $folder;
+            $this->mobilePanel = 'posts';
+        }
+
         if ($this->isCreateRoute()) {
             $this->creatingPostFromRoute = true;
             $this->mobilePanel = 'posts';
@@ -124,11 +129,15 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
     public function selectedSystemFolder(): ?PostFolder
     {
-        if (! $this->selectedSystemFolderSlug) {
+        if ($this->selectedSystemFolderSlug) {
+            return PostFolder::tryFrom($this->selectedSystemFolderSlug);
+        }
+
+        if ($this->selectedTopicSlug || $this->isCreatingPost()) {
             return null;
         }
 
-        return PostFolder::tryFrom($this->selectedSystemFolderSlug);
+        return PostFolder::Feed;
     }
 
     public function selectedPost(): ?Post
@@ -145,7 +154,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
     public function postsPanelReturnRoute(): string
     {
         if ($folder = $this->selectedSystemFolder()) {
-            return route('dashboard', ['folder' => $folder->value, 'panel' => 'posts']);
+            return $this->systemFolderRoute($folder);
         }
 
         if ($topic = $this->selectedTopic()) {
@@ -168,6 +177,18 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         return __('Dashboard');
     }
 
+    /**
+     * @param  array<string, mixed>  $parameters
+     */
+    public function systemFolderRoute(PostFolder $folder, array $parameters = []): string
+    {
+        return match ($folder) {
+            PostFolder::Feed => route('dashboard', $parameters),
+            PostFolder::Drafts => route('posts.drafts', $parameters),
+            PostFolder::Archived => route('posts.archived', $parameters),
+        };
+    }
+
     public function selectedAgent(): ?Agent
     {
         $workspace = $this->workspace();
@@ -187,7 +208,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         return $this->creatingPostFromRoute || $this->panelAction === 'new-post';
     }
 
-    /** @return list<array{slug: string, name: string, icon: string, count: int}> */
+    /** @return list<array{slug: string, name: string, icon: string, href: string, count: int}> */
     public function systemFolders(): array
     {
         $workspace = $this->workspace();
@@ -207,6 +228,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                 'slug' => $folder->value,
                 'name' => $folder->label(),
                 'icon' => $folder->icon(),
+                'href' => $this->systemFolderRoute($folder),
                 'count' => (int) ($counts[$folder->status()->value] ?? 0),
             ])
             ->all();
@@ -360,8 +382,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                     : $post->listSortValues(dateKey: PostListColumn::Sent->value);
 
                 return [
-                    'href' => route('dashboard', [
-                        'folder' => $folder->value,
+                    'href' => $this->systemFolderRoute($folder, [
                         'topic' => $post->topic->slug,
                         'post' => $post->slug,
                         'panel' => 'posts',
@@ -947,11 +968,14 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                     </div>
                 @else
                     <div class="divide-y divide-neutral-200 bg-white xl:flex-1 xl:overflow-auto dark:divide-white/5 dark:bg-zinc-900/20">
+                        @php
+                            $selectedFolder = $this->selectedSystemFolder();
+                        @endphp
                         @foreach ($this->systemFolders() as $folder)
-                            <a href="{{ route('dashboard', ['folder' => $folder['slug'], 'panel' => 'posts']) }}" wire:navigate
+                            <a href="{{ $folder['href'] }}" wire:navigate
                                @class([
                                    'flex items-center gap-3 px-4 py-3 hover:bg-neutral-100 dark:hover:bg-white/5',
-                                   'bg-blue-100/80 dark:bg-blue-500/15' => $selectedSystemFolderSlug === $folder['slug'],
+                                   'bg-blue-100/80 dark:bg-blue-500/15' => $selectedFolder?->value === $folder['slug'],
                                ])>
                                 <div class="flex size-8 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-500 dark:bg-blue-500/10 dark:text-blue-300">
                                     <flux:icon :name="$folder['icon']" class="size-4" />

@@ -42,6 +42,8 @@ Route::bind('agent', function (string $value): Agent {
 Route::middleware(['auth', 'verified', EnsureTeamMembership::class])
     ->group(function () {
         Route::livewire('dashboard', 'pages::dashboard')->name('dashboard');
+        Route::livewire('drafts', 'pages::dashboard')->name('posts.drafts')->defaults('folder', 'drafts');
+        Route::livewire('archived', 'pages::dashboard')->name('posts.archived')->defaults('folder', 'archived');
         Route::livewire('posts/new', 'pages::dashboard')->name('posts.create');
         Route::livewire('topics/{topic}', 'pages::topic')->name('topics.show');
         Route::livewire('posts/{post}', 'pages::post')->name('posts.show');

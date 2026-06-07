@@ -83,6 +83,11 @@ test('dashboard shows topics as folders for current workspace', function () {
 
     $topic = Topic::factory()->for($workspace)->create(['name' => 'Design']);
     $post = Post::factory()->for($topic)->create(['title' => 'Dashboard draft']);
+    $publishedPost = Post::factory()->for($topic)->create([
+        'title' => 'Dashboard published',
+        'status' => PostStatus::Published,
+        'sender_principal_id' => $workspace->principalForUser($user)->id,
+    ]);
 
     $this->actingAs($user)
         ->get(route('dashboard'))
@@ -92,9 +97,10 @@ test('dashboard shows topics as folders for current workspace', function () {
         ->assertSee('Drafts')
         ->assertSee('Archived')
         ->assertSee($topic->name)
+        ->assertSee($publishedPost->title)
         ->assertDontSee($post->title)
-        ->assertSee('Select a topic')
-        ->assertSee('Choose a topic to view its feed.');
+        ->assertDontSee('Select a topic')
+        ->assertDontSee('Choose a topic to view its feed.');
 });
 
 test('dashboard shows system folders with workspace post counts', function () {
@@ -115,9 +121,9 @@ test('dashboard shows system folders with workspace post counts', function () {
     $this->actingAs($user)
         ->get(route('dashboard'))
         ->assertOk()
-        ->assertSee(e(route('dashboard', ['folder' => 'feed', 'panel' => 'posts'])), escape: false)
-        ->assertSee(e(route('dashboard', ['folder' => 'drafts', 'panel' => 'posts'])), escape: false)
-        ->assertSee(e(route('dashboard', ['folder' => 'archived', 'panel' => 'posts'])), escape: false)
+        ->assertSee(e(route('dashboard')), escape: false)
+        ->assertSee(e(route('posts.drafts')), escape: false)
+        ->assertSee(e(route('posts.archived')), escape: false)
         ->assertSee('data-test="system-folder-feed-count"', escape: false)
         ->assertSee('data-test="system-folder-drafts-count"', escape: false);
 });
@@ -142,13 +148,12 @@ test('dashboard system draft folder shows draft posts across topics', function (
     ]);
 
     $response = $this->actingAs($user)
-        ->get(route('dashboard', ['folder' => 'drafts', 'panel' => 'posts']))
+        ->get(route('posts.drafts'))
         ->assertOk()
         ->assertSee('data-test="folder-title"', escape: false)
         ->assertSee('Drafts')
         ->assertSee('Working draft')
-        ->assertSee(e(route('dashboard', [
-            'folder' => 'drafts',
+        ->assertSee(e(route('posts.drafts', [
             'topic' => $design->slug,
             'post' => $designDraft->slug,
             'panel' => 'posts',
@@ -188,7 +193,7 @@ test('dashboard feed folder does not show draft posts', function () {
     ]);
 
     $this->actingAs($user)
-        ->get(route('dashboard', ['folder' => 'feed', 'panel' => 'posts']))
+        ->get(route('dashboard'))
         ->assertOk()
         ->assertSee('Visible post')
         ->assertDontSee('Hidden draft');
@@ -220,7 +225,7 @@ test('dashboard feed folder shows all published topic posts', function () {
     ]);
 
     $this->actingAs($user)
-        ->get(route('dashboard', ['folder' => 'feed', 'panel' => 'posts']))
+        ->get(route('dashboard'))
         ->assertOk()
         ->assertSee('data-test="folder-title"', escape: false)
         ->assertSeeText('Feed')
@@ -256,7 +261,7 @@ test('dashboard post panel returns to the selected folder before the post topic'
     $component->instance()->selectedPostSlug = $post->slug;
 
     expect($component->instance()->postsPanelReturnRoute())
-        ->toBe(route('dashboard', ['folder' => 'feed', 'panel' => 'posts']))
+        ->toBe(route('dashboard'))
         ->and($component->instance()->postsPanelReturnLabel())
         ->toBe('Feed');
 });
@@ -292,7 +297,7 @@ test('dashboard archived folder shows archived feed', function () {
     ]);
 
     $response = $this->actingAs($user)
-        ->get(route('dashboard', ['folder' => 'archived', 'panel' => 'posts']))
+        ->get(route('posts.archived'))
         ->assertOk()
         ->assertSee('data-test="folder-title"', escape: false)
         ->assertSeeText('Archived')
@@ -925,7 +930,7 @@ test('dashboard can render the topics mobile panel as active', function () {
         ->assertSee('hidden xl:flex', escape: false);
 });
 
-test('dashboard without a selected topic shows a top-level new post action', function () {
+test('dashboard feed panel shows a top-level new post action', function () {
     [$user, $workspace] = userWithWorkspace();
 
     Topic::factory()->for($workspace)->create();
@@ -933,12 +938,12 @@ test('dashboard without a selected topic shows a top-level new post action', fun
     $this->actingAs($user)
         ->get(route('dashboard', ['panel' => 'posts']))
         ->assertOk()
-        ->assertSee('Select a topic')
-        ->assertSee('data-mobile-panel="topics"', escape: false)
+        ->assertSee('Feed')
+        ->assertDontSee('Select a topic')
+        ->assertSee('data-mobile-panel="posts"', escape: false)
         ->assertSee('New post')
         ->assertSee(e(route('posts.create')), escape: false)
-        ->assertSee('data-mobile-nav="posts"', escape: false)
-        ->assertSee('disabled', escape: false);
+        ->assertSee('data-mobile-nav="posts"', escape: false);
 });
 
 test('dashboard selected topic shows attach and detach actions in the agents rail', function () {
