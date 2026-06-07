@@ -23,7 +23,7 @@ class AgentTaskFactory extends Factory
         return [
             'agent_id' => Agent::factory(),
             'post_id' => Post::factory(),
-            'event_type' => AgentTask::EventPostAssigned,
+            'event_type' => AgentTask::EventPostMentioned,
             'status' => AgentTaskStatus::Pending,
             'priority' => 0,
             'available_at' => now(),

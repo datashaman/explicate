@@ -5,9 +5,7 @@
     'bodyTest' => null,
     'topicModel' => null,
     'topicName' => null,
-    'agentIdsModel',
     'availableTopics' => collect(),
-    'availableAgents' => collect(),
     'canChangeTopic' => false,
     'testPrefix' => null,
     'post' => null,
@@ -28,9 +26,7 @@
         @include('partials.post-routing-fields', [
             'topicModel' => $topicModel,
             'topicName' => $topicName,
-            'agentIdsModel' => $agentIdsModel,
             'availableTopics' => $availableTopics,
-            'availableAgents' => $availableAgents,
             'canChangeTopic' => $canChangeTopic,
             'testPrefix' => $testPrefix,
         ])

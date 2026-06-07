@@ -31,18 +31,16 @@ test('it executes a pending agent task through an anonymous laravel ai agent', f
 
     $post = Post::factory()->for($this->topic)->create([
         'sender_principal_id' => $this->senderPrincipal->id,
-        'body' => 'Find the latest internal context.',
+        'body' => '@researcher Find the latest internal context.',
         'status' => PostStatus::Published,
     ]);
-    $this->topic->agents()->attach($agent);
-    $post->assignAgents([$agent->id]);
 
     $task = AgentTask::query()->whereBelongsTo($post)->sole();
 
     $reply = app(ExecuteAgentTask::class)->handle($task);
 
     Ai::assertAgentWasPrompted(AnonymousAgent::class, function (AgentPrompt $prompt): bool {
-        return $prompt->prompt === 'Find the latest internal context.'
+        return $prompt->prompt === '@researcher Find the latest internal context.'
             && $prompt->model === 'gemini-2.5-flash'
             && $prompt->provider()->name() === 'gemini'
             && $prompt->agent->instructions() === 'Answer as a concise researcher.';
@@ -64,10 +62,9 @@ test('it marks a task failed when the agent has no executable version', function
     $agent = Agent::factory()->for($this->workspace)->create(['name' => 'Researcher']);
     $post = Post::factory()->for($this->topic)->create([
         'sender_principal_id' => $this->senderPrincipal->id,
+        'body' => '@researcher Please handle this.',
         'status' => PostStatus::Published,
     ]);
-    $this->topic->agents()->attach($agent);
-    $post->assignAgents([$agent->id]);
 
     $task = AgentTask::query()->whereBelongsTo($post)->sole();
     $exception = null;
@@ -88,23 +85,18 @@ test('it marks a task failed when the agent has no executable version', function
         ->and($task->fresh()->last_error)->toBe('Agent does not have a version to execute.');
 });
 
-test('it ignores assigned draft post tasks until they are available', function () {
+test('it does not execute mentioned draft posts until they are published', function () {
     Ai::fakeAgent(AnonymousAgent::class)->preventStrayPrompts();
 
     $agent = Agent::factory()->for($this->workspace)->create(['name' => 'Researcher']);
     AgentVersion::factory()->for($agent)->create();
     $post = Post::factory()->for($this->topic)->create([
         'sender_principal_id' => $this->senderPrincipal->id,
+        'body' => '@researcher Draft request.',
         'status' => PostStatus::Draft,
     ]);
-    $this->topic->agents()->attach($agent);
-    $post->assignAgents([$agent->id]);
 
-    $task = AgentTask::query()->whereBelongsTo($post)->sole();
-
-    expect(app(ExecuteAgentTask::class)->handle($task))->toBeNull()
-        ->and($task->fresh()->status)->toBe(AgentTaskStatus::Pending)
-        ->and($task->fresh()->attempts)->toBe(0);
+    expect(AgentTask::query()->whereBelongsTo($post)->count())->toBe(0);
 
     Ai::assertAgentNeverPrompted(AnonymousAgent::class);
 });

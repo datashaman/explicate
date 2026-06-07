@@ -3,7 +3,6 @@
 namespace App\Actions\Posts;
 
 use App\Enums\PostStatus;
-use App\Models\Agent;
 use App\Models\Post;
 use App\Models\User;
 use App\Models\Workspace;
@@ -14,7 +13,6 @@ class UpdateDraftPost
     public function __construct(private StorePostAttachments $storePostAttachments) {}
 
     /**
-     * @param  iterable<int, int|string|Agent>  $agentIds
      * @param  array<int, TemporaryUploadedFile>  $uploads
      */
     public function handle(
@@ -22,7 +20,6 @@ class UpdateDraftPost
         Workspace $workspace,
         User $user,
         string $body,
-        iterable $agentIds,
         array $uploads,
         bool $publish = false,
     ): Post {
@@ -36,7 +33,7 @@ class UpdateDraftPost
         }
 
         $post->update($attributes);
-        $post->assignAgents($agentIds);
+        $post->syncMentionedAgentTasks();
         $this->storePostAttachments->handle($post, $uploads);
 
         return $post->fresh();

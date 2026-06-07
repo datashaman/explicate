@@ -16,7 +16,7 @@ use Laravel\Mcp\Server\Tools\Annotations\IsIdempotent;
 use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 
 #[Name('get-topic')]
-#[Description('Get a topic and its attached agents inside the current workspace.')]
+#[Description('Get a topic inside the current workspace.')]
 #[IsReadOnly]
 #[IsIdempotent]
 class GetTopicTool extends Tool
@@ -35,7 +35,7 @@ class GetTopicTool extends Tool
         /** @var User $user */
         $user = $this->context->requireUser($request->user());
         $topic = $this->context->topicFor($user, $validated['topic_slug']);
-        $topic->load(['agents.latestVersion', 'workspace']);
+        $topic->load('workspace');
 
         return Response::structured([
             'workspace' => $topic->workspace->only(['id', 'name', 'slug']),
@@ -46,16 +46,6 @@ class GetTopicTool extends Tool
                 'posts_count' => $topic->posts()->count(),
                 'resource_uri' => TopicForgeUris::topic($topic),
             ],
-            'agents' => $topic->agents
-                ->map(fn ($agent) => [
-                    'id' => $agent->id,
-                    'name' => $agent->name,
-                    'slug' => $agent->slug,
-                    'latest_version' => $agent->latestVersion?->version,
-                    'latest_model' => $agent->latestVersion?->model,
-                ])
-                ->values()
-                ->all(),
         ]);
     }
 

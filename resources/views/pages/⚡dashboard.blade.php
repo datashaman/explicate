@@ -73,15 +73,9 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
     public string $postBody = '';
 
-    /** @var list<int> */
-    public array $postAgentIds = [];
-
     public string $newPostBody = '';
 
     public ?int $newPostTopicId = null;
-
-    /** @var list<int> */
-    public array $newPostAgentIds = [];
 
     /** @var array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile> */
     public array $newPostUploads = [];
@@ -145,7 +139,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         }
 
         return $topic->posts()
-            ->with(['assignedAgents', 'sender.user', 'sender.agent', 'topic'])
+            ->with(['agentTasks.agent', 'sender.user', 'sender.agent', 'topic'])
             ->where('ulid', $this->selectedPostUlid)
             ->first();
     }
@@ -234,20 +228,6 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
     }
 
     /**
-     * @return list<int>
-     */
-    public function assignedAgentIds(): array
-    {
-        $topic = $this->selectedTopic();
-
-        if (! $topic) {
-            return [];
-        }
-
-        return $topic->agents()->pluck('agents.id')->all();
-    }
-
-    /**
      * @return \Illuminate\Database\Eloquent\Collection<int, Agent>
      */
     public function agents(): \Illuminate\Database\Eloquent\Collection
@@ -259,40 +239,6 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         }
 
         return $workspace->agents()->with('latestVersion')->get();
-    }
-
-    /**
-     * @return \Illuminate\Database\Eloquent\Collection<int, Agent>
-     */
-    public function newPostAssignableAgents(): \Illuminate\Database\Eloquent\Collection
-    {
-        $workspace = $this->workspace();
-
-        if (! $workspace || ! $this->newPostTopicId) {
-            return Agent::query()->whereNull('id')->get();
-        }
-
-        $topic = $workspace->topics()->find($this->newPostTopicId);
-
-        if (! $topic) {
-            return Agent::query()->whereNull('id')->get();
-        }
-
-        return $topic->agents()->with('latestVersion')->get();
-    }
-
-    /**
-     * @return \Illuminate\Database\Eloquent\Collection<int, Agent>
-     */
-    public function selectedPostAssignableAgents(): \Illuminate\Database\Eloquent\Collection
-    {
-        $post = $this->selectedPost();
-
-        if (! $post) {
-            return Agent::query()->whereNull('id')->get();
-        }
-
-        return $post->topic->agents()->with('latestVersion')->get();
     }
 
     /**
@@ -327,7 +273,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         }
 
         return $topic->posts()
-            ->with(['assignedAgents', 'sender.user', 'sender.agent', 'topic'])
+            ->with(['agentTasks.agent', 'sender.user', 'sender.agent', 'topic'])
             ->withCount('attachments')
             ->reorder()
             ->when(! $this->showArchived, fn ($query) => $query->where('status', '!=', PostStatus::Archived))
@@ -362,7 +308,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         }
 
         return Post::query()
-            ->with(['assignedAgents', 'topic', 'sender.user', 'sender.agent'])
+            ->with(['agentTasks.agent', 'topic', 'sender.user', 'sender.agent'])
             ->withCount('attachments')
             ->whereHas('topic', fn ($query) => $query->where('workspace_id', $workspace->id))
             ->where('status', $folder->status())
@@ -650,12 +596,9 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         $validated = $this->validate([
             'newPostBody' => ['required', 'string'],
             'newPostTopicId' => ['required', 'integer'],
-            'newPostAgentIds' => ['array'],
-            'newPostAgentIds.*' => ['integer'],
         ], [], [
             'newPostBody' => __('post'),
             'newPostTopicId' => __('topic'),
-            'newPostAgentIds' => __('requested agents'),
         ]);
         Validator::make(['newPostUploads' => $uploads], [
             'newPostUploads.*' => ['file', 'max:51200'],
@@ -669,7 +612,6 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             sender: $workspace->principalForUser(Auth::user()),
             body: $validated['newPostBody'],
             status: $status,
-            agentIds: $validated['newPostAgentIds'],
             uploads: $uploads,
         );
 
@@ -678,37 +620,11 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         $this->panelAction = null;
         $this->creatingPostFromRoute = false;
         $this->mobilePanel = 'posts';
-        $this->reset('newPostBody', 'newPostAgentIds', 'newPostUploads');
+        $this->reset('newPostBody', 'newPostUploads');
         $this->newPostTopicId = $topic->id;
         $this->syncSelectedPostFields();
 
         Flux::toast(variant: 'success', text: $status === PostStatus::Draft ? __('Draft created.') : __('Post published.'));
-    }
-
-    public function assignAgent(int $agentId): void
-    {
-        $topic = $this->selectedTopic();
-
-        abort_unless($topic, 422);
-
-        $agent = Auth::user()->currentWorkspace
-            ->agents()
-            ->findOrFail($agentId);
-
-        $topic->agents()->syncWithoutDetaching($agent);
-
-        Flux::toast(variant: 'success', text: __('Agent assigned.'));
-    }
-
-    public function unassignAgent(int $agentId): void
-    {
-        $topic = $this->selectedTopic();
-
-        abort_unless($topic, 422);
-
-        $topic->agents()->detach($agentId);
-
-        Flux::toast(variant: 'success', text: __('Agent removed.'));
     }
 
     public function openAgent(string $agentSlug): void
@@ -785,11 +701,8 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
         $validated = $this->validate([
             'postBody' => ['required', 'string'],
-            'postAgentIds' => ['array'],
-            'postAgentIds.*' => ['integer'],
         ], [], [
             'postBody' => __('post'),
-            'postAgentIds' => __('requested agents'),
         ]);
         Validator::make(['postUploads' => $uploads], [
             'postUploads.*' => ['file', 'max:51200'],
@@ -802,7 +715,6 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             workspace: $workspace,
             user: Auth::user(),
             body: $validated['postBody'],
-            agentIds: $validated['postAgentIds'],
             uploads: $uploads,
         );
         $this->reset('postUploads');
@@ -829,7 +741,6 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             workspace: $workspace,
             user: Auth::user(),
             body: $this->postBody,
-            agentIds: $this->postAgentIds,
             uploads: [],
             publish: true,
         );
@@ -929,7 +840,6 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         $post = $this->selectedPost();
 
         $this->postBody = $post?->body ?? '';
-        $this->postAgentIds = $post?->assignedAgentIds() ?? [];
     }
 
     private function syncNewPostTopic(): void
@@ -981,18 +891,19 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         @endphp
 
         <div @class([
-            'grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)] items-stretch gap-3 xl:auto-rows-fr',
+            'grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)] items-stretch gap-2 xl:auto-rows-fr',
             'xl:grid-cols-[16rem_minmax(0,1fr)_32rem]' => $this->selectedAgent(),
-            'xl:grid-cols-[16rem_minmax(0,1fr)_19rem]' => ! $this->selectedAgent(),
+            'xl:grid-cols-[16rem_minmax(0,1fr)]' => ! $this->selectedAgent(),
         ])>
-            <section
+            <div
                 id="topics-panel"
                 data-mobile-panel="topics"
                 @class([
-                    'scroll-mt-4 flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none',
+                    'scroll-mt-4 flex h-full min-h-0 flex-col gap-2',
                     'hidden xl:flex' => $this->mobilePanel !== 'topics',
                 ])
             >
+                <section class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none">
                 <div class="flex items-center justify-between gap-3 border-b border-neutral-300 bg-blue-50 px-4 py-3 dark:border-white/10 dark:bg-blue-500/10">
                     <flux:heading size="sm">{{ __('Topics') }}</flux:heading>
                     <flux:modal.trigger name="new-topic">
@@ -1051,7 +962,44 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                         @endforeach
                     </div>
                 @endif
-            </section>
+                </section>
+
+                <section class="flex min-h-0 flex-col overflow-hidden rounded-lg border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none">
+                    <div class="border-b border-neutral-300 bg-amber-50 px-4 py-3 dark:border-white/10 dark:bg-amber-500/10">
+                        <div class="flex items-center justify-between gap-3">
+                            <flux:heading size="sm">{{ __('Agents') }}</flux:heading>
+                            <flux:modal.trigger name="new-dashboard-agent">
+                                <flux:button icon="plus" size="xs">{{ __('New agent') }}</flux:button>
+                            </flux:modal.trigger>
+                        </div>
+                    </div>
+
+                    @if ($this->agents()->isEmpty())
+                        <div class="px-4 py-4">
+                            <flux:text class="text-sm text-neutral-400 dark:text-neutral-600">{{ __('No agents in this workspace.') }}</flux:text>
+                        </div>
+                    @else
+                        <div class="divide-y divide-neutral-200 bg-white dark:divide-white/5 dark:bg-zinc-900/20">
+                            @foreach ($this->agents() as $agent)
+                            <button
+                                type="button"
+                                wire:click="openAgent('{{ $agent->slug }}')"
+                                wire:key="workspace-agent-row-{{ $agent->id }}"
+                                data-test="workspace-agent-row-{{ $agent->slug }}"
+                                class="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-neutral-100 dark:hover:bg-white/5"
+                            >
+                                <div class="flex size-8 shrink-0 items-center justify-center rounded-full bg-amber-50 text-amber-500 dark:bg-amber-500/10 dark:text-amber-300">
+                                    <flux:icon name="cpu-chip" class="size-4" />
+                                </div>
+                                <div class="min-w-0 flex-1">
+                                    <div class="truncate text-sm font-medium text-neutral-700 dark:text-neutral-300">{{ $agent->name }}</div>
+                                </div>
+                            </button>
+                            @endforeach
+                        </div>
+                    @endif
+                </section>
+            </div>
 
             @if ($this->selectedTopic() || $this->selectedSystemFolder() || $this->isCreatingPost())
                 @php
@@ -1063,7 +1011,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                     id="posts-panel"
                     data-mobile-panel="posts"
                     @class([
-                        'scroll-mt-4 flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none',
+                        'scroll-mt-4 flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none',
                         'hidden xl:flex' => $this->mobilePanel !== 'posts',
                     ])
                 >
@@ -1082,9 +1030,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                             'bodyModel' => 'newPostBody',
                             'bodyTest' => 'new-post-body',
                             'topicModel' => 'newPostTopicId',
-                            'agentIdsModel' => 'newPostAgentIds',
                             'availableTopics' => $this->availableTopics,
-                            'availableAgents' => $this->newPostAssignableAgents(),
                             'canChangeTopic' => true,
                             'testPrefix' => 'new-post',
                             'uploadModel' => 'newPostUploads',
@@ -1111,8 +1057,6 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                                 'submitAction' => 'saveSelectedPost',
                                 'bodyModel' => 'postBody',
                                 'topicName' => $selectedDashboardPost->topic->name,
-                                'agentIdsModel' => 'postAgentIds',
-                                'availableAgents' => $this->selectedPostAssignableAgents(),
                                 'canChangeTopic' => false,
                                 'testPrefix' => 'post',
                                 'post' => $selectedDashboardPost,
@@ -1179,7 +1123,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                     id="posts-panel"
                     data-mobile-panel="posts"
                     @class([
-                        'scroll-mt-4 flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none',
+                        'scroll-mt-4 flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none',
                         'hidden xl:flex' => $this->mobilePanel !== 'posts',
                     ])
                 >
@@ -1201,16 +1145,16 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                 </section>
             @endif
 
-            <div
-                data-mobile-panel="agents"
-                @class([
-                    'h-full min-h-0 xl:block',
-                    'hidden xl:block' => $this->mobilePanel !== 'agents',
-                ])
-            >
-                @if ($selectedDashboardAgent = $this->selectedAgent())
+            @if ($selectedDashboardAgent = $this->selectedAgent())
+                <div
+                    data-mobile-panel="agents"
+                    @class([
+                        'h-full min-h-0 xl:block',
+                        'hidden xl:block' => $this->mobilePanel !== 'agents',
+                    ])
+                >
                     <aside id="agents-panel" class="h-full min-h-0">
-                        <div class="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none" data-test="dashboard-agent-panel">
+                        <div class="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none" data-test="dashboard-agent-panel">
                             <div class="flex items-center justify-between gap-3 border-b border-neutral-300 bg-amber-50 px-4 py-3 dark:border-white/10 dark:bg-amber-500/10">
                                 <flux:heading size="sm" class="min-w-0 flex-1 truncate">{{ $selectedDashboardAgent->name }}</flux:heading>
 
@@ -1313,25 +1257,12 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                             </div>
                         </div>
                     </aside>
-                @else
-                    @include('partials.workspace-agents-rail', [
-                        'agents' => $this->agents(),
-                        'createModal' => 'new-dashboard-agent',
-                        'panelId' => 'agents-panel',
-                        'asideClass' => 'h-full min-h-0',
-                        'containerClass' => 'h-full min-h-0 xl:min-h-0',
-                        'sticky' => false,
-                        'assignedAgentIds' => $this->selectedTopic() ? $this->assignedAgentIds() : [],
-                        'assignAction' => $this->selectedTopic() ? 'assignAgent' : null,
-                        'unassignAction' => $this->selectedTopic() ? 'unassignAgent' : null,
-                        'selectAction' => 'openAgent',
-                    ])
-                @endif
-            </div>
+                </div>
+            @endif
         </div>
 
         <nav class="fixed inset-x-0 bottom-0 z-40 bg-white/95 px-2 py-2 backdrop-blur xl:hidden dark:bg-zinc-900/95">
-            <div class="grid grid-cols-3 gap-2">
+            <div @class(['grid gap-2', $this->selectedAgent() ? 'grid-cols-3' : 'grid-cols-2'])>
                 <button
                     type="button"
                     wire:click="showMobilePanel('topics')"
@@ -1362,20 +1293,22 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                     <flux:icon name="document-text" class="size-4" />
                     <span>{{ __('Feed') }}</span>
                 </button>
-                <button
-                    type="button"
-                    wire:click="showMobilePanel('agents')"
-                    data-mobile-nav="agents"
-                    aria-pressed="{{ $this->mobilePanel === 'agents' ? 'true' : 'false' }}"
-                    @class([
-                        'flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition',
-                        'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-400/30 dark:bg-amber-500/15 dark:text-amber-200' => $this->mobilePanel === 'agents',
-                        'border-neutral-200 bg-neutral-50 text-neutral-700 dark:border-white/10 dark:bg-white/5 dark:text-neutral-200' => $this->mobilePanel !== 'agents',
-                    ])
-                >
-                    <flux:icon name="cpu-chip" class="size-4" />
-                    <span>{{ __('Agents') }}</span>
-                </button>
+                @if ($this->selectedAgent())
+                    <button
+                        type="button"
+                        wire:click="showMobilePanel('agents')"
+                        data-mobile-nav="agents"
+                        aria-pressed="{{ $this->mobilePanel === 'agents' ? 'true' : 'false' }}"
+                        @class([
+                            'flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition',
+                            'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-400/30 dark:bg-amber-500/15 dark:text-amber-200' => $this->mobilePanel === 'agents',
+                            'border-neutral-200 bg-neutral-50 text-neutral-700 dark:border-white/10 dark:bg-white/5 dark:text-neutral-200' => $this->mobilePanel !== 'agents',
+                        ])
+                    >
+                        <flux:icon name="cpu-chip" class="size-4" />
+                        <span>{{ __('Agent') }}</span>
+                    </button>
+                @endif
             </div>
         </nav>
 

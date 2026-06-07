@@ -13,7 +13,7 @@ trait FormatsMcpPayloads
      */
     protected function postSummaryPayload(Post $post): array
     {
-        $post->loadMissing(['topic.workspace', 'sender.user', 'sender.agent', 'assignedAgents']);
+        $post->loadMissing(['topic.workspace', 'sender.user', 'sender.agent']);
 
         return [
             'id' => $post->id,
@@ -26,14 +26,6 @@ trait FormatsMcpPayloads
                 'type' => $post->sender->type,
                 'name' => $post->sender->label(),
             ] : null,
-            'assigned_agents' => $post->assignedAgents
-                ->map(fn ($agent): array => [
-                    'id' => $agent->id,
-                    'name' => $agent->name,
-                    'slug' => $agent->slug,
-                ])
-                ->values()
-                ->all(),
             'resource_uri' => $this->postResourceUri($post),
         ];
     }

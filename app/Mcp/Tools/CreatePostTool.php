@@ -31,8 +31,6 @@ class CreatePostTool extends Tool
             'topic_slug' => ['required', 'string'],
             'body' => ['required', 'string'],
             'status' => ['nullable', 'string', Rule::enum(PostStatus::class)],
-            'agent_ids' => ['nullable', 'array'],
-            'agent_ids.*' => ['integer'],
         ]);
 
         /** @var User $user */
@@ -43,7 +41,6 @@ class CreatePostTool extends Tool
             sender: $topic->workspace->principalForUser($user),
             body: $validated['body'],
             status: PostStatus::from($validated['status'] ?? PostStatus::Draft->value),
-            agentIds: $validated['agent_ids'] ?? [],
         );
 
         return Response::structured([
@@ -58,7 +55,6 @@ class CreatePostTool extends Tool
                 'preview' => $post->preview(),
                 'status' => $post->status->value,
                 'sender_principal_id' => $post->sender_principal_id,
-                'assigned_agent_ids' => $post->assignedAgentIds(),
                 'resource_uri' => TopicForgeUris::post($post),
             ],
         ]);
@@ -81,9 +77,6 @@ class CreatePostTool extends Tool
             'status' => $schema->string()
                 ->description('Optional post status.')
                 ->enum(PostStatus::class)
-                ->nullable(),
-            'agent_ids' => $schema->array()
-                ->description('Optional workspace agent ids to assign to this post, creating agent tasks.')
                 ->nullable(),
         ];
     }

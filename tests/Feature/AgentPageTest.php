@@ -92,79 +92,6 @@ test('agent can be deleted', function () {
     expect(Agent::find($agent->id))->toBeNull();
 });
 
-test('agent can be assigned to a topic', function () {
-    $agent = Agent::factory()->for($this->workspace)->create();
-    $topic = Topic::factory()->for($this->workspace)->create();
-
-    $this->actingAs($this->user);
-
-    Livewire::test('pages::topic', ['topic' => $topic])
-        ->set('assignAgentId', $agent->id)
-        ->call('assignAgent')
-        ->assertHasNoErrors();
-
-    expect($topic->agents()->where('agents.id', $agent->id)->exists())->toBeTrue();
-});
-
-test('agent can be unassigned from a topic', function () {
-    $agent = Agent::factory()->for($this->workspace)->create();
-    $topic = Topic::factory()->for($this->workspace)->create();
-    $topic->agents()->attach($agent);
-
-    $this->actingAs($this->user);
-
-    Livewire::test('pages::topic', ['topic' => $topic])
-        ->call('unassignAgent', $agent->id)
-        ->assertHasNoErrors();
-
-    expect($topic->agents()->where('agents.id', $agent->id)->exists())->toBeFalse();
-});
-
-test('agent can be assigned to a selected topic from the dashboard component', function () {
-    $agent = Agent::factory()->for($this->workspace)->create();
-    $topic = Topic::factory()->for($this->workspace)->create(['slug' => 'dashboard-topic']);
-
-    $this->actingAs($this->user);
-
-    Livewire::test('pages::dashboard')
-        ->set('selectedTopicSlug', $topic->slug)
-        ->call('assignAgent', $agent->id)
-        ->assertHasNoErrors();
-
-    expect($topic->agents()->where('agents.id', $agent->id)->exists())->toBeTrue();
-});
-
-test('agent can be unassigned from a selected topic from the dashboard component', function () {
-    $agent = Agent::factory()->for($this->workspace)->create();
-    $topic = Topic::factory()->for($this->workspace)->create(['slug' => 'dashboard-topic']);
-    $topic->agents()->attach($agent);
-
-    $this->actingAs($this->user);
-
-    Livewire::test('pages::dashboard')
-        ->set('selectedTopicSlug', $topic->slug)
-        ->call('unassignAgent', $agent->id)
-        ->assertHasNoErrors();
-
-    expect($topic->agents()->where('agents.id', $agent->id)->exists())->toBeFalse();
-});
-
-test('available agents excludes already assigned agents', function () {
-    $assigned = Agent::factory()->for($this->workspace)->create();
-    $available = Agent::factory()->for($this->workspace)->create();
-    $topic = Topic::factory()->for($this->workspace)->create();
-    $topic->agents()->attach($assigned);
-
-    $this->actingAs($this->user);
-
-    $component = Livewire::test('pages::topic', ['topic' => $topic]);
-
-    $ids = $component->instance()->availableAgents()->pluck('id');
-
-    expect($ids)->toContain($available->id)
-        ->not->toContain($assigned->id);
-});
-
 test('agent details can be updated', function () {
     $agent = Agent::factory()->for($this->workspace)->create();
 
@@ -178,7 +105,7 @@ test('agent details can be updated', function () {
     expect($agent->fresh()->name)->toBe('Renamed Agent');
 });
 
-test('topic page can create and assign an agent with first version details', function () {
+test('topic page can create a workspace agent with first version details', function () {
     $topic = Topic::factory()->for($this->workspace)->create();
 
     $this->actingAs($this->user);
@@ -194,7 +121,6 @@ test('topic page can create and assign an agent with first version details', fun
     $agent = $this->workspace->agents()->where('name', 'Topic Agent')->first();
 
     expect($agent)->not->toBeNull();
-    expect($topic->agents()->where('agents.id', $agent->id)->exists())->toBeTrue();
     expect($agent->versions)->toHaveCount(1);
     expect($agent->versions->first()->model)->toBe('claude-sonnet-4-6');
 });

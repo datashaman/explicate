@@ -33,13 +33,12 @@ class ListAgentsTool extends Tool
         $workspace = $this->context->workspaceFor($user);
 
         $agents = $workspace->agents()
-            ->with(['latestVersion', 'topics'])
+            ->with('latestVersion')
             ->get()
             ->map(fn ($agent) => [
                 'id' => $agent->id,
                 'name' => $agent->name,
                 'slug' => $agent->slug,
-                'topics_count' => $agent->topics->count(),
                 'latest_version' => $agent->latestVersion?->version,
                 'latest_model' => $agent->latestVersion?->model,
                 'resource_uri' => TopicForgeUris::agent($agent),

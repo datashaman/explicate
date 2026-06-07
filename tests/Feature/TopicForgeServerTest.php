@@ -216,17 +216,6 @@ test('get topic returns attached agents for an accessible workspace', function (
     ]);
     Post::factory()->for($topic)->count(2)->create();
 
-    $agent = Agent::factory()->for($workspace)->create([
-        'name' => 'Research Agent',
-        'slug' => 'research-agent',
-    ]);
-    AgentVersion::factory()->for($agent)->create([
-        'version' => 1,
-        'model' => 'o4-mini',
-    ]);
-    $topic->agents()->attach($agent);
-    $agent->load('latestVersion');
-
     $response = TopicForgeServer::actingAs($user)->tool(GetTopicTool::class, [
         'topic_slug' => 'alpha-topic',
     ]);
@@ -238,13 +227,11 @@ test('get topic returns attached agents for an accessible workspace', function (
             ->where('topic.slug', 'alpha-topic')
             ->where('topic.posts_count', 2)
             ->where('topic.resource_uri', 'topic-forge://workspaces/strategy/topics/alpha-topic')
-            ->where('agents.0.slug', 'research-agent')
-            ->where('agents.0.latest_version', 1)
             ->etc()
         );
 });
 
-test('list agents returns workspace agents with topic counts and latest versions', function () {
+test('list agents returns workspace agents with latest versions', function () {
     $user = User::factory()->create();
     $workspace = Workspace::factory()->for($user->currentTeam)->create([
         'slug' => 'strategy',
@@ -252,10 +239,6 @@ test('list agents returns workspace agents with topic counts and latest versions
     $otherWorkspace = Workspace::factory()->for($user->currentTeam)->create();
     $user->switchWorkspace($workspace);
 
-    $visibleTopic = Topic::factory()->for($workspace)->create([
-        'name' => 'Visible Topic',
-        'slug' => 'visible-topic',
-    ]);
     $agent = Agent::factory()->for($workspace)->create([
         'name' => 'Research Agent',
         'slug' => 'research-agent',
@@ -264,7 +247,6 @@ test('list agents returns workspace agents with topic counts and latest versions
         'version' => 3,
         'model' => 'o4-mini',
     ]);
-    $visibleTopic->agents()->attach($agent);
 
     Agent::factory()->for($otherWorkspace)->create([
         'name' => 'Hidden Agent',
@@ -278,7 +260,6 @@ test('list agents returns workspace agents with topic counts and latest versions
         ->assertStructuredContent(fn ($json) => $json
             ->where('workspace.slug', 'strategy')
             ->where('agents.0.slug', 'research-agent')
-            ->where('agents.0.topics_count', 1)
             ->where('agents.0.latest_version', 3)
             ->where('agents.0.latest_model', 'o4-mini')
             ->where('agents.0.resource_uri', 'topic-forge://workspaces/strategy/agents/research-agent')
@@ -286,7 +267,7 @@ test('list agents returns workspace agents with topic counts and latest versions
         );
 });
 
-test('get agent returns topics and version history for an accessible workspace', function () {
+test('get agent returns version history for an accessible workspace', function () {
     $user = User::factory()->create();
     $workspace = Workspace::factory()->for($user->currentTeam)->create([
         'slug' => 'strategy',
@@ -294,7 +275,6 @@ test('get agent returns topics and version history for an accessible workspace',
     $user->switchWorkspace($workspace);
 
     $topic = Topic::factory()->for($workspace)->create([
-        'name' => 'Alpha Topic',
         'slug' => 'alpha-topic',
     ]);
     $agent = Agent::factory()->for($workspace)->create([
@@ -311,8 +291,6 @@ test('get agent returns topics and version history for an accessible workspace',
         'model' => 'o4-mini',
         'prompt' => 'Second prompt',
     ]);
-    $topic->agents()->attach($agent);
-
     $response = TopicForgeServer::actingAs($user)->tool(GetAgentTool::class, [
         'agent_slug' => 'research-agent',
     ]);
@@ -324,8 +302,6 @@ test('get agent returns topics and version history for an accessible workspace',
             ->where('agent.slug', 'research-agent')
             ->where('agent.latest_version', 2)
             ->where('agent.resource_uri', 'topic-forge://workspaces/strategy/agents/research-agent')
-            ->where('topics.0.slug', 'alpha-topic')
-            ->where('topics.0.resource_uri', 'topic-forge://workspaces/strategy/topics/alpha-topic')
             ->where('versions.0.version', 2)
             ->where('versions.0.model', 'o4-mini')
             ->where('versions.0.prompt', 'Second prompt')
@@ -463,10 +439,8 @@ test('list agent tasks returns post-derived work for an agent', function () {
     $post = Post::factory()->for($topic)->create([
         'status' => PostStatus::Published,
         'sender_principal_id' => $workspace->principalForUser($user)->id,
-        'body' => 'Please summarize.',
+        'body' => '@research-agent Please summarize.',
     ]);
-    $topic->agents()->attach($agent);
-    $post->assignAgents([$agent->id]);
     $task = AgentTask::query()->whereBelongsTo($post)->first();
 
     $response = TopicForgeServer::actingAs($user)->tool(ListAgentTasksTool::class, [
@@ -481,7 +455,7 @@ test('list agent tasks returns post-derived work for an agent', function () {
             ->where('agent.tasks_resource_uri', 'topic-forge://workspaces/strategy/agents/research-agent/tasks')
             ->where('tasks.0.id', $task->id)
             ->where('tasks.0.status', 'pending')
-            ->where('tasks.0.event_type', AgentTask::EventPostAssigned)
+            ->where('tasks.0.event_type', AgentTask::EventPostMentioned)
             ->where('tasks.0.post.ulid', $post->ulid)
             ->where('tasks.0.resource_uri', "topic-forge://workspaces/strategy/agents/research-agent/tasks/{$task->id}")
             ->etc()
@@ -505,10 +479,8 @@ test('get agent task returns full post context for agent work', function () {
     $post = Post::factory()->for($topic)->create([
         'status' => PostStatus::Published,
         'sender_principal_id' => $workspace->principalForUser($user)->id,
-        'body' => 'Please summarize.',
+        'body' => '@research-agent Please summarize.',
     ]);
-    $topic->agents()->attach($agent);
-    $post->assignAgents([$agent->id]);
     $task = AgentTask::query()->whereBelongsTo($post)->first();
 
     $response = TopicForgeServer::actingAs($user)->tool(GetAgentTaskTool::class, [
@@ -523,8 +495,7 @@ test('get agent task returns full post context for agent work', function () {
             ->where('agent.slug', 'research-agent')
             ->where('task.id', $task->id)
             ->where('task.post.ulid', $post->ulid)
-            ->where('task.post.body', 'Please summarize.')
-            ->where('task.post.assigned_agents.0.name', 'Research Agent')
+            ->where('task.post.body', '@research-agent Please summarize.')
             ->etc()
         );
 });
@@ -674,8 +645,6 @@ test('workspace agents resource returns agents for a workspace by uri template',
         'version' => 3,
         'model' => 'o4-mini',
     ]);
-    $topic->agents()->attach($agent);
-
     $resource = new class(app(TopicForgeContext::class)) extends WorkspaceAgentsResource
     {
         public function uri(): string
@@ -690,7 +659,6 @@ test('workspace agents resource returns agents for a workspace by uri template',
         ->assertOk()
         ->assertSee('"slug":"strategy"')
         ->assertSee('"slug":"research-agent"')
-        ->assertSee('"topics_count":1')
         ->assertSee('"resource_uri":"topic-forge://workspaces/strategy/agents/research-agent"');
 });
 
@@ -786,12 +754,10 @@ test('agent tasks resource returns queued work by uri template', function () {
         'slug' => 'research-agent',
     ]);
     $post = Post::factory()->for($topic)->create([
-        'body' => 'Agent Request',
+        'body' => '@research-agent Agent Request',
         'status' => PostStatus::Published,
         'sender_principal_id' => $workspace->principalForUser($user)->id,
     ]);
-    $topic->agents()->attach($agent);
-    $post->assignAgents([$agent->id]);
     $task = AgentTask::query()->whereBelongsTo($post)->first();
 
     $resource = new class(app(TopicForgeContext::class)) extends AgentTasksResource
@@ -830,10 +796,8 @@ test('agent task resource returns queued work by uri template', function () {
     $post = Post::factory()->for($topic)->create([
         'status' => PostStatus::Published,
         'sender_principal_id' => $workspace->principalForUser($user)->id,
-        'body' => 'Please summarize.',
+        'body' => '@research-agent Please summarize.',
     ]);
-    $topic->agents()->attach($agent);
-    $post->assignAgents([$agent->id]);
     $task = AgentTask::query()->whereBelongsTo($post)->first();
 
     $resource = new class(app(TopicForgeContext::class), $task->id) extends AgentTaskResource
@@ -854,8 +818,7 @@ test('agent task resource returns queued work by uri template', function () {
     $response
         ->assertOk()
         ->assertSee('"id":'.$task->id)
-        ->assertSee('"body":"Please summarize."')
-        ->assertSee('"assigned_agents":[{"id":')
+        ->assertSee('"body":"@research-agent Please summarize."')
         ->assertSee('"name":"Research Agent"');
 });
 
@@ -866,10 +829,6 @@ test('agent resource returns agent context by uri template', function () {
     ]);
     $user->switchWorkspace($workspace);
 
-    $topic = Topic::factory()->for($workspace)->create([
-        'name' => 'Alpha Topic',
-        'slug' => 'alpha-topic',
-    ]);
     $agent = Agent::factory()->for($workspace)->create([
         'name' => 'Research Agent',
         'slug' => 'research-agent',
@@ -879,8 +838,6 @@ test('agent resource returns agent context by uri template', function () {
         'model' => 'o4-mini',
         'prompt' => 'Second prompt',
     ]);
-    $topic->agents()->attach($agent);
-
     $resource = new class(app(TopicForgeContext::class)) extends AgentResource
     {
         public function uri(): string
@@ -895,7 +852,7 @@ test('agent resource returns agent context by uri template', function () {
         ->assertOk()
         ->assertSee('"slug":"research-agent"')
         ->assertSee('"resource_uri":"topic-forge://workspaces/strategy/agents/research-agent"')
-        ->assertSee('"resource_uri":"topic-forge://workspaces/strategy/topics/alpha-topic"');
+        ->assertSee('"tasks_resource_uri":"topic-forge://workspaces/strategy/agents/research-agent/tasks"');
 });
 
 test('topic forge server lists top-level resources', function () {

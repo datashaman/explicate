@@ -591,25 +591,6 @@ test('dashboard shows workspace agents in the right rail', function () {
         ->assertDontSee(route('agents.show', ['agent' => $agent->slug]), escape: false);
 });
 
-test('dashboard gives assigned agents prominence in the right rail', function () {
-    [$user, $workspace] = userWithWorkspace();
-
-    $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
-    $available = Agent::factory()->for($workspace)->create(['name' => 'Available Agent']);
-    $assigned = Agent::factory()->for($workspace)->create(['name' => 'Assigned Agent']);
-    $topic->agents()->attach($assigned);
-
-    $this->actingAs($user)
-        ->get(route('dashboard', ['topic' => $topic->slug, 'panel' => 'agents']))
-        ->assertOk()
-        ->assertSee('Assigned')
-        ->assertSee('Available')
-        ->assertSeeInOrder(['Assigned', 'Assigned Agent', 'Available', 'Available Agent'])
-        ->assertSee('border-l-2 border-amber-400', escape: false)
-        ->assertSee('data-test="workspace-agent-row-'.$assigned->slug.'"', escape: false)
-        ->assertSee('data-test="workspace-agent-row-'.$available->slug.'"', escape: false);
-});
-
 test('dashboard shows selected agent details in the right panel', function () {
     [$user, $workspace] = userWithWorkspace();
 
@@ -813,29 +794,28 @@ test('dashboard can make a new post actionable in the main panel', function () {
         ->and($post->status)->toBe(PostStatus::Published);
 });
 
-test('dashboard can assign agents when sending a new post', function () {
+test('dashboard creates agent tasks from mentions when sending a new post', function () {
     [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
-    $agents = Agent::factory()->count(2)->for($workspace)->create();
-    $topic->agents()->attach($agents->pluck('id'));
+    Agent::factory()->for($workspace)->create(['name' => 'Researcher']);
+    Agent::factory()->for($workspace)->create(['name' => 'Reviewer']);
 
     $this->actingAs($user);
 
     Livewire::test('pages::dashboard')
         ->set('selectedTopicSlug', $topic->slug)
         ->set('panelAction', 'new-post')
-        ->set('newPostBody', 'Please both review this.')
+        ->set('newPostBody', '@researcher @reviewer Please both review this.')
         ->set('newPostTopicId', $topic->id)
-        ->set('newPostAgentIds', $agents->pluck('id')->all())
         ->call('sendDashboardPost')
         ->assertHasNoErrors();
 
-    $post = $topic->posts()->where('body', 'Please both review this.')->first();
+    $post = $topic->posts()->where('body', '@researcher @reviewer Please both review this.')->first();
 
     expect($post)->not->toBeNull()
         ->and($post->agentTasks)->toHaveCount(2)
-        ->and($post->agentTasks->pluck('event_type')->unique()->values()->all())->toBe([AgentTask::EventPostAssigned])
+        ->and($post->agentTasks->pluck('event_type')->unique()->values()->all())->toBe([AgentTask::EventPostMentioned])
         ->and($post->agentTasks->pluck('available_at')->filter())->toHaveCount(2);
 });
 
@@ -894,10 +874,8 @@ test('dashboard shows mobile bottom navigation with topics active by default', f
         ->assertOk()
         ->assertSee('data-mobile-nav="topics"', escape: false)
         ->assertSee('data-mobile-nav="posts"', escape: false)
-        ->assertSee('data-mobile-nav="agents"', escape: false)
         ->assertSee('aria-pressed="true"', escape: false)
         ->assertSee('data-mobile-panel="topics"', escape: false)
-        ->assertSee('data-mobile-panel="agents"', escape: false)
         ->assertDontSee('xl:sticky xl:top-6')
         ->assertSee('Agents');
 });
@@ -929,24 +907,6 @@ test('dashboard feed panel shows a top-level new post action', function () {
         ->assertSee('New post')
         ->assertSee(e(route('posts.create')), escape: false)
         ->assertSee('data-mobile-nav="posts"', escape: false);
-});
-
-test('dashboard selected topic shows attach and detach actions in the agents rail', function () {
-    [$user, $workspace] = userWithWorkspace();
-
-    $topic = Topic::factory()->for($workspace)->create(['slug' => 'selected-topic']);
-    $attachedAgent = Agent::factory()->for($workspace)->create(['name' => 'Attached Agent']);
-    $availableAgent = Agent::factory()->for($workspace)->create(['name' => 'Available Agent']);
-
-    $topic->agents()->attach($attachedAgent);
-
-    $this->actingAs($user)
-        ->get(route('dashboard', ['topic' => $topic->slug, 'panel' => 'agents']))
-        ->assertOk()
-        ->assertSee('Attached Agent')
-        ->assertSee('Available Agent')
-        ->assertSee('Attach')
-        ->assertSee('Detach');
 });
 
 test('topic page renders posts as message feed items', function () {
@@ -1030,36 +990,4 @@ test('topic post list uses insertion order for channel order', function () {
         'Second tied post',
         'Newest post',
     ]);
-});
-
-test('topic page agent rail labels attach and detach actions clearly', function () {
-    [$user, $workspace] = userWithWorkspace();
-
-    $topic = Topic::factory()->for($workspace)->create();
-    $attachedAgent = Agent::factory()->for($workspace)->create(['name' => 'Attached Agent']);
-    $availableAgent = Agent::factory()->for($workspace)->create(['name' => 'Available Agent']);
-
-    $topic->agents()->attach($attachedAgent);
-
-    $this->actingAs($user)
-        ->get(route('topics.show', ['topic' => $topic->slug]))
-        ->assertOk()
-        ->assertSee('Attached Agent')
-        ->assertSee('Available Agent')
-        ->assertSee('Detach')
-        ->assertSee('Attach')
-        ->assertSee('Detach this agent from the topic?', escape: false);
-});
-
-test('topic page with only available agents does not render detach confirmation copy', function () {
-    [$user, $workspace] = userWithWorkspace();
-
-    $topic = Topic::factory()->for($workspace)->create();
-    Agent::factory()->for($workspace)->create(['name' => 'Available Agent']);
-
-    $this->actingAs($user)
-        ->get(route('topics.show', ['topic' => $topic->slug]))
-        ->assertOk()
-        ->assertSee('Attach')
-        ->assertDontSee('Detach this agent from the topic?');
 });

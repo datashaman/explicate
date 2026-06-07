@@ -3,7 +3,6 @@
 use App\Actions\Posts\DeletePostAttachment;
 use App\Actions\Posts\UpdateDraftPost;
 use App\Enums\PostStatus;
-use App\Models\Agent;
 use App\Models\Post;
 use App\Models\Topic;
 use Flux\Flux;
@@ -24,9 +23,6 @@ new #[Layout('layouts::workspace'), Title('Post')] class extends Component {
 
     public string $body = '';
 
-    /** @var list<int> */
-    public array $agentIds = [];
-
     /** @var array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile> */
     public array $uploads = [];
 
@@ -40,24 +36,8 @@ new #[Layout('layouts::workspace'), Title('Post')] class extends Component {
         );
 
         $this->topic = $topic;
-        $this->post = $post->loadMissing(['assignedAgents', 'sender.user', 'sender.agent', 'topic']);
+        $this->post = $post->loadMissing(['agentTasks.agent', 'sender.user', 'sender.agent', 'topic']);
         $this->body = $post->body ?? '';
-        $this->agentIds = $post->assignedAgentIds();
-    }
-
-    /**
-     * @return \Illuminate\Database\Eloquent\Collection<int, Agent>
-     */
-    #[Computed]
-    public function availableAgents(): \Illuminate\Database\Eloquent\Collection
-    {
-        $workspace = Auth::user()->currentWorkspace;
-
-        if (! $workspace) {
-            return Agent::query()->whereNull('id')->get();
-        }
-
-        return $this->topic->agents()->get();
     }
 
     public function save(): void
@@ -72,11 +52,8 @@ new #[Layout('layouts::workspace'), Title('Post')] class extends Component {
 
         $validated = $this->validate([
             'body' => ['required', 'string'],
-            'agentIds' => ['array'],
-            'agentIds.*' => ['integer'],
         ], [], [
             'body' => __('post'),
-            'agentIds' => __('requested agents'),
         ]);
         Validator::make(['uploads' => $uploads], [
             'uploads.*' => ['file', 'max:51200'],
@@ -89,7 +66,6 @@ new #[Layout('layouts::workspace'), Title('Post')] class extends Component {
             workspace: $workspace,
             user: Auth::user(),
             body: $validated['body'],
-            agentIds: $validated['agentIds'],
             uploads: $uploads,
         );
         $this->reset('uploads');
@@ -109,11 +85,8 @@ new #[Layout('layouts::workspace'), Title('Post')] class extends Component {
 
         $validated = $this->validate([
             'body' => ['required', 'string'],
-            'agentIds' => ['array'],
-            'agentIds.*' => ['integer'],
         ], [], [
             'body' => __('post'),
-            'agentIds' => __('requested agents'),
         ]);
         Validator::make(['uploads' => $uploads], [
             'uploads.*' => ['file', 'max:51200'],
@@ -126,7 +99,6 @@ new #[Layout('layouts::workspace'), Title('Post')] class extends Component {
             workspace: $workspace,
             user: Auth::user(),
             body: $validated['body'],
-            agentIds: $validated['agentIds'],
             uploads: $uploads,
             publish: true,
         );
@@ -138,7 +110,6 @@ new #[Layout('layouts::workspace'), Title('Post')] class extends Component {
         $this->post->moveToDraft();
 
         $this->body = $this->post->body ?? '';
-        $this->agentIds = $this->post->assignedAgentIds();
     }
 
     public function archive(): void
@@ -151,7 +122,6 @@ new #[Layout('layouts::workspace'), Title('Post')] class extends Component {
         $this->post->moveToDraft();
 
         $this->body = $this->post->body ?? '';
-        $this->agentIds = $this->post->assignedAgentIds();
     }
 
     public function deleteAttachment(int $attachmentId): void
@@ -177,8 +147,6 @@ new #[Layout('layouts::workspace'), Title('Post')] class extends Component {
                 'submitAction' => 'save',
                 'bodyModel' => 'body',
                 'topicName' => $topic->name,
-                'agentIdsModel' => 'agentIds',
-                'availableAgents' => $this->availableAgents,
                 'canChangeTopic' => false,
                 'testPrefix' => 'post',
                 'post' => $post,

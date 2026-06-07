@@ -14,17 +14,16 @@ beforeEach(function () {
     $this->senderPrincipal = $this->workspace->principalForUser($this->user);
 });
 
-test('assigning a published post to an agent creates agent work instead of a notification', function () {
+test('mentioning an agent in a published post creates agent work instead of a notification', function () {
     Notification::fake();
 
     $agent = Agent::factory()->for($this->workspace)->create(['name' => 'Researcher']);
 
     $post = Post::factory()->for($this->topic)->create([
         'sender_principal_id' => $this->senderPrincipal->id,
+        'body' => '@researcher Find the latest internal context.',
         'status' => PostStatus::Published,
     ]);
-    $this->topic->agents()->attach($agent);
-    $post->assignAgents([$agent->id]);
 
     Notification::assertNothingSent();
 
@@ -34,7 +33,7 @@ test('assigning a published post to an agent creates agent work instead of a not
         ->first();
 
     expect($task)->not->toBeNull()
-        ->and($task->event_type)->toBe(AgentTask::EventPostAssigned)
+        ->and($task->event_type)->toBe(AgentTask::EventPostMentioned)
         ->and($task->status)->toBe(AgentTaskStatus::Pending)
         ->and($task->available_at)->not->toBeNull();
 });
@@ -52,22 +51,21 @@ test('topic posts without assignments do not create notifications or agent tasks
     expect(AgentTask::query()->count())->toBe(0);
 });
 
-test('publishing an assigned draft makes agent work available once', function () {
+test('publishing a draft with an agent mention creates agent work once', function () {
     Notification::fake();
 
     $agent = Agent::factory()->for($this->workspace)->create(['name' => 'Researcher']);
 
     $post = Post::factory()->for($this->topic)->create([
         'sender_principal_id' => $this->senderPrincipal->id,
+        'body' => '@researcher Draft context.',
         'status' => PostStatus::Draft,
     ]);
-    $this->topic->agents()->attach($agent);
-    $post->assignAgents([$agent->id]);
 
-    expect($post->agentTasks()->sole()->available_at)->toBeNull();
+    expect($post->agentTasks()->count())->toBe(0);
 
     $post->update(['status' => PostStatus::Published]);
-    $post->update(['body' => 'Already sent']);
+    $post->update(['body' => '@researcher Already sent']);
 
     $task = AgentTask::query()
         ->whereBelongsTo($agent)
@@ -81,33 +79,31 @@ test('publishing an assigned draft makes agent work available once', function ()
             ->count())->toBe(1);
 });
 
-test('assigning multiple agents creates one task for each agent', function () {
-    $agents = Agent::factory()->count(2)->for($this->workspace)->create();
+test('mentioning multiple agents creates one task for each agent', function () {
+    Agent::factory()->for($this->workspace)->create(['name' => 'Researcher']);
+    Agent::factory()->for($this->workspace)->create(['name' => 'Reviewer']);
+
     $post = Post::factory()->for($this->topic)->create([
+        'body' => '@researcher @reviewer Please collaborate.',
         'sender_principal_id' => $this->senderPrincipal->id,
         'status' => PostStatus::Published,
     ]);
-
-    $this->topic->agents()->attach($agents->pluck('id'));
-    $post->assignAgents($agents->pluck('id'));
 
     expect($post->agentTasks)->toHaveCount(2)
         ->and($post->agentTasks->pluck('event_type')->unique()->values()->all())
-        ->toBe([AgentTask::EventPostAssigned]);
+        ->toBe([AgentTask::EventPostMentioned]);
 });
 
-test('post assignment only creates work for agents associated with the topic', function () {
-    $associatedAgent = Agent::factory()->for($this->workspace)->create();
-    $unassociatedAgent = Agent::factory()->for($this->workspace)->create();
-    $this->topic->agents()->attach($associatedAgent);
+test('mentions only create work for agents in the post workspace', function () {
+    $mentionedAgent = Agent::factory()->for($this->workspace)->create(['name' => 'Researcher']);
+    Agent::factory()->create(['name' => 'Reviewer']);
 
     $post = Post::factory()->for($this->topic)->create([
+        'body' => '@researcher @reviewer Please review.',
         'sender_principal_id' => $this->senderPrincipal->id,
         'status' => PostStatus::Published,
     ]);
 
-    $post->assignAgents([$associatedAgent->id, $unassociatedAgent->id]);
-
     expect($post->agentTasks)->toHaveCount(1)
-        ->and($post->agentTasks->first()->agent_id)->toBe($associatedAgent->id);
+        ->and($post->agentTasks->first()->agent_id)->toBe($mentionedAgent->id);
 });

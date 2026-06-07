@@ -16,7 +16,7 @@ use Laravel\Mcp\Server\Tools\Annotations\IsIdempotent;
 use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 
 #[Name('get-agent')]
-#[Description('Get an agent with its topic attachments and version history inside the current workspace.')]
+#[Description('Get an agent with its version history inside the current workspace.')]
 #[IsReadOnly]
 #[IsIdempotent]
 class GetAgentTool extends Tool
@@ -35,7 +35,7 @@ class GetAgentTool extends Tool
         /** @var User $user */
         $user = $this->context->requireUser($request->user());
         $agent = $this->context->agentFor($user, $validated['agent_slug']);
-        $agent->load(['workspace', 'topics', 'latestVersion', 'versions']);
+        $agent->load(['workspace', 'latestVersion', 'versions']);
 
         return Response::structured([
             'workspace' => $agent->workspace->only(['id', 'name', 'slug']),
@@ -47,15 +47,6 @@ class GetAgentTool extends Tool
                 'latest_model' => $agent->latestVersion?->model,
                 'resource_uri' => TopicForgeUris::agent($agent),
             ],
-            'topics' => $agent->topics
-                ->map(fn ($topic) => [
-                    'id' => $topic->id,
-                    'name' => $topic->name,
-                    'slug' => $topic->slug,
-                    'resource_uri' => TopicForgeUris::topic($topic),
-                ])
-                ->values()
-                ->all(),
             'versions' => $agent->versions
                 ->sortByDesc('version')
                 ->values()

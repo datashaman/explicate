@@ -33,8 +33,6 @@ new #[Layout('layouts::workspace'), Title('Topic')] class extends Component {
 
     public bool $showArchived = false;
 
-    public ?int $assignAgentId = null;
-
     public function mount(Topic $topic): void
     {
         abort_unless(
@@ -64,7 +62,7 @@ new #[Layout('layouts::workspace'), Title('Topic')] class extends Component {
     public function items(): array
     {
         return $this->topic->posts()
-            ->with(['assignedAgents', 'sender.user', 'sender.agent', 'topic'])
+            ->with(['agentTasks.agent', 'sender.user', 'sender.agent', 'topic'])
             ->withCount('attachments')
             ->reorder()
             ->when(! $this->showArchived, fn ($q) => $q->where('status', '!=', PostStatus::Archived))
@@ -116,33 +114,12 @@ new #[Layout('layouts::workspace'), Title('Topic')] class extends Component {
     /**
      * @return \Illuminate\Database\Eloquent\Collection<int, Agent>
      */
-    public function availableAgents(): \Illuminate\Database\Eloquent\Collection
-    {
-        $assigned = $this->topic->agents()->pluck('agents.id');
-
-        return Auth::user()->currentWorkspace
-            ->agents()
-            ->whereNotIn('id', $assigned)
-            ->get();
-    }
-
-    /**
-     * @return \Illuminate\Database\Eloquent\Collection<int, Agent>
-     */
     public function workspaceAgents(): \Illuminate\Database\Eloquent\Collection
     {
         return Auth::user()->currentWorkspace
             ->agents()
             ->with('latestVersion')
             ->get();
-    }
-
-    /**
-     * @return list<int>
-     */
-    public function assignedAgentIds(): array
-    {
-        return $this->topic->agents()->pluck('agents.id')->all();
     }
 
     /** @return list<string> */
@@ -190,7 +167,7 @@ new #[Layout('layouts::workspace'), Title('Topic')] class extends Component {
             'agentPrompt' => ['nullable', 'string'],
         ]);
 
-        $agent = app(CreateAgent::class)->handle(
+        app(CreateAgent::class)->handle(
             workspace: $workspace,
             name: $validated['agentName'],
             provider: $validated['agentProvider'],
@@ -199,37 +176,11 @@ new #[Layout('layouts::workspace'), Title('Topic')] class extends Component {
             prompt: $validated['agentPrompt'],
         );
 
-        $this->topic->agents()->syncWithoutDetaching($agent);
-
         $this->reset('agentName', 'agentProvider', 'agentModel', 'agentReasoningEffort', 'agentPrompt');
 
         Flux::modal('new-agent-for-topic')->close();
 
-        Flux::toast(variant: 'success', text: __('Agent created and assigned.'));
-    }
-
-    public function assignAgent(?int $agentId = null): void
-    {
-        $agentId ??= $this->assignAgentId;
-
-        abort_unless($agentId, 422);
-
-        $agent = Auth::user()->currentWorkspace
-            ->agents()
-            ->findOrFail($agentId);
-
-        $this->topic->agents()->syncWithoutDetaching($agent);
-
-        $this->reset('assignAgentId');
-
-        Flux::toast(variant: 'success', text: __('Agent assigned.'));
-    }
-
-    public function unassignAgent(int $agentId): void
-    {
-        $this->topic->agents()->detach($agentId);
-
-        Flux::toast(variant: 'success', text: __('Agent removed.'));
+        Flux::toast(variant: 'success', text: __('Agent created.'));
     }
 
 }; ?>
@@ -273,9 +224,6 @@ new #[Layout('layouts::workspace'), Title('Topic')] class extends Component {
         @include('partials.workspace-agents-rail', [
             'agents' => $this->workspaceAgents(),
             'createModal' => 'new-agent-for-topic',
-            'assignedAgentIds' => $this->assignedAgentIds(),
-            'assignAction' => 'assignAgent',
-            'unassignAction' => 'unassignAgent',
             'asideClass' => 'xl:h-full',
             'containerClass' => 'min-h-[calc(100dvh-4rem)]',
             'sticky' => false,
@@ -286,7 +234,7 @@ new #[Layout('layouts::workspace'), Title('Topic')] class extends Component {
         <form wire:submit="createAgent" class="space-y-6">
             <div>
                 <flux:heading size="lg">{{ __('New agent') }}</flux:heading>
-                <flux:subheading>{{ __('Create an agent, save its first version, and assign it to this topic.') }}</flux:subheading>
+                <flux:subheading>{{ __('Create an agent and save its first version.') }}</flux:subheading>
             </div>
 
             <flux:input wire:model="agentName" :label="__('Name')" type="text" required autofocus />

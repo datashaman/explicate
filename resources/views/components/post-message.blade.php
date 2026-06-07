@@ -5,7 +5,7 @@
 ])
 
 @php
-    $post->loadMissing(['assignedAgents', 'sender.user', 'sender.agent', 'topic']);
+    $post->loadMissing(['agentTasks.agent', 'sender.user', 'sender.agent', 'topic']);
 
     $senderName = $post->sender?->label() ?? __('Unknown sender');
     $senderInitials = Str::of($senderName)
@@ -20,6 +20,10 @@
     $timestampTitle = $timestamp->timezone($timezone)->isoFormat('LLLL');
     $hasActions = isset($actions) && trim($actions->toHtml()) !== '';
     $body = $post->body ?: __('No content.');
+    $mentionedAgentSlugs = $post->mentionedAgentSlugs();
+    $visibleAgentTasks = $post->agentTasks
+        ->filter(fn ($task) => $task->event_type === \App\Models\AgentTask::EventPostMentioned)
+        ->filter(fn ($task) => $task->agent && $mentionedAgentSlugs->contains($task->agent->slug));
 @endphp
 
 <article {{ $attributes->class('flex min-w-0 gap-3') }} data-test="post-message">
@@ -68,12 +72,13 @@
             @endif
         </div>
 
-        @if ($post->assignedAgents->isNotEmpty())
-            <div class="flex flex-wrap gap-2">
-                @foreach ($post->assignedAgents as $agent)
-                    <span class="inline-flex items-center rounded-md bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 ring-1 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-200 dark:ring-amber-400/20">
-                        {{ $agent->name }}
-                    </span>
+        @if ($visibleAgentTasks->isNotEmpty())
+            <div class="mt-2 space-y-1 text-xs text-neutral-500 dark:text-neutral-400" data-test="post-message-tasks">
+                @foreach ($visibleAgentTasks as $task)
+                    <div class="flex items-center gap-2">
+                        <flux:icon name="cpu-chip" variant="mini" class="size-3.5 text-amber-500" />
+                        <span>{{ $task->agent->name }} {{ $task->status->label() }}</span>
+                    </div>
                 @endforeach
             </div>
         @endif

@@ -13,7 +13,7 @@ use Laravel\Mcp\Server\Contracts\HasUriTemplate;
 use Laravel\Mcp\Server\Resource;
 use Laravel\Mcp\Support\UriTemplate;
 
-#[Description('Read an agent with its attached topics and version history from an accessible workspace.')]
+#[Description('Read an agent with its version history from an accessible workspace.')]
 class AgentResource extends Resource implements HasUriTemplate
 {
     use HandlesResourceExceptions;
@@ -35,7 +35,7 @@ class AgentResource extends Resource implements HasUriTemplate
                 (string) $request->get('agent'),
                 (string) $request->get('workspace'),
             );
-            $agent->load(['workspace', 'topics', 'latestVersion', 'versions']);
+            $agent->load(['workspace', 'latestVersion', 'versions']);
 
             return Response::json([
                 'workspace' => $agent->workspace->only(['id', 'name', 'slug']),
@@ -48,15 +48,6 @@ class AgentResource extends Resource implements HasUriTemplate
                     'resource_uri' => TopicForgeUris::agent($agent),
                     'tasks_resource_uri' => TopicForgeUris::agentTasks($agent),
                 ],
-                'topics' => $agent->topics
-                    ->map(fn ($topic) => [
-                        'id' => $topic->id,
-                        'name' => $topic->name,
-                        'slug' => $topic->slug,
-                        'resource_uri' => TopicForgeUris::topic($topic),
-                    ])
-                    ->values()
-                    ->all(),
                 'versions' => $agent->versions
                     ->sortByDesc('version')
                     ->values()

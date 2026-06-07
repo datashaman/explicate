@@ -10,7 +10,6 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Collection;
@@ -40,9 +39,13 @@ class Post extends Model
             }
         });
 
+        static::created(function (Post $post) {
+            $post->syncMentionedAgentTasks();
+        });
+
         static::updated(function (Post $post) {
-            if ($post->wasChanged('status') && $post->status === PostStatus::Published) {
-                $post->makeAssignedAgentTasksAvailable();
+            if ($post->wasChanged('status') || $post->wasChanged('body')) {
+                $post->syncMentionedAgentTasks();
             }
         });
     }
@@ -63,59 +66,32 @@ class Post extends Model
         return $this->hasMany(AgentTask::class);
     }
 
-    /**
-     * @return BelongsToMany<Agent, $this>
-     */
-    public function assignedAgents(): BelongsToMany
+    public function syncMentionedAgentTasks(): void
     {
-        return $this->belongsToMany(Agent::class, 'agent_tasks')
-            ->wherePivot('event_type', AgentTask::EventPostAssigned)
-            ->withPivot(['id', 'status', 'available_at', 'locked_at', 'attempts', 'last_error'])
-            ->withTimestamps();
-    }
-
-    /**
-     * @param  iterable<int, int|string|Agent>  $agents
-     */
-    public function assignAgents(iterable $agents): void
-    {
-        $agentIds = Collection::make($agents)
-            ->map(fn (int|string|Agent $agent): int => $agent instanceof Agent ? $agent->id : (int) $agent)
-            ->filter(fn (int $agentId): bool => $agentId > 0)
-            ->unique()
-            ->values();
-
-        $validAgentIds = $this->topic
-            ->agents()
-            ->whereKey($agentIds->all())
-            ->pluck('id');
+        $mentionedAgentIds = $this->mentionedAgents()->pluck('id');
 
         $tasksToRemove = $this->agentTasks()
-            ->where('event_type', AgentTask::EventPostAssigned);
+            ->where('event_type', AgentTask::EventPostMentioned);
 
-        if ($validAgentIds->isNotEmpty()) {
-            $tasksToRemove->whereNotIn('agent_id', $validAgentIds);
+        if ($mentionedAgentIds->isNotEmpty()) {
+            $tasksToRemove->whereNotIn('agent_id', $mentionedAgentIds);
         }
 
         $tasksToRemove->delete();
 
-        $validAgentIds->each(function (int $agentId): void {
+        if ($this->status !== PostStatus::Published) {
+            return;
+        }
+
+        $mentionedAgentIds->each(function (int $agentId): void {
             $this->agentTasks()->firstOrCreate([
                 'agent_id' => $agentId,
-                'event_type' => AgentTask::EventPostAssigned,
+                'event_type' => AgentTask::EventPostMentioned,
             ], [
                 'status' => AgentTaskStatus::Pending,
-                'available_at' => $this->status === PostStatus::Published ? now() : null,
+                'available_at' => now(),
             ]);
         });
-    }
-
-    public function makeAssignedAgentTasksAvailable(): void
-    {
-        $this->agentTasks()
-            ->where('event_type', AgentTask::EventPostAssigned)
-            ->whereNull('available_at')
-            ->update(['available_at' => now()]);
     }
 
     public function moveToDraft(): void
@@ -128,14 +104,34 @@ class Post extends Model
         $this->update(['status' => PostStatus::Archived]);
     }
 
-    /** @return list<int> */
-    public function assignedAgentIds(): array
+    /**
+     * @return Collection<int, Agent>
+     */
+    public function mentionedAgents(): Collection
     {
-        return $this->agentTasks()
-            ->where('event_type', AgentTask::EventPostAssigned)
-            ->pluck('agent_id')
-            ->map(fn ($id): int => (int) $id)
-            ->all();
+        $slugs = $this->mentionedAgentSlugs();
+
+        if ($slugs->isEmpty()) {
+            return Collection::make();
+        }
+
+        return $this->topic->workspace
+            ->agents()
+            ->whereIn('slug', $slugs->all())
+            ->get();
+    }
+
+    /**
+     * @return Collection<int, string>
+     */
+    public function mentionedAgentSlugs(): Collection
+    {
+        preg_match_all('/(?<![\w@])@([a-z0-9][a-z0-9-]*)\b/i', $this->body ?? '', $matches);
+
+        return Collection::make($matches[1] ?? [])
+            ->map(fn (string $slug): string => Str::lower($slug))
+            ->unique()
+            ->values();
     }
 
     /**

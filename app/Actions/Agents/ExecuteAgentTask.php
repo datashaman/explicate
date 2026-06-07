@@ -56,7 +56,6 @@ class ExecuteAgentTask
                 sender: $task->agent->workspace->principalForAgent($task->agent),
                 body: $response->text,
                 status: PostStatus::Published,
-                agentIds: [],
             );
 
             $task->forceFill([

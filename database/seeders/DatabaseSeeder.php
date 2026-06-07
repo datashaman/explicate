@@ -11,14 +11,11 @@ use App\Models\Post;
 use App\Models\Topic;
 use App\Models\User;
 use App\Models\Workspace;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Str;
 
 class DatabaseSeeder extends Seeder
 {
-    use WithoutModelEvents;
-
     /**
      * Seed the application's database.
      */
@@ -90,23 +87,6 @@ class DatabaseSeeder extends Seeder
         });
 
         $topicsByName = $topics->keyBy('name');
-        $agentsByName = $agents->keyBy('name');
-        $attachAgents = function (Topic $topic, array $agentNames) use ($agentsByName): void {
-            $topic->agents()->attach(
-                collect($agentNames)
-                    ->mapWithKeys(function (string $agentName) use ($agentsByName): array {
-                        $agent = $agentsByName[$agentName];
-
-                        return [$agent->id => ['agent_version_id' => $agent->latestVersion->id]];
-                    })
-                    ->all()
-            );
-        };
-
-        $attachAgents($topicsByName['Design'], ['Writer', 'Reviewer']);
-        $attachAgents($topicsByName['Engineering'], ['Researcher', 'Reviewer']);
-        $attachAgents($topicsByName['Marketing'], ['Writer', 'SEO Analyst']);
-        $attachAgents($topicsByName['Research'], ['Researcher']);
 
         $designDraft = Post::factory()->for($topicsByName['Design'])->create([
             'body' => "Homepage hero directions\n\nExplore three tonal directions for the homepage hero.\n\n1. Product-led\n2. Proof-led\n3. Narrative-led",
@@ -117,7 +97,7 @@ class DatabaseSeeder extends Seeder
         Attachment::factory()->count(2)->for($designDraft)->create();
 
         Post::factory()->for($topicsByName['Design'])->create([
-            'body' => "Brand voice notes\n\nCapture phrases to avoid and preferred tone examples.",
+            'body' => "@reviewer Brand voice notes\n\nCapture phrases to avoid and preferred tone examples.",
             'status' => PostStatus::Published,
             'sender_principal_id' => $senderPrincipal->id,
         ]);
@@ -135,7 +115,7 @@ class DatabaseSeeder extends Seeder
         ]);
 
         Post::factory()->for($topicsByName['Marketing'])->create([
-            'body' => "Q3 campaign angles\n\nList campaign themes tied to the strongest product outcomes.",
+            'body' => "@seo-analyst Q3 campaign angles\n\nList campaign themes tied to the strongest product outcomes.",
             'status' => PostStatus::Published,
             'sender_principal_id' => $senderPrincipal->id,
         ]);
