@@ -1,10 +1,12 @@
 <?php
 
 use App\Enums\TeamRole;
+use App\Enums\WorkspaceFileType;
 use App\Models\Agent;
 use App\Models\Team;
 use App\Models\User;
 use App\Models\Workspace;
+use App\Models\WorkspaceFile;
 use Illuminate\Database\QueryException;
 
 test('a team can have many workspaces', function () {
@@ -60,4 +62,27 @@ test('workspace lists team member and agent principals by label', function () {
         'Member User',
         'Research Agent',
     ]);
+});
+
+test('workspace files maintain nested paths and cascade folder deletes', function () {
+    $workspace = Workspace::factory()->create();
+    $folder = WorkspaceFile::factory()->for($workspace)->folder()->create([
+        'name' => 'docs',
+    ]);
+    $file = WorkspaceFile::factory()->for($workspace)->create([
+        'parent_id' => $folder->id,
+        'name' => 'spec.md',
+    ]);
+
+    expect($folder->path)->toBe('docs');
+    expect($file->refresh()->path)->toBe('docs/spec.md');
+
+    $folder->update(['name' => 'notes']);
+
+    expect($file->refresh()->path)->toBe('notes/spec.md');
+
+    $folder->delete();
+
+    expect($workspace->files()->whereKey($file->id)->exists())->toBeFalse();
+    expect($workspace->files()->where('type', WorkspaceFileType::Folder)->exists())->toBeFalse();
 });

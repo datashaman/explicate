@@ -8,6 +8,7 @@ use App\Models\AgentTask;
 use App\Models\Post;
 use App\Models\Topic;
 use App\Models\Workspace;
+use App\Models\WorkspaceFile;
 
 final class TopicForgeUris
 {
@@ -20,6 +21,10 @@ final class TopicForgeUris
     public const WorkspaceTopicsTemplate = 'topic-forge://workspaces/{workspace}/topics';
 
     public const WorkspaceAgentsTemplate = 'topic-forge://workspaces/{workspace}/agents';
+
+    public const WorkspaceFilesTemplate = 'topic-forge://workspaces/{workspace}/files';
+
+    public const WorkspaceFileTemplate = 'topic-forge://workspaces/{workspace}/files/{path}';
 
     public const TopicTemplate = 'topic-forge://workspaces/{workspace}/topics/{topic}';
 
@@ -41,6 +46,18 @@ final class TopicForgeUris
     public static function workspaceAgents(Workspace|UserWorkspace|string $workspace): string
     {
         return self::Workspaces.'/'.self::workspaceSlug($workspace).'/agents';
+    }
+
+    public static function workspaceFiles(Workspace|UserWorkspace|string $workspace): string
+    {
+        return self::Workspaces.'/'.self::workspaceSlug($workspace).'/files';
+    }
+
+    public static function workspaceFile(WorkspaceFile $file): string
+    {
+        $file->loadMissing('workspace');
+
+        return self::workspaceFiles($file->workspace).'/'.rawurlencode($file->path);
     }
 
     public static function topic(Topic $topic): string

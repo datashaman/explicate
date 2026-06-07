@@ -8,6 +8,7 @@ use App\Models\Post;
 use App\Models\Topic;
 use App\Models\User;
 use App\Models\Workspace;
+use App\Models\WorkspaceFile;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
 use Throwable;
@@ -104,5 +105,19 @@ class TopicForgeContext
         }
 
         return $task;
+    }
+
+    public function workspaceFileFor(User $user, string $path, ?string $workspaceSlug = null): WorkspaceFile
+    {
+        $workspace = $this->workspaceFor($user, $workspaceSlug);
+        $path = WorkspaceFile::normalizePath($path);
+
+        $file = $workspace->files()->where('path', $path)->first();
+
+        if (! $file instanceof WorkspaceFile) {
+            throw new AuthorizationException('The requested workspace file is not accessible for the authenticated user.');
+        }
+
+        return $file;
     }
 }

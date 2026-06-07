@@ -16,19 +16,23 @@ use App\Mcp\Resources\WorkspaceTopicsResource;
 use App\Mcp\Tools\CreateAgentTool;
 use App\Mcp\Tools\CreatePostTool;
 use App\Mcp\Tools\CreateTopicTool;
+use App\Mcp\Tools\DeleteFileTool;
 use App\Mcp\Tools\DeletePostTool;
 use App\Mcp\Tools\GetAgentTaskTool;
 use App\Mcp\Tools\GetAgentTool;
+use App\Mcp\Tools\GetFileTool;
 use App\Mcp\Tools\GetPostTool;
 use App\Mcp\Tools\GetTopicTool;
 use App\Mcp\Tools\ListAgentsTool;
 use App\Mcp\Tools\ListAgentTasksTool;
+use App\Mcp\Tools\ListFilesTool;
 use App\Mcp\Tools\ListPostsTool;
 use App\Mcp\Tools\ListTopicsTool;
 use App\Mcp\Tools\ListWorkspacesTool;
 use App\Mcp\Tools\SwitchWorkspaceTool;
 use App\Mcp\Tools\UpdateAgentTool;
 use App\Mcp\Tools\WhoAmITool;
+use App\Mcp\Tools\WriteFileTool;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use Laravel\Mcp\Server;
@@ -64,6 +68,10 @@ class TopicForgeServer extends Server
         UpdateAgentTool::class,
         CreatePostTool::class,
         DeletePostTool::class,
+        ListFilesTool::class,
+        GetFileTool::class,
+        WriteFileTool::class,
+        DeleteFileTool::class,
     ];
 
     protected array $resources = [

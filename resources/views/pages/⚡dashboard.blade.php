@@ -10,9 +10,11 @@ use App\Enums\PostListColumn;
 use App\Enums\PostStatus;
 use App\Enums\Provider;
 use App\Enums\ReasoningEffort;
+use App\Enums\WorkspaceFileType;
 use App\Models\Agent;
 use App\Models\Post;
 use App\Models\Topic;
+use App\Models\WorkspaceFile;
 use Flux\Flux;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
@@ -41,6 +43,9 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
     #[Url(as: 'agent')]
     public ?string $selectedAgentSlug = null;
+
+    #[Url(as: 'file')]
+    public ?int $selectedWorkspaceFileId = null;
 
     #[Url(as: 'panel')]
     public string $mobilePanel = 'topics';
@@ -77,6 +82,12 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
     public ?int $newPostTopicId = null;
 
+    public string $newWorkspaceFileType = 'file';
+
+    public string $newWorkspaceFileName = '';
+
+    public string $workspaceFileContent = '';
+
     /** @var array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile> */
     public array $newPostUploads = [];
 
@@ -99,12 +110,14 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             $this->selectedTopicSlug = null;
             $this->selectedSystemFolderSlug = null;
             $this->selectedPostUlid = null;
+            $this->selectedWorkspaceFileId = null;
             $this->panelAction = null;
             $this->mobilePanel = 'posts';
         }
 
         $this->normalizeMobilePanel();
         $this->syncSelectedPostFields();
+        $this->syncSelectedWorkspaceFileFields();
         $this->syncNewPostTopic();
         $this->syncSelectedAgentFields();
     }
@@ -209,9 +222,64 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             ->first();
     }
 
+    public function selectedWorkspaceFile(): ?WorkspaceFile
+    {
+        $workspace = $this->workspace();
+
+        if (! $workspace || ! $this->selectedWorkspaceFileId) {
+            return null;
+        }
+
+        return $workspace->files()->with('children')->whereKey($this->selectedWorkspaceFileId)->first();
+    }
+
+    public function isFilesPanel(): bool
+    {
+        return $this->panelAction === 'files' || $this->selectedWorkspaceFileId !== null;
+    }
+
     public function isCreatingPost(): bool
     {
         return $this->creatingPostFromRoute || $this->panelAction === 'new-post';
+    }
+
+    /** @return list<array{id: int, name: string, path: string, type: string, depth: int, href: string}> */
+    public function workspaceFileItems(): array
+    {
+        $workspace = $this->workspace();
+
+        if (! $workspace) {
+            return [];
+        }
+
+        $files = $workspace->files()
+            ->get()
+            ->groupBy('parent_id');
+
+        $flatten = function (?int $parentId, int $depth) use (&$flatten, $files): array {
+            return $files->get($parentId, collect())
+                ->flatMap(function (WorkspaceFile $file) use ($flatten, $depth): array {
+                    return [
+                        [
+                            'id' => $file->id,
+                            'name' => $file->name,
+                            'path' => $file->path,
+                            'type' => $file->type->value,
+                            'depth' => $depth,
+                            'href' => route('dashboard', [
+                                'action' => 'files',
+                                'file' => $file->id,
+                                'panel' => 'posts',
+                            ]),
+                        ],
+                        ...$flatten($file->id, $depth + 1),
+                    ];
+                })
+                ->values()
+                ->all();
+        };
+
+        return $flatten(null, 0);
     }
 
     /** @return list<array{slug: string, name: string, icon: string, href: string, count: int}> */
@@ -479,6 +547,8 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         if ($this->selectedTopicSlug) {
             $this->selectedSystemFolderSlug = null;
             $this->selectedAgentSlug = null;
+            $this->selectedWorkspaceFileId = null;
+            $this->panelAction = null;
         }
 
         $this->selectedPostUlid = null;
@@ -493,6 +563,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             $this->selectedTopicSlug = null;
             $this->selectedAgentSlug = null;
             $this->selectedPostUlid = null;
+            $this->selectedWorkspaceFileId = null;
             $this->panelAction = null;
             $this->mobilePanel = 'posts';
         }
@@ -512,10 +583,26 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
     public function updatedSelectedAgentSlug(): void
     {
         if ($this->selectedAgentSlug) {
+            $this->selectedWorkspaceFileId = null;
+            $this->panelAction = null;
             $this->mobilePanel = 'posts';
         }
 
         $this->syncSelectedAgentFields();
+    }
+
+    public function updatedSelectedWorkspaceFileId(): void
+    {
+        if ($this->selectedWorkspaceFileId) {
+            $this->selectedTopicSlug = null;
+            $this->selectedSystemFolderSlug = null;
+            $this->selectedAgentSlug = null;
+            $this->selectedPostUlid = null;
+            $this->panelAction = 'files';
+            $this->mobilePanel = 'posts';
+        }
+
+        $this->syncSelectedWorkspaceFileFields();
     }
 
     public function openPost(string $postUlid): void
@@ -679,6 +766,101 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         $this->panelAction = null;
         $this->mobilePanel = 'posts';
         $this->syncSelectedAgentFields();
+    }
+
+    public function openFiles(): void
+    {
+        $this->selectedTopicSlug = null;
+        $this->selectedSystemFolderSlug = null;
+        $this->selectedAgentSlug = null;
+        $this->selectedPostUlid = null;
+        $this->panelAction = 'files';
+        $this->mobilePanel = 'posts';
+    }
+
+    public function openWorkspaceFile(int $fileId): void
+    {
+        $workspace = $this->workspace();
+
+        abort_unless($workspace, 403);
+
+        $file = $workspace->files()->whereKey($fileId)->firstOrFail();
+
+        $this->selectedWorkspaceFileId = $file->id;
+        $this->selectedTopicSlug = null;
+        $this->selectedSystemFolderSlug = null;
+        $this->selectedAgentSlug = null;
+        $this->selectedPostUlid = null;
+        $this->panelAction = 'files';
+        $this->mobilePanel = 'posts';
+        $this->syncSelectedWorkspaceFileFields();
+    }
+
+    public function createWorkspaceFile(): void
+    {
+        $workspace = $this->workspace();
+
+        abort_unless($workspace, 403);
+
+        $validated = $this->validate([
+            'newWorkspaceFileType' => ['required', 'string', Rule::enum(WorkspaceFileType::class)],
+            'newWorkspaceFileName' => ['required', 'string', 'max:255'],
+        ], [], [
+            'newWorkspaceFileType' => __('type'),
+            'newWorkspaceFileName' => __('name'),
+        ]);
+
+        $parent = $this->selectedWorkspaceFile();
+
+        if ($parent && $parent->isFile()) {
+            $parent = $parent->parent;
+        }
+
+        $file = $workspace->files()->create([
+            'parent_id' => $parent?->id,
+            'type' => WorkspaceFileType::from($validated['newWorkspaceFileType']),
+            'name' => $validated['newWorkspaceFileName'],
+            'content' => '',
+        ]);
+
+        $this->reset('newWorkspaceFileName');
+        $this->selectedWorkspaceFileId = $file->id;
+        $this->syncSelectedWorkspaceFileFields();
+
+        Flux::toast(variant: 'success', text: $file->isFolder() ? __('Folder created.') : __('File created.'));
+    }
+
+    public function saveSelectedWorkspaceFile(): void
+    {
+        $file = $this->selectedWorkspaceFile();
+
+        abort_unless($file && $file->isFile(), 404);
+
+        $validated = $this->validate([
+            'workspaceFileContent' => ['nullable', 'string'],
+        ]);
+
+        $file->update([
+            'content' => $validated['workspaceFileContent'] ?? '',
+        ]);
+
+        Flux::toast(variant: 'success', text: __('File saved.'));
+    }
+
+    public function deleteSelectedWorkspaceFile(): void
+    {
+        $file = $this->selectedWorkspaceFile();
+
+        abort_unless($file, 404);
+
+        $parentId = $file->parent_id;
+
+        $file->delete();
+
+        $this->selectedWorkspaceFileId = $parentId;
+        $this->syncSelectedWorkspaceFileFields();
+
+        Flux::toast(variant: 'success', text: __('Deleted.'));
     }
 
     public function closeAgent(): void
@@ -883,6 +1065,13 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         $this->postBody = $post?->body ?? '';
     }
 
+    private function syncSelectedWorkspaceFileFields(): void
+    {
+        $file = $this->selectedWorkspaceFile();
+
+        $this->workspaceFileContent = $file?->content ?? '';
+    }
+
     private function syncNewPostTopic(): void
     {
         $topic = $this->selectedTopic();
@@ -931,7 +1120,8 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             $selectedDashboardAgent = $this->selectedAgent();
             $selectedDashboardPost = $this->selectedPost();
             $selectedDashboardFolder = $this->selectedSystemFolder();
-            $hasSelectedPostsPanel = (bool) ($selectedDashboardAgent || $this->selectedTopic() || $selectedDashboardFolder || $this->isCreatingPost());
+            $selectedDashboardFile = $this->selectedWorkspaceFile();
+            $hasSelectedPostsPanel = (bool) ($selectedDashboardAgent || $this->selectedTopic() || $selectedDashboardFolder || $this->isCreatingPost() || $this->isFilesPanel());
             $hasThreadPanel = (bool) $selectedDashboardPost;
         @endphp
 
@@ -1009,6 +1199,24 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                 @endif
                 </section>
 
+                <section class="shrink-0 overflow-hidden rounded-lg border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none">
+                    <a href="{{ route('dashboard', ['action' => 'files', 'panel' => 'posts']) }}" wire:navigate
+                       @class([
+                           'flex items-center gap-3 px-4 py-3 hover:bg-neutral-100 dark:hover:bg-white/5',
+                           'bg-violet-100/80 dark:bg-violet-500/15' => $this->isFilesPanel(),
+                       ])>
+                        <div class="flex size-8 shrink-0 items-center justify-center rounded-full bg-violet-50 text-violet-500 dark:bg-violet-500/10 dark:text-violet-300">
+                            <flux:icon name="folder" class="size-4" />
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <div class="truncate text-sm font-medium text-neutral-700 dark:text-neutral-300">{{ __('Files') }}</div>
+                        </div>
+                        @if (count($this->workspaceFileItems()) > 0)
+                            <flux:badge color="zinc" size="sm" data-test="workspace-files-count">{{ count($this->workspaceFileItems()) }}</flux:badge>
+                        @endif
+                    </a>
+                </section>
+
                 <section class="flex max-h-[45%] min-h-0 shrink-0 flex-col overflow-hidden rounded-lg border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none">
                     <div class="border-b border-neutral-300 bg-amber-50 px-4 py-3 dark:border-white/10 dark:bg-amber-500/10">
                         <div class="flex items-center justify-between gap-3">
@@ -1049,7 +1257,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                 </section>
             </div>
 
-            @if ($this->selectedAgent() || $this->selectedTopic() || $this->selectedSystemFolder() || $this->isCreatingPost())
+            @if ($this->selectedAgent() || $this->selectedTopic() || $this->selectedSystemFolder() || $this->isCreatingPost() || $this->isFilesPanel())
                 <section
                     id="posts-panel"
                     data-mobile-panel="posts"
@@ -1058,7 +1266,95 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                         'hidden xl:flex' => $this->mobilePanel !== 'posts',
                     ])
                 >
-                    @if ($selectedDashboardAgent)
+                    @if ($this->isFilesPanel())
+                        <div class="flex items-center justify-between gap-3 border-b border-neutral-300 bg-violet-50 px-4 py-3 dark:border-white/10 dark:bg-violet-500/10">
+                            <flux:heading size="sm" class="min-w-0 flex-1 truncate">{{ __('Files') }}</flux:heading>
+                        </div>
+
+                        <div class="grid min-h-0 flex-1 grid-cols-1 overflow-hidden xl:grid-cols-[18rem_minmax(0,1fr)]" data-test="workspace-files-panel">
+                            <div class="flex min-h-0 flex-col overflow-hidden border-b border-neutral-200 xl:border-r xl:border-b-0 dark:border-white/10">
+                                <form wire:submit="createWorkspaceFile" class="space-y-3 border-b border-neutral-200 bg-white px-4 py-4 dark:border-white/10 dark:bg-zinc-900/20">
+                                    <div class="grid grid-cols-[7rem_minmax(0,1fr)] gap-2">
+                                        <flux:select wire:model="newWorkspaceFileType" :label="__('Type')" data-test="workspace-file-type">
+                                            <flux:select.option value="file">{{ __('File') }}</flux:select.option>
+                                            <flux:select.option value="folder">{{ __('Folder') }}</flux:select.option>
+                                        </flux:select>
+
+                                        <flux:input wire:model="newWorkspaceFileName" :label="__('Name')" type="text" placeholder="notes.md" data-test="workspace-file-name" />
+                                    </div>
+
+                                    <flux:button type="submit" icon="plus" size="xs" variant="primary" data-test="workspace-file-create">
+                                        {{ $selectedDashboardFile?->isFolder() ? __('Create inside') : __('Create') }}
+                                    </flux:button>
+                                </form>
+
+                                @if (empty($this->workspaceFileItems()))
+                                    <div class="min-h-0 flex-1 overflow-auto px-4 py-4">
+                                        <flux:text class="text-sm text-neutral-400 dark:text-neutral-600">{{ __('No files in this workspace.') }}</flux:text>
+                                    </div>
+                                @else
+                                    <div class="min-h-0 flex-1 overflow-auto py-2">
+                                        @foreach ($this->workspaceFileItems() as $fileItem)
+                                            <button
+                                                type="button"
+                                                wire:click="openWorkspaceFile({{ $fileItem['id'] }})"
+                                                wire:key="workspace-file-{{ $fileItem['id'] }}"
+                                                data-test="workspace-file-row-{{ $fileItem['path'] }}"
+                                                @class([
+                                                    'flex w-full cursor-pointer items-center gap-2 px-4 py-2 text-left text-sm hover:bg-neutral-100 dark:hover:bg-white/5',
+                                                    'bg-violet-100/80 dark:bg-violet-500/15' => $selectedWorkspaceFileId === $fileItem['id'],
+                                                ])
+                                                style="padding-left: {{ 1 + ($fileItem['depth'] * 1.25) }}rem"
+                                            >
+                                                <flux:icon :name="$fileItem['type'] === 'folder' ? 'folder' : 'document-text'" class="size-4 shrink-0 text-violet-500 dark:text-violet-300" />
+                                                <span class="min-w-0 flex-1 truncate text-neutral-700 dark:text-neutral-300">{{ $fileItem['name'] }}</span>
+                                            </button>
+                                        @endforeach
+                                    </div>
+                                @endif
+                            </div>
+
+                            <div class="flex min-h-0 flex-col overflow-hidden">
+                                @if ($selectedDashboardFile)
+                                    <div class="flex items-center justify-between gap-3 border-b border-neutral-200 px-4 py-3 dark:border-white/10">
+                                        <div class="min-w-0">
+                                            <div class="truncate text-sm font-medium text-neutral-800 dark:text-neutral-200">{{ $selectedDashboardFile->name }}</div>
+                                            <div class="truncate text-xs text-neutral-500 dark:text-neutral-500">{{ $selectedDashboardFile->path }}</div>
+                                        </div>
+
+                                        <flux:button wire:click="deleteSelectedWorkspaceFile" wire:confirm="{{ __('Delete this item and everything inside it?') }}" size="xs" variant="danger" icon="trash" data-test="workspace-file-delete">
+                                            {{ __('Delete') }}
+                                        </flux:button>
+                                    </div>
+
+                                    @if ($selectedDashboardFile->isFile())
+                                        <form wire:submit="saveSelectedWorkspaceFile" class="flex min-h-0 flex-1 flex-col overflow-hidden">
+                                            <flux:textarea wire:model="workspaceFileContent" class="min-h-0 flex-1 resize-none overflow-auto border-0 font-mono text-sm" data-test="workspace-file-content" />
+
+                                            <div class="flex justify-end border-t border-neutral-200 px-4 py-3 dark:border-white/10">
+                                                <flux:button type="submit" size="xs" variant="primary" icon="check" data-test="workspace-file-save">{{ __('Save') }}</flux:button>
+                                            </div>
+                                        </form>
+                                    @else
+                                        <div class="min-h-0 flex-1 overflow-auto px-4 py-4">
+                                            <flux:text class="text-sm text-neutral-500 dark:text-neutral-500">
+                                                {{ __('Select a file to edit it, or create a new item inside this folder.') }}
+                                            </flux:text>
+                                        </div>
+                                    @endif
+                                @else
+                                    <div class="flex min-h-0 flex-1 items-center justify-center px-6 py-10 text-center">
+                                        <div class="space-y-2">
+                                            <flux:heading size="sm">{{ __('Select a file') }}</flux:heading>
+                                            <flux:text class="text-sm text-neutral-400 dark:text-neutral-600">
+                                                {{ __('Choose a workspace file to view or edit it.') }}
+                                            </flux:text>
+                                        </div>
+                                    </div>
+                                @endif
+                            </div>
+                        </div>
+                    @elseif ($selectedDashboardAgent)
                         <div class="flex items-center justify-between gap-3 border-b border-neutral-300 bg-amber-50 px-4 py-3 dark:border-white/10 dark:bg-amber-500/10">
                             <flux:heading size="sm" class="min-w-0 flex-1 truncate">{{ $selectedDashboardAgent->name }}</flux:heading>
                         </div>

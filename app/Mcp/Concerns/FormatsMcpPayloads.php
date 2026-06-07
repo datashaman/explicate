@@ -5,6 +5,7 @@ namespace App\Mcp\Concerns;
 use App\Mcp\TopicForgeUris;
 use App\Models\AgentTask;
 use App\Models\Post;
+use App\Models\WorkspaceFile;
 
 trait FormatsMcpPayloads
 {
@@ -71,6 +72,29 @@ trait FormatsMcpPayloads
             ...$this->agentTaskPayload($task),
             'post' => $this->postPayload($task->post),
         ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function workspaceFilePayload(WorkspaceFile $file, bool $includeContent = false): array
+    {
+        $file->loadMissing('workspace');
+
+        $payload = [
+            'id' => $file->id,
+            'type' => $file->type->value,
+            'name' => $file->name,
+            'path' => $file->path,
+            'parent_id' => $file->parent_id,
+            'resource_uri' => TopicForgeUris::workspaceFile($file),
+        ];
+
+        if ($includeContent) {
+            $payload['content'] = $file->content;
+        }
+
+        return $payload;
     }
 
     protected function postResourceUri(Post $post): string

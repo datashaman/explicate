@@ -3,6 +3,7 @@
 use App\Enums\PostStatus;
 use App\Enums\Provider;
 use App\Enums\ReasoningEffort;
+use App\Enums\WorkspaceFileType;
 use App\Jobs\ProcessAgentTask;
 use App\Mcp\Resources\AgentResource;
 use App\Mcp\Resources\AgentTaskResource;
@@ -19,19 +20,23 @@ use App\Mcp\Servers\TopicForgeServer;
 use App\Mcp\Tools\CreateAgentTool;
 use App\Mcp\Tools\CreatePostTool;
 use App\Mcp\Tools\CreateTopicTool;
+use App\Mcp\Tools\DeleteFileTool;
 use App\Mcp\Tools\DeletePostTool;
 use App\Mcp\Tools\GetAgentTaskTool;
 use App\Mcp\Tools\GetAgentTool;
+use App\Mcp\Tools\GetFileTool;
 use App\Mcp\Tools\GetPostTool;
 use App\Mcp\Tools\GetTopicTool;
 use App\Mcp\Tools\ListAgentsTool;
 use App\Mcp\Tools\ListAgentTasksTool;
+use App\Mcp\Tools\ListFilesTool;
 use App\Mcp\Tools\ListPostsTool;
 use App\Mcp\Tools\ListTopicsTool;
 use App\Mcp\Tools\ListWorkspacesTool;
 use App\Mcp\Tools\SwitchWorkspaceTool;
 use App\Mcp\Tools\UpdateAgentTool;
 use App\Mcp\Tools\WhoAmITool;
+use App\Mcp\Tools\WriteFileTool;
 use App\Mcp\TopicForgeContext;
 use App\Models\Agent;
 use App\Models\AgentTask;
@@ -257,9 +262,75 @@ test('topic forge tools expose switch workspace instead of workspace slug parame
         'update-agent',
         'create-post',
         'delete-post',
+        'list-files',
+        'get-file',
+        'write-file',
+        'delete-file',
     ] as $toolName) {
         expect($tools[$toolName]['inputSchema']['properties'] ?? [])->not->toHaveKey('workspace_slug');
     }
+});
+
+test('workspace file tools let agents manage the current workspace filesystem', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->for($user->currentTeam)->create([
+        'slug' => 'strategy',
+    ]);
+    $otherWorkspace = Workspace::factory()->for($user->currentTeam)->create();
+    $user->switchWorkspace($workspace);
+
+    $writeResponse = TopicForgeServer::actingAs($user)->tool(WriteFileTool::class, [
+        'path' => 'docs/spec.md',
+        'content' => "# Specification\n",
+    ]);
+
+    $file = $workspace->files()->where('path', 'docs/spec.md')->first();
+
+    expect($file)->not->toBeNull();
+    expect($file?->type)->toBe(WorkspaceFileType::File);
+    expect($file?->content)->toBe("# Specification\n");
+    expect($workspace->files()->where('path', 'docs')->first()?->type)->toBe(WorkspaceFileType::Folder);
+    expect($otherWorkspace->files()->count())->toBe(0);
+
+    $writeResponse
+        ->assertOk()
+        ->assertStructuredContent(fn ($json) => $json
+            ->where('workspace.slug', 'strategy')
+            ->where('file.path', 'docs/spec.md')
+            ->where('file.content', "# Specification\n")
+            ->etc()
+        );
+
+    TopicForgeServer::actingAs($user)->tool(ListFilesTool::class, [])
+        ->assertOk()
+        ->assertStructuredContent(fn ($json) => $json
+            ->where('workspace.slug', 'strategy')
+            ->where('files.0.path', 'docs')
+            ->where('files.1.path', 'docs/spec.md')
+            ->etc()
+        );
+
+    TopicForgeServer::actingAs($user)->tool(GetFileTool::class, [
+        'path' => 'docs/spec.md',
+    ])
+        ->assertOk()
+        ->assertStructuredContent(fn ($json) => $json
+            ->where('file.path', 'docs/spec.md')
+            ->where('file.content', "# Specification\n")
+            ->etc()
+        );
+
+    TopicForgeServer::actingAs($user)->tool(DeleteFileTool::class, [
+        'path' => 'docs',
+    ])
+        ->assertOk()
+        ->assertStructuredContent(fn ($json) => $json
+            ->where('file.path', 'docs')
+            ->where('deleted', true)
+            ->etc()
+        );
+
+    expect($workspace->files()->count())->toBe(0);
 });
 
 test('create topic creates a topic in the current workspace', function () {
