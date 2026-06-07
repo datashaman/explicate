@@ -13,6 +13,7 @@ use App\Mcp\Resources\WhoamiResource;
 use App\Mcp\Resources\WorkspaceAgentsResource;
 use App\Mcp\Resources\WorkspacesResource;
 use App\Mcp\Resources\WorkspaceTopicsResource;
+use App\Mcp\Tools\CreateAgentTool;
 use App\Mcp\Tools\CreatePostTool;
 use App\Mcp\Tools\GetAgentTaskTool;
 use App\Mcp\Tools\GetAgentTool;
@@ -24,6 +25,7 @@ use App\Mcp\Tools\ListPostsTool;
 use App\Mcp\Tools\ListTopicsTool;
 use App\Mcp\Tools\ListWorkspacesTool;
 use App\Mcp\Tools\SwitchWorkspaceTool;
+use App\Mcp\Tools\UpdateAgentTool;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use Laravel\Mcp\Server;
@@ -49,6 +51,8 @@ class TopicForgeServer extends Server
         GetAgentTool::class,
         ListPostsTool::class,
         GetPostTool::class,
+        CreateAgentTool::class,
+        UpdateAgentTool::class,
         CreatePostTool::class,
     ];
 

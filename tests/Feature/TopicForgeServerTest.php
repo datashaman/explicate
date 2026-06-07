@@ -1,6 +1,8 @@
 <?php
 
 use App\Enums\PostStatus;
+use App\Enums\Provider;
+use App\Enums\ReasoningEffort;
 use App\Mcp\Resources\AgentResource;
 use App\Mcp\Resources\AgentTaskResource;
 use App\Mcp\Resources\AgentTasksResource;
@@ -13,6 +15,7 @@ use App\Mcp\Resources\WorkspaceAgentsResource;
 use App\Mcp\Resources\WorkspacesResource;
 use App\Mcp\Resources\WorkspaceTopicsResource;
 use App\Mcp\Servers\TopicForgeServer;
+use App\Mcp\Tools\CreateAgentTool;
 use App\Mcp\Tools\CreatePostTool;
 use App\Mcp\Tools\GetAgentTaskTool;
 use App\Mcp\Tools\GetAgentTool;
@@ -24,6 +27,7 @@ use App\Mcp\Tools\ListPostsTool;
 use App\Mcp\Tools\ListTopicsTool;
 use App\Mcp\Tools\ListWorkspacesTool;
 use App\Mcp\Tools\SwitchWorkspaceTool;
+use App\Mcp\Tools\UpdateAgentTool;
 use App\Mcp\TopicForgeContext;
 use App\Models\Agent;
 use App\Models\AgentTask;
@@ -196,6 +200,8 @@ test('topic forge tools expose switch workspace instead of workspace slug parame
         'get-agent',
         'list-posts',
         'get-post',
+        'create-agent',
+        'update-agent',
         'create-post',
     ] as $toolName) {
         expect($tools[$toolName]['inputSchema']['properties'] ?? [])->not->toHaveKey('workspace_slug');
@@ -267,6 +273,52 @@ test('list agents returns workspace agents with latest versions', function () {
         );
 });
 
+test('create agent creates an agent with an initial version in the current workspace', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->for($user->currentTeam)->create([
+        'slug' => 'strategy',
+    ]);
+    $otherWorkspace = Workspace::factory()->for($user->currentTeam)->create();
+    $user->switchWorkspace($workspace);
+
+    $response = TopicForgeServer::actingAs($user)->tool(CreateAgentTool::class, [
+        'name' => 'Research Agent',
+        'provider' => Provider::OpenAI->value,
+        'model' => 'o4-mini',
+        'reasoning_effort' => ReasoningEffort::Low->value,
+        'prompt' => 'Research the latest context.',
+    ]);
+
+    $agent = $workspace->agents()->where('name', 'Research Agent')->first();
+
+    expect($agent)->not->toBeNull();
+    expect($agent?->workspace_id)->toBe($workspace->id);
+    expect($otherWorkspace->agents()->count())->toBe(0);
+    expect($agent?->versions()->count())->toBe(1);
+
+    $version = $agent?->versions()->first();
+
+    expect($version?->provider)->toBe(Provider::OpenAI);
+    expect($version?->model)->toBe('o4-mini');
+    expect($version?->reasoning_effort)->toBe(ReasoningEffort::Low);
+    expect($version?->prompt)->toBe('Research the latest context.');
+
+    $response
+        ->assertOk()
+        ->assertStructuredContent(fn ($json) => $json
+            ->where('workspace.slug', 'strategy')
+            ->where('agent.name', 'Research Agent')
+            ->where('agent.slug', 'research-agent')
+            ->where('agent.resource_uri', 'topic-forge://workspaces/strategy/agents/research-agent')
+            ->where('latest_version.version', 1)
+            ->where('latest_version.provider', 'openai')
+            ->where('latest_version.model', 'o4-mini')
+            ->where('latest_version.reasoning_effort', 'low')
+            ->where('latest_version.prompt', 'Research the latest context.')
+            ->etc()
+        );
+});
+
 test('get agent returns version history for an accessible workspace', function () {
     $user = User::factory()->create();
     $workspace = Workspace::factory()->for($user->currentTeam)->create([
@@ -306,6 +358,68 @@ test('get agent returns version history for an accessible workspace', function (
             ->where('versions.0.model', 'o4-mini')
             ->where('versions.0.prompt', 'Second prompt')
             ->where('versions.1.version', 1)
+            ->etc()
+        );
+});
+
+test('update agent renames the agent and creates a new version in the current workspace', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->for($user->currentTeam)->create([
+        'slug' => 'strategy',
+    ]);
+    $otherWorkspace = Workspace::factory()->for($user->currentTeam)->create();
+    $user->switchWorkspace($workspace);
+
+    $agent = Agent::factory()->for($workspace)->create([
+        'name' => 'Research Agent',
+        'slug' => 'research-agent',
+    ]);
+    AgentVersion::factory()->for($agent)->create([
+        'version' => 1,
+        'provider' => Provider::OpenAI,
+        'model' => 'o3-mini',
+        'reasoning_effort' => ReasoningEffort::Medium,
+        'prompt' => 'Old prompt.',
+    ]);
+    Agent::factory()->for($otherWorkspace)->create([
+        'name' => 'Other Agent',
+        'slug' => 'other-agent',
+    ]);
+
+    $response = TopicForgeServer::actingAs($user)->tool(UpdateAgentTool::class, [
+        'agent_slug' => 'research-agent',
+        'name' => 'Updated Agent',
+        'model' => 'o4-mini',
+        'prompt' => 'New prompt.',
+    ]);
+
+    $agent->refresh();
+
+    expect($agent->name)->toBe('Updated Agent');
+    expect($agent->slug)->toBe('updated-agent');
+    expect($agent->versions()->count())->toBe(2);
+    expect($otherWorkspace->agents()->where('slug', 'other-agent')->exists())->toBeTrue();
+
+    $version = $agent->latestVersion()->first();
+
+    expect($version?->version)->toBe(2);
+    expect($version?->provider)->toBe(Provider::OpenAI);
+    expect($version?->model)->toBe('o4-mini');
+    expect($version?->reasoning_effort)->toBe(ReasoningEffort::Medium);
+    expect($version?->prompt)->toBe('New prompt.');
+
+    $response
+        ->assertOk()
+        ->assertStructuredContent(fn ($json) => $json
+            ->where('workspace.slug', 'strategy')
+            ->where('agent.name', 'Updated Agent')
+            ->where('agent.slug', 'updated-agent')
+            ->where('agent.resource_uri', 'topic-forge://workspaces/strategy/agents/updated-agent')
+            ->where('latest_version.version', 2)
+            ->where('latest_version.provider', 'openai')
+            ->where('latest_version.model', 'o4-mini')
+            ->where('latest_version.reasoning_effort', 'medium')
+            ->where('latest_version.prompt', 'New prompt.')
             ->etc()
         );
 });
