@@ -211,7 +211,7 @@ new #[Layout('layouts::workspace'), Title('Topic')] class extends Component {
                     ['label' => Auth::user()->currentWorkspace?->name, 'href' => route('dashboard')],
                     ['label' => $topic->name],
                 ],
-                'titleLabel' => __('Feed'),
+                'titleLabel' => $topic->name,
                 'items' => collect($this->items()),
                 'icon' => 'document-text',
                 'iconClass' => 'size-12 text-neutral-400 group-hover:text-neutral-300',

@@ -56,7 +56,7 @@
     <div @class(['flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between', $toolbarClass])>
         @if ($titleLabel)
             <div class="flex w-full min-w-0 items-center justify-between gap-3">
-                <flux:heading size="sm">{{ $titleLabel }}</flux:heading>
+                <flux:heading size="sm" data-test="folder-title">{{ $titleLabel }}</flux:heading>
 
                 <div class="flex shrink-0 items-center gap-2 md:hidden">
                     <flux:button

@@ -1181,7 +1181,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                                 ['label' => $this->workspace()->name, 'href' => route('dashboard')],
                                 ['label' => $selectedDashboardFolder['name'] ?? $this->selectedTopic()?->name ?? __('New post')],
                             ],
-                            'titleLabel' => __('Feed'),
+                            'titleLabel' => $selectedDashboardFolder['name'] ?? $this->selectedTopic()?->name ?? __('Feed'),
                             'items' => collect($selectedDashboardFolder ? $this->selectedSystemFolderItems() : $this->selectedTopicItems()),
                             'icon' => 'document-text',
                             'iconClass' => 'size-12 text-neutral-400 group-hover:text-neutral-300',

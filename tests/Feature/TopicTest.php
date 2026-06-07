@@ -81,7 +81,7 @@ test('slug is unique per workspace', function () {
 test('dashboard shows topics as folders for current workspace', function () {
     [$user, $workspace] = userWithWorkspace();
 
-    $topic = Topic::factory()->for($workspace)->create();
+    $topic = Topic::factory()->for($workspace)->create(['name' => 'Design']);
     $post = Post::factory()->for($topic)->create(['title' => 'Dashboard draft']);
 
     $this->actingAs($user)
@@ -145,6 +145,7 @@ test('dashboard system draft folder shows draft posts across topics', function (
     $response = $this->actingAs($user)
         ->get(route('dashboard', ['folder' => 'drafts', 'panel' => 'posts']))
         ->assertOk()
+        ->assertSee('data-test="folder-title"', escape: false)
         ->assertSee('Drafts')
         ->assertSee('Working draft')
         ->assertSee(e(route('dashboard', [
@@ -227,6 +228,8 @@ test('dashboard feed folder shows all published topic posts', function () {
     $this->actingAs($user)
         ->get(route('dashboard', ['folder' => 'feed', 'panel' => 'posts']))
         ->assertOk()
+        ->assertSee('data-test="folder-title"', escape: false)
+        ->assertSeeText('Feed')
         ->assertSee('For me')
         ->assertSee('For someone else')
         ->assertSee('For the topic')
@@ -300,6 +303,8 @@ test('dashboard archived folder shows archived feed', function () {
     $response = $this->actingAs($user)
         ->get(route('dashboard', ['folder' => 'archived', 'panel' => 'posts']))
         ->assertOk()
+        ->assertSee('data-test="folder-title"', escape: false)
+        ->assertSeeText('Archived')
         ->assertSee('Archived post')
         ->assertDontSeeText('Author')
         ->assertSee('data-test="folder-list-sort-sender"', escape: false)
@@ -1017,7 +1022,7 @@ test('dashboard selected topic shows attach and detach actions in the agents rai
 test('topic page left aligns post icons in icon view', function () {
     [$user, $workspace] = userWithWorkspace();
 
-    $topic = Topic::factory()->for($workspace)->create();
+    $topic = Topic::factory()->for($workspace)->create(['name' => 'Design']);
     $post = Post::factory()->for($topic)->create([
         'updated_at' => now()->subMinutes(13),
         'status' => PostStatus::Published,
@@ -1028,7 +1033,8 @@ test('topic page left aligns post icons in icon view', function () {
     $this->actingAs($user)
         ->get(route('topics.show', ['topic' => $topic->slug]))
         ->assertOk()
-        ->assertSee('Feed')
+        ->assertSee('data-test="folder-title"', escape: false)
+        ->assertSeeText('Design')
         ->assertSee('Agents')
         ->assertSee('flex w-full min-w-0 items-center justify-between gap-3', escape: false)
         ->assertSee('hidden shrink-0 items-center gap-3 md:flex', escape: false)
