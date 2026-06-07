@@ -298,6 +298,11 @@ test('workspace file tools let agents manage the current workspace filesystem', 
             ->where('workspace.slug', 'strategy')
             ->where('file.path', 'docs/spec.md')
             ->where('file.content', "# Specification\n")
+            ->where('file.dashboard_url', route('dashboard', [
+                'action' => 'files',
+                'file' => $file?->id,
+                'panel' => 'posts',
+            ]))
             ->etc()
         );
 
@@ -307,6 +312,11 @@ test('workspace file tools let agents manage the current workspace filesystem', 
             ->where('workspace.slug', 'strategy')
             ->where('files.0.path', 'docs')
             ->where('files.1.path', 'docs/spec.md')
+            ->where('files.1.dashboard_url', route('dashboard', [
+                'action' => 'files',
+                'file' => $file?->id,
+                'panel' => 'posts',
+            ]))
             ->etc()
         );
 
@@ -317,6 +327,11 @@ test('workspace file tools let agents manage the current workspace filesystem', 
         ->assertStructuredContent(fn ($json) => $json
             ->where('file.path', 'docs/spec.md')
             ->where('file.content', "# Specification\n")
+            ->where('file.dashboard_url', route('dashboard', [
+                'action' => 'files',
+                'file' => $file?->id,
+                'panel' => 'posts',
+            ]))
             ->etc()
         );
 

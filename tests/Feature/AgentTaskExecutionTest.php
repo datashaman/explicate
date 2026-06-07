@@ -56,7 +56,12 @@ test('it executes a pending agent task through an anonymous laravel ai agent', f
         return $prompt->prompt === '@researcher Find the latest internal context.'
             && $prompt->model === 'gemini-2.5-flash'
             && $prompt->provider()->name() === 'gemini'
-            && $prompt->agent->instructions() === 'Answer as a concise researcher.'
+            && str_starts_with($prompt->agent->instructions(), 'Answer as a concise researcher.')
+            && str_contains($prompt->agent->instructions(), 'Topic Forge artifact policy:')
+            && str_contains($prompt->agent->instructions(), 'Use the workspace filesystem tools for substantial artifacts')
+            && str_contains($prompt->agent->instructions(), 'reference that path in your reply')
+            && str_contains($prompt->agent->instructions(), 'use a Markdown link with the file path as the label')
+            && str_contains($prompt->agent->instructions(), 'dashboard_url as the href')
             && in_array('list-files', $toolNames, true)
             && in_array('write-file', $toolNames, true)
             && in_array('create-post', $toolNames, true)

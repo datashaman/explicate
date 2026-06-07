@@ -46,7 +46,7 @@ class ExecuteAgentTask
             }
 
             $response = laravelAiAgent(
-                instructions: $version->prompt,
+                instructions: $this->instructionsFor($version->prompt),
                 tools: $this->toolFactory->forAgentTask(
                     $this->toolUserFor($task),
                     $task->agent->workspace,
@@ -80,6 +80,20 @@ class ExecuteAgentTask
     protected function promptFor(Post $post): string
     {
         return trim($post->body);
+    }
+
+    private function instructionsFor(?string $agentInstructions): string
+    {
+        return trim(implode("\n\n", array_filter([
+            trim((string) $agentInstructions),
+            <<<'INSTRUCTIONS'
+Topic Forge artifact policy:
+- Keep the post reply concise. Use it to summarize what you did, mention important file paths, and ask short follow-up questions.
+- Use the workspace filesystem tools for substantial artifacts such as specifications, plans, reports, code, research notes, or any response that would otherwise be long.
+- Prefer creating or updating a well-named Markdown file with write-file, then reference that path in your reply instead of pasting large swaths of text into the post.
+- When you refer to a workspace file in a post reply, use a Markdown link with the file path as the label and the file tool response's dashboard_url as the href, for example [docs/spec.md](dashboard_url).
+INSTRUCTIONS,
+        ])));
     }
 
     private function toolUserFor(AgentTask $task): User

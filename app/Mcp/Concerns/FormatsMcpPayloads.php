@@ -88,6 +88,11 @@ trait FormatsMcpPayloads
             'path' => $file->path,
             'parent_id' => $file->parent_id,
             'resource_uri' => TopicForgeUris::workspaceFile($file),
+            'dashboard_url' => route('dashboard', [
+                'action' => 'files',
+                'file' => $file->id,
+                'panel' => 'posts',
+            ]),
         ];
 
         if ($includeContent) {
