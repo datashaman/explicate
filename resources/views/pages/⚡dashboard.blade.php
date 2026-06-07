@@ -1639,9 +1639,11 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                                 'uploadError' => 'postUploads.*',
                                 'deleteAction' => 'deleteSelectedPostAttachment',
                             ])
+                        </div>
 
-                            @if ($selectedDashboardPost->status === PostStatus::Published)
-                                <div class="pl-13" data-test="thread-panel-composer-shell">
+                        @if ($selectedDashboardPost->status === PostStatus::Published)
+                            <div class="shrink-0 border-t border-neutral-200 bg-neutral-50/80 px-4 pb-20 pt-3 xl:py-3 dark:border-white/10 dark:bg-zinc-950/40" data-test="thread-panel-composer-shell">
+                                <div class="pl-13">
                                     @include('partials.post-composer', [
                                         'bodyModel' => 'threadReplyBody',
                                         'buttonTest' => 'thread-panel-composer-send',
@@ -1654,8 +1656,8 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                                         'uploadModel' => 'threadReplyUploads',
                                     ])
                                 </div>
-                            @endif
-                        </div>
+                            </div>
+                        @endif
                     @endif
                 </section>
             @endif

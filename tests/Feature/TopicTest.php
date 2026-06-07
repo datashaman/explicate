@@ -683,7 +683,10 @@ test('dashboard thread panel shows an inline reply composer', function () {
         ->assertSee('data-test="thread-panel-composer-attachments-button"', escape: false)
         ->assertSee('data-test="thread-panel-composer-attachments-input"', escape: false)
         ->assertSee('wire:submit="sendThreadReply"', escape: false)
-        ->assertSee('Reply...');
+        ->assertSee('Reply...')
+        ->assertSee('data-test="dashboard-post-panel"', escape: false)
+        ->assertSee('flex min-h-0 flex-1 flex-col gap-6 overflow-auto', escape: false)
+        ->assertSee('shrink-0 border-t border-neutral-200 bg-neutral-50/80', escape: false);
 });
 
 test('dashboard thread composer replies in the selected post thread', function () {
