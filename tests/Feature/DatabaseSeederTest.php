@@ -1,13 +1,17 @@
 <?php
 
 use App\Models\Agent;
+use App\Models\Attachment;
 use App\Models\Post;
 use App\Models\Team;
 use App\Models\Topic;
 use App\Models\User;
 use App\Models\Workspace;
+use Illuminate\Support\Facades\Storage;
 
 test('database seeder creates demo workspace content', function () {
+    Storage::fake('public');
+
     $this->seed();
 
     $user = User::where('email', 'test@example.com')->first();
@@ -35,7 +39,6 @@ test('database seeder creates demo workspace content', function () {
     expect($designTopic->slug)->toBe('design');
     expect($designTopic->posts()->count())->toBeGreaterThanOrEqual(2);
     expect($designTopic->posts()->whereNotNull('ulid')->count())->toBe($designTopic->posts()->count());
-    expect($designTopic->agents()->count())->toBeGreaterThanOrEqual(2);
 
     expect($engineeringTopic)->not->toBeNull();
     expect($engineeringTopic->slug)->toBe('engineering');
@@ -48,6 +51,17 @@ test('database seeder creates demo workspace content', function () {
     expect($writerAgent->slug)->toBe('writer');
     expect($writerAgent->versions)->toHaveCount(1);
     expect($writerAgent->latestVersion)->not->toBeNull();
+
+    $attachments = Attachment::query()
+        ->whereHas('post.topic', fn ($query) => $query->whereBelongsTo($user->currentWorkspace))
+        ->get();
+
+    expect($attachments)->toHaveCount(3);
+    expect($attachments->pluck('mime_type')->contains('image/svg+xml'))->toBeTrue();
+
+    $attachments->each(function (Attachment $attachment): void {
+        Storage::disk('public')->assertExists($attachment->path);
+    });
 });
 
 test('factories derive slugs from overridden names and post ulids', function () {

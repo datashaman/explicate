@@ -36,7 +36,7 @@ new #[Layout('layouts::workspace'), Title('Post')] class extends Component {
         );
 
         $this->topic = $topic;
-        $this->post = $post->loadMissing(['agentTasks.agent', 'sender.user', 'sender.agent', 'topic']);
+        $this->post = $post->loadMissing(['agentTasks.agent', 'attachments', 'sender.user', 'sender.agent', 'topic']);
         $this->body = $post->body ?? '';
     }
 

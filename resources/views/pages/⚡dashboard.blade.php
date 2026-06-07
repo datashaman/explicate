@@ -151,7 +151,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         }
 
         return $topic->posts()
-            ->with(['agentTasks.agent', 'sender.user', 'sender.agent', 'topic'])
+            ->with(['agentTasks.agent', 'attachments', 'sender.user', 'sender.agent', 'topic'])
             ->where('ulid', $this->selectedPostUlid)
             ->first();
     }
@@ -285,7 +285,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         }
 
         return $topic->posts()
-            ->with(['agentTasks.agent', 'sender.user', 'sender.agent', 'topic'])
+            ->with(['agentTasks.agent', 'attachments', 'sender.user', 'sender.agent', 'topic'])
             ->withCount('attachments')
             ->reorder()
             ->when(! $this->showArchived, fn ($query) => $query->where('status', '!=', PostStatus::Archived))
@@ -320,7 +320,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         }
 
         return Post::query()
-            ->with(['agentTasks.agent', 'topic', 'sender.user', 'sender.agent'])
+            ->with(['agentTasks.agent', 'attachments', 'topic', 'sender.user', 'sender.agent'])
             ->withCount('attachments')
             ->whereHas('topic', fn ($query) => $query->where('workspace_id', $workspace->id))
             ->where('status', $folder->status())

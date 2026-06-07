@@ -62,7 +62,7 @@ new #[Layout('layouts::workspace'), Title('Topic')] class extends Component {
     public function items(): array
     {
         return $this->topic->posts()
-            ->with(['agentTasks.agent', 'sender.user', 'sender.agent', 'topic'])
+            ->with(['agentTasks.agent', 'attachments', 'sender.user', 'sender.agent', 'topic'])
             ->withCount('attachments')
             ->reorder()
             ->when(! $this->showArchived, fn ($q) => $q->where('status', '!=', PostStatus::Archived))

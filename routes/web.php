@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AttachmentController;
 use App\Http\Middleware\EnsureTeamMembership;
 use App\Models\Agent;
 use App\Models\Post;
@@ -47,6 +48,7 @@ Route::middleware(['auth', 'verified', EnsureTeamMembership::class])
         Route::livewire('posts/new', 'pages::dashboard')->name('posts.create');
         Route::livewire('topics/{topic}', 'pages::topic')->name('topics.show');
         Route::livewire('posts/{post}', 'pages::post')->name('posts.show');
+        Route::get('attachments/{attachment}', AttachmentController::class)->name('attachments.show');
         Route::livewire('agents', 'pages::agents')->name('agents');
         Route::livewire('agents/{agent}', 'pages::agent')->name('agents.show');
     });

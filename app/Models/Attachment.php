@@ -8,7 +8,6 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Support\Facades\Storage;
 
 #[Fillable(['post_id', 'filename', 'path', 'mime_type', 'size'])]
 class Attachment extends Model
@@ -26,7 +25,7 @@ class Attachment extends Model
 
     public function url(): string
     {
-        return Storage::disk('public')->url($this->path);
+        return route('attachments.show', ['attachment' => $this]);
     }
 
     public function formattedSize(): string
@@ -40,5 +39,10 @@ class Attachment extends Model
         }
 
         return round($bytes / 1048576, 1).' MB';
+    }
+
+    public function isImage(): bool
+    {
+        return str_starts_with($this->mime_type ?? '', 'image/');
     }
 }

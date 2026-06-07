@@ -521,6 +521,94 @@ test('dashboard post panel shows attachments', function () {
         ->assertDontSee('type="file"', escape: false);
 });
 
+test('dashboard feed post messages show attachments', function () {
+    [$user, $workspace] = userWithWorkspace();
+
+    $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
+    $post = Post::factory()->for($topic)->create([
+        'body' => 'Published note',
+        'status' => PostStatus::Published,
+    ]);
+    Attachment::factory()->for($post)->create([
+        'filename' => 'brief.pdf',
+        'size' => 2048,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('dashboard', ['topic' => $topic->slug, 'panel' => 'posts']))
+        ->assertOk()
+        ->assertSee('data-test="post-message-attachments"', escape: false)
+        ->assertSee('brief.pdf')
+        ->assertSee('2 KB');
+});
+
+test('dashboard feed post messages show image attachments as thumbnails', function () {
+    [$user, $workspace] = userWithWorkspace();
+
+    $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
+    $post = Post::factory()->for($topic)->create([
+        'body' => 'Published note',
+        'status' => PostStatus::Published,
+    ]);
+    $attachment = Attachment::factory()->for($post)->create([
+        'filename' => 'screenshot.png',
+        'path' => 'attachments/screenshot.png',
+        'mime_type' => 'image/png',
+        'size' => 2048,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('dashboard', ['topic' => $topic->slug, 'panel' => 'posts']))
+        ->assertOk()
+        ->assertSee('data-test="post-message-image-attachment"', escape: false)
+        ->assertSee('<img', escape: false)
+        ->assertSee('screenshot.png')
+        ->assertSee(route('attachments.show', ['attachment' => $attachment]), escape: false);
+});
+
+test('dashboard feed post messages link agent mentions to agent panel', function () {
+    [$user, $workspace] = userWithWorkspace();
+
+    $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
+    $agent = Agent::factory()->for($workspace)->create([
+        'name' => 'Reviewer',
+        'slug' => 'reviewer',
+    ]);
+    Post::factory()->for($topic)->create([
+        'body' => '@reviewer Please review this.',
+        'status' => PostStatus::Published,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('dashboard', ['topic' => $topic->slug, 'panel' => 'posts']))
+        ->assertOk()
+        ->assertSee('data-test="post-message-agent-mention"', escape: false)
+        ->assertSee('>@reviewer</a>', escape: false)
+        ->assertSee(route('dashboard', ['agent' => $agent->slug]), escape: false);
+});
+
+test('attachment route serves image files inline', function () {
+    Storage::fake('public');
+
+    [$user, $workspace] = userWithWorkspace();
+
+    $topic = Topic::factory()->for($workspace)->create();
+    $post = Post::factory()->for($topic)->create();
+    Storage::disk('public')->put('attachments/screenshot.png', 'image-content');
+
+    $attachment = Attachment::factory()->for($post)->create([
+        'filename' => 'screenshot.png',
+        'path' => 'attachments/screenshot.png',
+        'mime_type' => 'image/png',
+        'size' => 2048,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('attachments.show', ['attachment' => $attachment]))
+        ->assertOk()
+        ->assertHeader('content-type', 'image/png');
+});
+
 test('dashboard saves pending attachments with selected draft post', function () {
     Storage::fake('public');
 

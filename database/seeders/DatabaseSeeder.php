@@ -12,6 +12,7 @@ use App\Models\Topic;
 use App\Models\User;
 use App\Models\Workspace;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class DatabaseSeeder extends Seeder
@@ -94,13 +95,30 @@ class DatabaseSeeder extends Seeder
             'sender_principal_id' => $senderPrincipal->id,
         ]);
 
-        Attachment::factory()->count(2)->for($designDraft)->create();
+        $this->createSeedAttachment(
+            post: $designDraft,
+            filename: 'hero-directions.txt',
+            contents: "Product-led\nProof-led\nNarrative-led\n",
+            mimeType: 'text/plain',
+        );
+        $this->createSeedAttachment(
+            post: $designDraft,
+            filename: 'hero-copy-notes.txt',
+            contents: "Keep the first viewport focused on the product and next action.\n",
+            mimeType: 'text/plain',
+        );
 
-        Post::factory()->for($topicsByName['Design'])->create([
+        $designPublishedPost = Post::factory()->for($topicsByName['Design'])->create([
             'body' => "@reviewer Brand voice notes\n\nCapture phrases to avoid and preferred tone examples.",
             'status' => PostStatus::Published,
             'sender_principal_id' => $senderPrincipal->id,
         ]);
+        $this->createSeedAttachment(
+            post: $designPublishedPost,
+            filename: 'brand-snapshot.svg',
+            contents: $this->seedImageContents(),
+            mimeType: 'image/svg+xml',
+        );
 
         Post::factory()->for($topicsByName['Engineering'])->create([
             'body' => "Agent orchestration outline\n\nDocument the post lifecycle and queue boundaries.\n\nInclude failure handling and retry policy.",
@@ -131,5 +149,34 @@ class DatabaseSeeder extends Seeder
             'status' => PostStatus::Draft,
             'sender_principal_id' => $senderPrincipal->id,
         ]);
+    }
+
+    private function createSeedAttachment(Post $post, string $filename, string $contents, string $mimeType): Attachment
+    {
+        $path = "attachments/seed/{$post->ulid}/{$filename}";
+
+        Storage::disk('public')->put($path, $contents);
+
+        return $post->attachments()->create([
+            'filename' => $filename,
+            'path' => $path,
+            'mime_type' => $mimeType,
+            'size' => strlen($contents),
+        ]);
+    }
+
+    private function seedImageContents(): string
+    {
+        return <<<'SVG'
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360">
+  <rect width="640" height="360" fill="#f8fafc"/>
+  <rect x="48" y="48" width="544" height="264" rx="24" fill="#ecfdf5" stroke="#10b981" stroke-width="4"/>
+  <circle cx="142" cy="132" r="42" fill="#f59e0b"/>
+  <rect x="216" y="104" width="292" height="28" rx="14" fill="#111827"/>
+  <rect x="216" y="152" width="356" height="20" rx="10" fill="#6b7280"/>
+  <rect x="216" y="192" width="240" height="20" rx="10" fill="#9ca3af"/>
+  <rect x="88" y="244" width="464" height="32" rx="16" fill="#10b981"/>
+</svg>
+SVG;
     }
 }

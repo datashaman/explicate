@@ -5,7 +5,7 @@
 ])
 
 @php
-    $post->loadMissing(['agentTasks.agent', 'sender.user', 'sender.agent', 'topic']);
+    $post->loadMissing(['agentTasks.agent', 'attachments', 'sender.user', 'sender.agent', 'topic']);
 
     $senderName = $post->sender?->label() ?? __('Unknown sender');
     $senderInitials = Str::of($senderName)
@@ -21,6 +21,33 @@
     $hasActions = isset($actions) && trim($actions->toHtml()) !== '';
     $body = $post->body ?: __('No content.');
     $mentionedAgentSlugs = $post->mentionedAgentSlugs();
+    $mentionedAgentsBySlug = $post->mentionedAgents()->keyBy('slug');
+    $bodyHtml = (function () use ($body, $mentionedAgentsBySlug): \Illuminate\Support\HtmlString {
+        $pattern = '/(?<![\w@])@([a-z0-9][a-z0-9-]*)\b/i';
+        $offset = 0;
+        $html = '';
+
+        preg_match_all($pattern, $body, $matches, PREG_OFFSET_CAPTURE);
+
+        foreach ($matches[0] as $index => [$mention, $position]) {
+            $html .= e(substr($body, $offset, $position - $offset));
+
+            $slug = Str::lower($matches[1][$index][0]);
+            $agent = $mentionedAgentsBySlug->get($slug);
+
+            if ($agent) {
+                $html .= '<a href="'.e(route('dashboard', ['agent' => $agent->slug])).'" wire:navigate class="font-medium text-amber-700 hover:underline dark:text-amber-300" data-test="post-message-agent-mention">'.e($mention).'</a>';
+            } else {
+                $html .= e($mention);
+            }
+
+            $offset = $position + strlen($mention);
+        }
+
+        $html .= e(substr($body, $offset));
+
+        return new \Illuminate\Support\HtmlString($html);
+    })();
     $visibleAgentTasks = $post->agentTasks
         ->filter(fn ($task) => $task->event_type === \App\Models\AgentTask::EventPostMentioned)
         ->filter(fn ($task) => $task->agent && $mentionedAgentSlugs->contains($task->agent->slug));
@@ -59,7 +86,7 @@
         </div>
 
         <div class="text-sm leading-[1.2] text-neutral-800 dark:text-neutral-200">
-            @if ($href)
+            @if ($href && $mentionedAgentsBySlug->isEmpty())
                 <a href="{{ $href }}" wire:navigate @class([
                     'block whitespace-pre-wrap hover:underline',
                     'text-neutral-400 dark:text-neutral-600' => ! $post->body,
@@ -68,9 +95,46 @@
                 <div @class([
                     'whitespace-pre-wrap',
                     'text-neutral-400 dark:text-neutral-600' => ! $post->body,
-                ])>{{ $body }}</div>
+                ])>{!! $bodyHtml !!}</div>
             @endif
         </div>
+
+        @if ($post->attachments->isNotEmpty())
+            <div class="mt-2 flex flex-wrap gap-2" data-test="post-message-attachments">
+                @foreach ($post->attachments as $attachment)
+                    @if ($attachment->isImage())
+                        <a
+                            href="{{ $attachment->url() }}"
+                            target="_blank"
+                            class="group block max-w-40 overflow-hidden rounded-md border border-neutral-200 bg-neutral-50 hover:border-neutral-300 dark:border-white/10 dark:bg-white/5 dark:hover:border-white/20"
+                            title="{{ $attachment->filename }} · {{ $attachment->formattedSize() }}"
+                            data-test="post-message-image-attachment"
+                        >
+                            <img
+                                src="{{ $attachment->url() }}"
+                                alt="{{ $attachment->filename }}"
+                                class="aspect-video w-40 object-cover"
+                            >
+                            <span class="block truncate px-2 py-1 text-xs text-neutral-500 group-hover:text-neutral-800 dark:text-neutral-400 dark:group-hover:text-neutral-200">
+                                {{ $attachment->filename }}
+                            </span>
+                        </a>
+                    @else
+                        <a
+                            href="{{ $attachment->url() }}"
+                            target="_blank"
+                            class="inline-flex max-w-full items-center gap-1.5 rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1 text-xs text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900 dark:border-white/10 dark:bg-white/5 dark:text-neutral-300 dark:hover:bg-white/10"
+                            title="{{ $attachment->filename }} · {{ $attachment->formattedSize() }}"
+                            data-test="post-message-attachment"
+                        >
+                            <flux:icon name="paper-clip" variant="mini" class="size-3.5 shrink-0 text-neutral-400" />
+                            <span class="truncate">{{ $attachment->filename }}</span>
+                            <span class="shrink-0 text-neutral-400">{{ $attachment->formattedSize() }}</span>
+                        </a>
+                    @endif
+                @endforeach
+            </div>
+        @endif
 
         @if ($visibleAgentTasks->isNotEmpty())
             <div class="mt-2 space-y-1 text-xs text-neutral-500 dark:text-neutral-400" data-test="post-message-tasks">
