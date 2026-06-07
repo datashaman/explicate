@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\Agents\CreateAgentVersion;
 use App\Enums\Provider;
 use App\Enums\ReasoningEffort;
 use App\Models\Agent;
@@ -95,12 +96,13 @@ new #[Title('Agent')] class extends Component {
             'prompt' => ['nullable', 'string'],
         ]);
 
-        $this->agent->versions()->create([
-            'provider' => $validated['provider'],
-            'model' => $validated['model'],
-            'reasoning_effort' => $validated['reasoningEffort'] ?: null,
-            'prompt' => $validated['prompt'] ?: null,
-        ]);
+        app(CreateAgentVersion::class)->handle(
+            agent: $this->agent,
+            provider: $validated['provider'],
+            model: $validated['model'],
+            reasoningEffort: $validated['reasoningEffort'],
+            prompt: $validated['prompt'],
+        );
 
         Flux::toast(variant: 'success', text: __('Version saved.'));
     }

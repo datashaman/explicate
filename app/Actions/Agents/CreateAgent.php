@@ -7,6 +7,8 @@ use App\Models\Workspace;
 
 class CreateAgent
 {
+    public function __construct(private CreateAgentVersion $createAgentVersion) {}
+
     public function handle(
         Workspace $workspace,
         string $name,
@@ -17,12 +19,7 @@ class CreateAgent
     ): Agent {
         $agent = $workspace->agents()->create(['name' => $name]);
 
-        $agent->versions()->create([
-            'provider' => $provider,
-            'model' => $model,
-            'reasoning_effort' => $reasoningEffort ?: null,
-            'prompt' => $prompt ?: null,
-        ]);
+        $this->createAgentVersion->handle($agent, $provider, $model, $reasoningEffort, $prompt);
 
         return $agent->fresh(['latestVersion']);
     }

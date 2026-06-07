@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\Agents\CreateAgent;
+use App\Actions\Agents\CreateAgentVersion;
 use App\Actions\Posts\CreatePost;
 use App\Actions\Posts\UpdateDraftPost;
 use App\Enums\PostFolder;
@@ -735,12 +736,13 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             'selectedAgentPrompt' => ['nullable', 'string'],
         ]);
 
-        $agent->versions()->create([
-            'provider' => $validated['selectedAgentProvider'],
-            'model' => $validated['selectedAgentModel'],
-            'reasoning_effort' => $validated['selectedAgentReasoningEffort'] ?: null,
-            'prompt' => $validated['selectedAgentPrompt'] ?: null,
-        ]);
+        app(CreateAgentVersion::class)->handle(
+            agent: $agent,
+            provider: $validated['selectedAgentProvider'],
+            model: $validated['selectedAgentModel'],
+            reasoningEffort: $validated['selectedAgentReasoningEffort'],
+            prompt: $validated['selectedAgentPrompt'],
+        );
 
         Flux::toast(variant: 'success', text: __('Version saved.'));
     }
