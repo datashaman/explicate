@@ -224,8 +224,8 @@ new #[Layout('layouts::workspace'), Title('Topic')] class extends Component {
                 'createTest' => 'topic-new-post-button',
                 'showArchivedModel' => 'showArchived',
                 'listColumns' => [
-                    PostListColumn::Name->toColumn(),
                     PostListColumn::Sender->toColumn(),
+                    PostListColumn::Name->toColumn(),
                     PostListColumn::Sent->toColumn(),
                     PostListColumn::Attachments->toColumn(__('Attachments'), 'w-24 shrink-0'),
                 ],

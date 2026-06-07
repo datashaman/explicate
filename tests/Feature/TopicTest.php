@@ -422,6 +422,8 @@ test('dashboard shows selected topic in the main panel', function () {
         ->assertSee($selectedPost->title)
         ->assertSee(e(route('dashboard', ['topic' => $selectedTopic->slug, 'post' => $selectedPost->slug, 'panel' => 'posts'])), escape: false)
         ->assertDontSee(route('posts.show', ['post' => $selectedPost]), escape: false)
+        ->assertDontSee('data-test="folder-list-sort-topic"', escape: false)
+        ->assertDontSeeText('Topic:')
         ->assertSee('Another selected post')
         ->assertDontSee('Other post');
 });

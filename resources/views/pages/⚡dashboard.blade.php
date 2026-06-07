@@ -384,15 +384,22 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         $folder = $this->selectedSystemFolder();
         $dateLabel = $folder?->dateLabel() ?? __('Posted');
 
-        $columns = [
-            PostListColumn::Name->toColumn(),
-        ];
-
         if ($folder === PostFolder::Drafts) {
-            $columns[] = PostListColumn::Topic->toColumn();
+            $columns = [
+                PostListColumn::Name->toColumn(),
+                PostListColumn::Topic->toColumn(),
+            ];
+        } elseif ($folder) {
+            $columns = [
+                PostListColumn::Sender->toColumn(),
+                PostListColumn::Name->toColumn(),
+                PostListColumn::Topic->toColumn(),
+            ];
         } else {
-            $columns[] = PostListColumn::Sender->toColumn();
-            $columns[] = PostListColumn::Topic->toColumn();
+            $columns = [
+                PostListColumn::Sender->toColumn(),
+                PostListColumn::Name->toColumn(),
+            ];
         }
 
         $dateColumn = PostListColumn::from($folder?->dateKey() ?? PostListColumn::Sent->value);
