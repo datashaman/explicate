@@ -661,11 +661,34 @@ test('dashboard post messages open from the replies affordance instead of the wh
         ->assertOk()
         ->assertSee('data-test="folder-post-message"', escape: false)
         ->assertSee('data-href="'.e($postHref).'"', escape: false)
+        ->assertSee('data-test="post-message-thread-button"', escape: false)
+        ->assertSee('Open thread')
+        ->assertSee('wire:click="openPost(\''.$post->ulid.'\')"', escape: false)
         ->assertSee('data-test="post-message-replies"', escape: false)
         ->assertSee('href="'.e($postHref).'"', escape: false)
         ->assertDontSee('cursor-pointer rounded-lg px-2 py-4', escape: false)
         ->assertDontSee('$wire.openPost', escape: false)
         ->assertDontSee('block whitespace-pre-wrap hover:underline', escape: false);
+});
+
+test('dashboard top level post without replies still has a thread button', function () {
+    [$user, $workspace] = userWithWorkspace();
+
+    $topic = Topic::factory()->for($workspace)->create(['name' => 'Selected Topic', 'slug' => 'selected-topic']);
+    $post = Post::factory()->for($topic)->create([
+        'body' => 'Start a thread from this post.',
+        'status' => PostStatus::Published,
+    ]);
+    $postHref = route('dashboard', ['topic' => $topic->slug, 'post' => $post->ulid, 'panel' => 'posts']);
+
+    $this->actingAs($user)
+        ->get(route('dashboard', ['topic' => $topic->slug]))
+        ->assertOk()
+        ->assertSee('Start a thread from this post.')
+        ->assertSee('data-test="post-message-thread-button"', escape: false)
+        ->assertSee('wire:click="openPost(\''.$post->ulid.'\')"', escape: false)
+        ->assertSee('group-hover/post-message:opacity-100', escape: false)
+        ->assertDontSee('data-test="post-message-replies"', escape: false);
 });
 
 test('post messages collapse bodies that are longer than ten lines', function () {
@@ -752,6 +775,9 @@ test('dashboard thread panel shows an inline reply composer', function () {
         ->assertSee('data-test="thread-panel-composer-attachments-button"', escape: false)
         ->assertSee('data-test="thread-panel-composer-attachments-input"', escape: false)
         ->assertSee('wire:submit="sendThreadReply"', escape: false)
+        ->assertSee('x-ref="composerTextarea"', escape: false)
+        ->assertSee('$refs.composerTextarea?.focus()', escape: false)
+        ->assertSee('x-on:thread-opened.window', escape: false)
         ->assertSee('Reply...')
         ->assertSee('data-test="dashboard-post-panel"', escape: false)
         ->assertSee('flex min-h-0 flex-1 flex-col gap-6 overflow-auto', escape: false)

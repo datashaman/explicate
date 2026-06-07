@@ -3,6 +3,8 @@
     'showTopic' => true,
     'showReplyAffordance' => false,
     'replyHref' => null,
+    'showThreadButton' => false,
+    'threadButtonAction' => null,
 ])
 
 @php
@@ -64,7 +66,7 @@
     }
 @endphp
 
-<article {{ $attributes->class('flex min-w-0 gap-3') }} data-test="post-message">
+<article {{ $attributes->class('group/post-message flex min-w-0 gap-3') }} data-test="post-message">
     <div class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-neutral-200 text-sm font-semibold text-neutral-700 dark:bg-zinc-700 dark:text-neutral-100">
         {{ $senderInitials ?: '?' }}
     </div>
@@ -85,14 +87,46 @@
                 @endif
             </div>
 
-            @if ($hasActions)
-                <flux:dropdown position="bottom" align="end">
-                    <flux:button variant="subtle" size="xs" square icon="ellipsis-horizontal" tooltip="{{ __('Post actions') }}" data-test="post-message-actions" />
+            @if (($showThreadButton && $replyHref) || $hasActions)
+                <div class="flex shrink-0 items-center gap-1">
+                    @if ($showThreadButton && $replyHref)
+                        @if ($threadButtonAction)
+                            <flux:button
+                                type="button"
+                                wire:click="{{ $threadButtonAction }}('{{ $post->ulid }}')"
+                                variant="subtle"
+                                size="xs"
+                                square
+                                icon="chat-bubble-left"
+                                tooltip="{{ __('Open thread') }}"
+                                class="opacity-0 transition-opacity group-hover/post-message:opacity-100 focus:opacity-100"
+                                data-test="post-message-thread-button"
+                            />
+                        @else
+                            <flux:button
+                                href="{{ $replyHref }}"
+                                wire:navigate
+                                variant="subtle"
+                                size="xs"
+                                square
+                                icon="chat-bubble-left"
+                                tooltip="{{ __('Open thread') }}"
+                                class="opacity-0 transition-opacity group-hover/post-message:opacity-100 focus:opacity-100"
+                                data-test="post-message-thread-button"
+                            />
+                        @endif
+                    @endif
 
-                    <flux:menu>
-                        {{ $actions }}
-                    </flux:menu>
-                </flux:dropdown>
+                    @if ($hasActions)
+                        <flux:dropdown position="bottom" align="end">
+                            <flux:button variant="subtle" size="xs" square icon="ellipsis-horizontal" tooltip="{{ __('Post actions') }}" data-test="post-message-actions" />
+
+                            <flux:menu>
+                                {{ $actions }}
+                            </flux:menu>
+                        </flux:dropdown>
+                    @endif
+                </div>
             @endif
         </div>
 

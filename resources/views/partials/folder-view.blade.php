@@ -272,7 +272,7 @@
                                     </div>
                                 </form>
                             @else
-                                <x-post-message :post="$post" :show-topic="$showPostMessageTopic ?? true" :show-reply-affordance="! ($item['can_restore'] ?? false)" :reply-href="$item['href']">
+                                <x-post-message :post="$post" :show-topic="$showPostMessageTopic ?? true" :show-reply-affordance="! ($item['can_restore'] ?? false)" :show-thread-button="! ($item['can_restore'] ?? false)" :reply-href="$item['href']" :thread-button-action="$threadButtonAction ?? null">
                                     <x-slot:actions>
                                         @if ($item['can_restore'] ?? false)
                                             @isset($restorePostAction)

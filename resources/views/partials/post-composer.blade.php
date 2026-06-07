@@ -2,6 +2,7 @@
     'bodyModel',
     'buttonTest',
     'dataTest',
+    'autofocus' => false,
     'loadingTarget' => null,
     'placeholder',
     'removeUploadAction' => null,
@@ -24,6 +25,8 @@
     x-on:livewire-upload-finish="uploading = false"
     x-on:livewire-upload-error="uploading = false"
     x-on:livewire-upload-progress="progress = $event.detail.progress"
+    @if ($autofocus) x-init="$nextTick(() => $refs.composerTextarea?.focus())" @endif
+    @if ($autofocus) x-on:thread-opened.window="$nextTick(() => $refs.composerTextarea?.focus())" @endif
 >
     <div class="rounded-lg border border-neutral-300 bg-white shadow-sm transition focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 dark:border-white/10 dark:bg-zinc-950 dark:focus-within:border-blue-400 dark:focus-within:ring-blue-400/10">
         <textarea
@@ -32,6 +35,7 @@
             wire:keydown.ctrl.enter.prevent="{{ $submitAction }}"
             rows="2"
             placeholder="{{ $placeholder }}"
+            x-ref="composerTextarea"
             class="block max-h-40 min-h-18 w-full resize-none overflow-auto border-0 bg-transparent px-3 py-2.5 text-sm leading-5 text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:ring-0 dark:text-neutral-100 dark:placeholder:text-neutral-600"
             data-test="{{ $dataTest }}-textarea"
         ></textarea>

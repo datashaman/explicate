@@ -673,6 +673,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         $this->selectedAgentSlug = null;
         $this->panelAction = null;
         $this->creatingPostFromRoute = false;
+        $this->dispatch('thread-opened');
         $this->mobilePanel = 'posts';
         $this->syncSelectedPostFields();
     }
@@ -1605,6 +1606,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                                 'items' => collect($selectedDashboardFolder ? $this->selectedSystemFolderItems() : $this->selectedTopicItems()),
                                 'itemPresentation' => 'posts',
                                 'openPostAction' => 'openPost',
+                                'threadButtonAction' => 'openPost',
                                 'showPostMessageTopic' => (bool) $selectedDashboardFolder,
                                 'icon' => 'document-text',
                                 'iconClass' => 'size-12 text-neutral-400 group-hover:text-neutral-300',
@@ -1753,6 +1755,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                                         'bodyModel' => 'threadReplyBody',
                                         'buttonTest' => 'thread-panel-composer-send',
                                         'dataTest' => 'thread-panel-composer',
+                                        'autofocus' => true,
                                         'loadingTarget' => 'threadReplyUploads,sendThreadReply',
                                         'placeholder' => __('Reply...'),
                                         'removeUploadAction' => 'removeThreadReplyUpload',
