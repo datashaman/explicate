@@ -4,6 +4,7 @@ namespace App\Mcp\Resources;
 
 use App\Mcp\Resources\Concerns\HandlesResourceExceptions;
 use App\Mcp\TopicForgeContext;
+use App\Mcp\TopicForgeUris;
 use App\Models\User;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -13,7 +14,7 @@ use Laravel\Mcp\Server\Attributes\Uri;
 use Laravel\Mcp\Server\Resource;
 
 #[Description('Show the authenticated Topic Forge MCP user and current team/workspace context.')]
-#[Uri('topic-forge://whoami')]
+#[Uri(TopicForgeUris::Whoami)]
 #[MimeType('application/json')]
 class WhoamiResource extends Resource
 {
@@ -31,7 +32,7 @@ class WhoamiResource extends Resource
             $user = $this->context->requireUser($request->user());
 
             return Response::json([
-                'resource_uri' => 'topic-forge://whoami',
+                'resource_uri' => TopicForgeUris::Whoami,
                 'authenticated' => true,
                 'user' => $user->only(['id', 'name', 'email']),
                 'team' => $user->currentTeam?->only(['id', 'name', 'slug']),

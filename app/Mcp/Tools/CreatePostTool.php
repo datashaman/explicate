@@ -4,6 +4,7 @@ namespace App\Mcp\Tools;
 
 use App\Enums\PostStatus;
 use App\Mcp\TopicForgeContext;
+use App\Mcp\TopicForgeUris;
 use App\Models\AgentTask;
 use App\Models\Post;
 use App\Models\User;
@@ -66,7 +67,7 @@ class CreatePostTool extends Tool
             'workspace' => $topic->workspace->only(['id', 'name', 'slug']),
             'topic' => [
                 ...$topic->only(['id', 'name', 'slug']),
-                'resource_uri' => "topic-forge://workspaces/{$topic->workspace->slug}/topics/{$topic->slug}",
+                'resource_uri' => TopicForgeUris::topic($topic),
             ],
             'post' => [
                 'id' => $post->id,
@@ -79,7 +80,7 @@ class CreatePostTool extends Tool
                     ->where('event_type', AgentTask::EventPostAssigned)
                     ->pluck('agent_id')
                     ->all(),
-                'resource_uri' => "topic-forge://workspaces/{$topic->workspace->slug}/topics/{$topic->slug}/posts/{$post->slug}",
+                'resource_uri' => TopicForgeUris::post($post),
             ],
         ]);
     }

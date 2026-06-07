@@ -4,6 +4,7 @@ namespace App\Mcp\Tools;
 
 use App\Mcp\Concerns\FormatsMcpPayloads;
 use App\Mcp\TopicForgeContext;
+use App\Mcp\TopicForgeUris;
 use App\Models\User;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
@@ -54,8 +55,8 @@ class ListAgentTasksTool extends Tool
                 'id' => $agent->id,
                 'name' => $agent->name,
                 'slug' => $agent->slug,
-                'resource_uri' => "topic-forge://workspaces/{$agent->workspace->slug}/agents/{$agent->slug}",
-                'tasks_resource_uri' => "topic-forge://workspaces/{$agent->workspace->slug}/agents/{$agent->slug}/tasks",
+                'resource_uri' => TopicForgeUris::agent($agent),
+                'tasks_resource_uri' => TopicForgeUris::agentTasks($agent),
             ],
             'tasks' => $tasks,
         ]);

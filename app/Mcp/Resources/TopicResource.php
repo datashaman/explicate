@@ -4,6 +4,7 @@ namespace App\Mcp\Resources;
 
 use App\Mcp\Resources\Concerns\HandlesResourceExceptions;
 use App\Mcp\TopicForgeContext;
+use App\Mcp\TopicForgeUris;
 use App\Models\User;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -21,7 +22,7 @@ class TopicResource extends Resource implements HasUriTemplate
 
     public function uriTemplate(): UriTemplate
     {
-        return new UriTemplate('topic-forge://workspaces/{workspace}/topics/{topic}');
+        return new UriTemplate(TopicForgeUris::TopicTemplate);
     }
 
     /**
@@ -44,7 +45,7 @@ class TopicResource extends Resource implements HasUriTemplate
                 'workspace' => $topic->workspace->only(['id', 'name', 'slug']),
                 'topic' => [
                     ...$topic->only(['id', 'name', 'slug']),
-                    'resource_uri' => "topic-forge://workspaces/{$topic->workspace->slug}/topics/{$topic->slug}",
+                    'resource_uri' => TopicForgeUris::topic($topic),
                 ],
                 'agents' => $topic->agents
                     ->map(fn ($agent) => [
@@ -53,7 +54,7 @@ class TopicResource extends Resource implements HasUriTemplate
                         'slug' => $agent->slug,
                         'latest_version' => $agent->latestVersion?->version,
                         'latest_model' => $agent->latestVersion?->model,
-                        'resource_uri' => "topic-forge://workspaces/{$topic->workspace->slug}/agents/{$agent->slug}",
+                        'resource_uri' => TopicForgeUris::agent($agent),
                     ])
                     ->values()
                     ->all(),
@@ -67,7 +68,7 @@ class TopicResource extends Resource implements HasUriTemplate
                         'slug' => $post->slug,
                         'status' => $post->status->value,
                         'body' => $post->body,
-                        'resource_uri' => "topic-forge://workspaces/{$topic->workspace->slug}/topics/{$topic->slug}/posts/{$post->slug}",
+                        'resource_uri' => TopicForgeUris::post($post),
                     ])
                     ->values()
                     ->all(),

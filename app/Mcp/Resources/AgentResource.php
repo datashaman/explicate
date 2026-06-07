@@ -4,6 +4,7 @@ namespace App\Mcp\Resources;
 
 use App\Mcp\Resources\Concerns\HandlesResourceExceptions;
 use App\Mcp\TopicForgeContext;
+use App\Mcp\TopicForgeUris;
 use App\Models\User;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -21,7 +22,7 @@ class AgentResource extends Resource implements HasUriTemplate
 
     public function uriTemplate(): UriTemplate
     {
-        return new UriTemplate('topic-forge://workspaces/{workspace}/agents/{agent}');
+        return new UriTemplate(TopicForgeUris::AgentTemplate);
     }
 
     public function handle(Request $request): Response
@@ -44,15 +45,15 @@ class AgentResource extends Resource implements HasUriTemplate
                     'slug' => $agent->slug,
                     'latest_version' => $agent->latestVersion?->version,
                     'latest_model' => $agent->latestVersion?->model,
-                    'resource_uri' => "topic-forge://workspaces/{$agent->workspace->slug}/agents/{$agent->slug}",
-                    'tasks_resource_uri' => "topic-forge://workspaces/{$agent->workspace->slug}/agents/{$agent->slug}/tasks",
+                    'resource_uri' => TopicForgeUris::agent($agent),
+                    'tasks_resource_uri' => TopicForgeUris::agentTasks($agent),
                 ],
                 'topics' => $agent->topics
                     ->map(fn ($topic) => [
                         'id' => $topic->id,
                         'name' => $topic->name,
                         'slug' => $topic->slug,
-                        'resource_uri' => "topic-forge://workspaces/{$agent->workspace->slug}/topics/{$topic->slug}",
+                        'resource_uri' => TopicForgeUris::topic($topic),
                     ])
                     ->values()
                     ->all(),

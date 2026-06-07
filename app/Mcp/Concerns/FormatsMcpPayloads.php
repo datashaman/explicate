@@ -2,6 +2,7 @@
 
 namespace App\Mcp\Concerns;
 
+use App\Mcp\TopicForgeUris;
 use App\Models\AgentTask;
 use App\Models\Post;
 
@@ -76,13 +77,13 @@ trait FormatsMcpPayloads
     {
         $post->loadMissing('topic.workspace');
 
-        return "topic-forge://workspaces/{$post->topic->workspace->slug}/topics/{$post->topic->slug}/posts/{$post->slug}";
+        return TopicForgeUris::post($post);
     }
 
     protected function agentTaskResourceUri(AgentTask $task): string
     {
         $task->loadMissing('agent.workspace');
 
-        return "topic-forge://workspaces/{$task->agent->workspace->slug}/agents/{$task->agent->slug}/tasks/{$task->id}";
+        return TopicForgeUris::agentTask($task);
     }
 }

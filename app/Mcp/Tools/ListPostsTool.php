@@ -4,6 +4,7 @@ namespace App\Mcp\Tools;
 
 use App\Mcp\Concerns\FormatsMcpPayloads;
 use App\Mcp\TopicForgeContext;
+use App\Mcp\TopicForgeUris;
 use App\Models\User;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
@@ -50,7 +51,7 @@ class ListPostsTool extends Tool
             'workspace' => $topic->workspace->only(['id', 'name', 'slug']),
             'topic' => [
                 ...$topic->only(['id', 'name', 'slug']),
-                'resource_uri' => "topic-forge://workspaces/{$topic->workspace->slug}/topics/{$topic->slug}",
+                'resource_uri' => TopicForgeUris::topic($topic),
             ],
             'posts' => $posts,
         ]);

@@ -3,6 +3,7 @@
 namespace App\Mcp\Tools;
 
 use App\Mcp\TopicForgeContext;
+use App\Mcp\TopicForgeUris;
 use App\Models\User;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
@@ -43,7 +44,7 @@ class GetTopicTool extends Tool
                 'name' => $topic->name,
                 'slug' => $topic->slug,
                 'posts_count' => $topic->posts()->count(),
-                'resource_uri' => "topic-forge://workspaces/{$topic->workspace->slug}/topics/{$topic->slug}",
+                'resource_uri' => TopicForgeUris::topic($topic),
             ],
             'agents' => $topic->agents
                 ->map(fn ($agent) => [

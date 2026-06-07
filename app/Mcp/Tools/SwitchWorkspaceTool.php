@@ -3,6 +3,7 @@
 namespace App\Mcp\Tools;
 
 use App\Mcp\TopicForgeContext;
+use App\Mcp\TopicForgeUris;
 use App\Models\User;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
@@ -38,8 +39,8 @@ class SwitchWorkspaceTool extends Tool
             'workspace' => [
                 ...$workspace->only(['id', 'name', 'slug']),
                 'is_current' => true,
-                'topics_resource_uri' => "topic-forge://workspaces/{$workspace->slug}/topics",
-                'agents_resource_uri' => "topic-forge://workspaces/{$workspace->slug}/agents",
+                'topics_resource_uri' => TopicForgeUris::workspaceTopics($workspace),
+                'agents_resource_uri' => TopicForgeUris::workspaceAgents($workspace),
             ],
         ]);
     }

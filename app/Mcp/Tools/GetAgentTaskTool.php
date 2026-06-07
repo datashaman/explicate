@@ -4,6 +4,7 @@ namespace App\Mcp\Tools;
 
 use App\Mcp\Concerns\FormatsMcpPayloads;
 use App\Mcp\TopicForgeContext;
+use App\Mcp\TopicForgeUris;
 use App\Models\User;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
@@ -50,8 +51,8 @@ class GetAgentTaskTool extends Tool
                 'id' => $task->agent->id,
                 'name' => $task->agent->name,
                 'slug' => $task->agent->slug,
-                'resource_uri' => "topic-forge://workspaces/{$task->agent->workspace->slug}/agents/{$task->agent->slug}",
-                'tasks_resource_uri' => "topic-forge://workspaces/{$task->agent->workspace->slug}/agents/{$task->agent->slug}/tasks",
+                'resource_uri' => TopicForgeUris::agent($task->agent),
+                'tasks_resource_uri' => TopicForgeUris::agentTasks($task->agent),
             ],
             'task' => $this->agentTaskPayload($task, includePostBody: true),
         ]);

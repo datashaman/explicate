@@ -3,6 +3,7 @@
 namespace App\Mcp\Tools;
 
 use App\Mcp\TopicForgeContext;
+use App\Mcp\TopicForgeUris;
 use App\Models\User;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
@@ -44,14 +45,14 @@ class GetAgentTool extends Tool
                 'slug' => $agent->slug,
                 'latest_version' => $agent->latestVersion?->version,
                 'latest_model' => $agent->latestVersion?->model,
-                'resource_uri' => "topic-forge://workspaces/{$agent->workspace->slug}/agents/{$agent->slug}",
+                'resource_uri' => TopicForgeUris::agent($agent),
             ],
             'topics' => $agent->topics
                 ->map(fn ($topic) => [
                     'id' => $topic->id,
                     'name' => $topic->name,
                     'slug' => $topic->slug,
-                    'resource_uri' => "topic-forge://workspaces/{$agent->workspace->slug}/topics/{$topic->slug}",
+                    'resource_uri' => TopicForgeUris::topic($topic),
                 ])
                 ->values()
                 ->all(),

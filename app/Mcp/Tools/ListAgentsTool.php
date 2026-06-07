@@ -3,6 +3,7 @@
 namespace App\Mcp\Tools;
 
 use App\Mcp\TopicForgeContext;
+use App\Mcp\TopicForgeUris;
 use App\Models\User;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
@@ -41,7 +42,7 @@ class ListAgentsTool extends Tool
                 'topics_count' => $agent->topics->count(),
                 'latest_version' => $agent->latestVersion?->version,
                 'latest_model' => $agent->latestVersion?->model,
-                'resource_uri' => "topic-forge://workspaces/{$workspace->slug}/agents/{$agent->slug}",
+                'resource_uri' => TopicForgeUris::agent($agent),
             ])
             ->values()
             ->all();

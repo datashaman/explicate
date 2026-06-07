@@ -34,10 +34,27 @@ use App\Models\Topic;
 use App\Models\User;
 use App\Models\Workspace;
 use Illuminate\Container\Container;
+use Illuminate\Support\Facades\File;
 use Laravel\Mcp\Server\Transport\FakeTransporter;
 use Laravel\Mcp\Server\Transport\JsonRpcRequest;
 use Laravel\Mcp\Server\Transport\JsonRpcResponse;
 use Symfony\Component\Process\Process;
+
+test('mcp uri literals are centralized', function () {
+    $matches = collect(File::allFiles(app_path('Mcp')))
+        ->reject(fn (SplFileInfo $file): bool => $file->getFilename() === 'TopicForgeUris.php')
+        ->flatMap(function (SplFileInfo $file): array {
+            preg_match_all('/topic-forge:\/\//', $file->getContents(), $fileMatches);
+
+            return collect($fileMatches[0])
+                ->map(fn (): string => $file->getRelativePathname())
+                ->all();
+        })
+        ->values()
+        ->all();
+
+    expect($matches)->toBe([]);
+});
 
 test('list workspaces returns current team workspaces', function () {
     $user = User::factory()->create();

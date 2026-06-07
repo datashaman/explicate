@@ -4,6 +4,7 @@ namespace App\Mcp\Resources;
 
 use App\Mcp\Resources\Concerns\HandlesResourceExceptions;
 use App\Mcp\TopicForgeContext;
+use App\Mcp\TopicForgeUris;
 use App\Models\User;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -13,7 +14,7 @@ use Laravel\Mcp\Server\Attributes\Uri;
 use Laravel\Mcp\Server\Resource;
 
 #[Description('List the authenticated user\'s accessible workspaces in the current team.')]
-#[Uri('topic-forge://workspaces')]
+#[Uri(TopicForgeUris::Workspaces)]
 #[MimeType('application/json')]
 class WorkspacesResource extends Resource
 {
@@ -32,15 +33,15 @@ class WorkspacesResource extends Resource
 
             return Response::json([
                 'team' => $user->currentTeam?->only(['id', 'name', 'slug']),
-                'resource_uri' => 'topic-forge://workspaces',
+                'resource_uri' => TopicForgeUris::Workspaces,
                 'workspaces' => $user->toUserWorkspaces()
                     ->map(fn ($workspace) => [
                         'id' => $workspace->id,
                         'name' => $workspace->name,
                         'slug' => $workspace->slug,
                         'is_current' => $workspace->isCurrent,
-                        'topics_resource_uri' => "topic-forge://workspaces/{$workspace->slug}/topics",
-                        'agents_resource_uri' => "topic-forge://workspaces/{$workspace->slug}/agents",
+                        'topics_resource_uri' => TopicForgeUris::workspaceTopics($workspace),
+                        'agents_resource_uri' => TopicForgeUris::workspaceAgents($workspace),
                     ])
                     ->values()
                     ->all(),

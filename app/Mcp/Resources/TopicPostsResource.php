@@ -5,6 +5,7 @@ namespace App\Mcp\Resources;
 use App\Mcp\Concerns\FormatsMcpPayloads;
 use App\Mcp\Resources\Concerns\HandlesResourceExceptions;
 use App\Mcp\TopicForgeContext;
+use App\Mcp\TopicForgeUris;
 use App\Models\User;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -23,7 +24,7 @@ class TopicPostsResource extends Resource implements HasUriTemplate
 
     public function uriTemplate(): UriTemplate
     {
-        return new UriTemplate('topic-forge://workspaces/{workspace}/topics/{topic}/posts');
+        return new UriTemplate(TopicForgeUris::TopicPostsTemplate);
     }
 
     public function handle(Request $request): Response
@@ -49,7 +50,7 @@ class TopicPostsResource extends Resource implements HasUriTemplate
                 'workspace' => $topic->workspace->only(['id', 'name', 'slug']),
                 'topic' => [
                     ...$topic->only(['id', 'name', 'slug']),
-                    'resource_uri' => "topic-forge://workspaces/{$topic->workspace->slug}/topics/{$topic->slug}",
+                    'resource_uri' => TopicForgeUris::topic($topic),
                 ],
                 'posts' => $posts,
             ]);
