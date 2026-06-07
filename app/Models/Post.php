@@ -160,6 +160,16 @@ class Post extends Model
             ->update(['available_at' => now()]);
     }
 
+    /** @return list<int> */
+    public function assignedAgentIds(): array
+    {
+        return $this->agentTasks()
+            ->where('event_type', AgentTask::EventPostAssigned)
+            ->pluck('agent_id')
+            ->map(fn ($id): int => (int) $id)
+            ->all();
+    }
+
     /**
      * @return BelongsTo<Topic, $this>
      */
@@ -229,7 +239,7 @@ class Post extends Model
     }
 
     /**
-     * @return array{name: string, sender: string, to: string, sent?: string, saved?: string, attachments: string, status: string}
+     * @return array{name: string, sender: string, sent?: string, saved?: string, attachments: string, status: string}
      */
     public function listSortValues(?string $dateKey = null): array
     {

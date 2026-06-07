@@ -867,11 +867,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
         $this->postTitle = $post?->title ?? '';
         $this->postBody = $post?->body ?? '';
-        $this->postAgentIds = $post?->agentTasks()
-            ->where('event_type', \App\Models\AgentTask::EventPostAssigned)
-            ->pluck('agent_id')
-            ->map(fn ($id): int => (int) $id)
-            ->all() ?? [];
+        $this->postAgentIds = $post?->assignedAgentIds() ?? [];
     }
 
     private function syncNewPostTopic(): void

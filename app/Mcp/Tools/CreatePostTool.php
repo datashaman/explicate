@@ -6,7 +6,6 @@ use App\Actions\Posts\CreatePost;
 use App\Enums\PostStatus;
 use App\Mcp\TopicForgeContext;
 use App\Mcp\TopicForgeUris;
-use App\Models\AgentTask;
 use App\Models\User;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Validation\Rule;
@@ -61,10 +60,7 @@ class CreatePostTool extends Tool
                 'slug' => $post->slug,
                 'status' => $post->status->value,
                 'sender_principal_id' => $post->sender_principal_id,
-                'assigned_agent_ids' => $post->agentTasks()
-                    ->where('event_type', AgentTask::EventPostAssigned)
-                    ->pluck('agent_id')
-                    ->all(),
+                'assigned_agent_ids' => $post->assignedAgentIds(),
                 'resource_uri' => TopicForgeUris::post($post),
             ],
         ]);

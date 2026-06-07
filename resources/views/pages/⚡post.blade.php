@@ -44,11 +44,7 @@ new #[Layout('layouts::workspace'), Title('Post')] class extends Component {
         $this->topic = $topic;
         $this->title = $post->title;
         $this->body = $post->body ?? '';
-        $this->agentIds = $post->agentTasks()
-            ->where('event_type', \App\Models\AgentTask::EventPostAssigned)
-            ->pluck('agent_id')
-            ->map(fn ($id): int => (int) $id)
-            ->all();
+        $this->agentIds = $post->assignedAgentIds();
     }
 
     /**
@@ -147,11 +143,7 @@ new #[Layout('layouts::workspace'), Title('Post')] class extends Component {
 
         $this->title = $this->post->title;
         $this->body = $this->post->body ?? '';
-        $this->agentIds = $this->post->agentTasks()
-            ->where('event_type', \App\Models\AgentTask::EventPostAssigned)
-            ->pluck('agent_id')
-            ->map(fn ($id): int => (int) $id)
-            ->all();
+        $this->agentIds = $this->post->assignedAgentIds();
     }
 
     public function archive(): void
@@ -165,11 +157,7 @@ new #[Layout('layouts::workspace'), Title('Post')] class extends Component {
 
         $this->title = $this->post->title;
         $this->body = $this->post->body ?? '';
-        $this->agentIds = $this->post->agentTasks()
-            ->where('event_type', \App\Models\AgentTask::EventPostAssigned)
-            ->pluck('agent_id')
-            ->map(fn ($id): int => (int) $id)
-            ->all();
+        $this->agentIds = $this->post->assignedAgentIds();
     }
 
     public function deleteAttachment(int $attachmentId): void
