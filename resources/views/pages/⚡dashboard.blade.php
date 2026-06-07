@@ -348,27 +348,6 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                 $isDraftsFolder = $folder === PostFolder::Drafts;
                 $timezone = Auth::user()->displayTimezone();
 
-                $meta = $isDraftsFolder
-                    ? [
-                        ['key' => 'topic', 'label' => __('Topic'), 'value' => $post->topic->name],
-                        [
-                            'key' => 'saved',
-                            'label' => __('Saved'),
-                            'value' => $post->updated_at->diffForHumans(),
-                            'title' => $post->updated_at->timezone($timezone)->isoFormat('LLLL'),
-                        ],
-                    ]
-                    : [
-                        ...($post->sender ? [['key' => 'sender', 'label' => __('Sender'), 'value' => $post->sender->label()]] : []),
-                        ['key' => 'topic', 'label' => __('Topic'), 'value' => $post->topic->name],
-                        [
-                            'key' => 'sent',
-                            'label' => __('Sent'),
-                            'value' => $post->updated_at->diffForHumans(),
-                            'title' => $post->updated_at->timezone($timezone)->isoFormat('LLLL'),
-                        ],
-                    ];
-
                 $sort = $isDraftsFolder
                     ? [
                         ...$post->listSortValues(dateKey: 'saved'),
@@ -387,7 +366,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                         'panel' => 'posts',
                     ]),
                     'name' => $post->title,
-                    'meta' => $meta,
+                    'meta' => $post->listTopicMeta(showSender: ! $isDraftsFolder, timezone: $timezone),
                     'attachments_count' => $post->attachments_count,
                     'sort' => $sort,
                     'badge' => null,

@@ -229,6 +229,29 @@ class Post extends Model
     }
 
     /**
+     * @return list<array{key: string, label: string, value: string, title?: string}>
+     */
+    public function listTopicMeta(bool $showSender, ?string $timezone = null): array
+    {
+        $meta = [];
+
+        if ($showSender && $this->sender) {
+            $meta[] = ['key' => 'sender', 'label' => __('Sender'), 'value' => $this->sender->label()];
+        }
+
+        $meta[] = ['key' => 'topic', 'label' => __('Topic'), 'value' => $this->topic->name];
+
+        $meta[] = [
+            'key' => $this->status === PostStatus::Draft ? 'saved' : 'sent',
+            'label' => $this->status === PostStatus::Draft ? __('Saved') : __('Sent'),
+            'value' => $this->updated_at->diffForHumans(),
+            'title' => $this->updated_at->timezone($timezone ?: config('app.timezone'))->isoFormat('LLLL'),
+        ];
+
+        return $meta;
+    }
+
+    /**
      * @return array{name: string, sender: string, to: string, sent?: string, saved?: string, attachments: string, status: string}
      */
     public function listSortValues(?string $recipientFallback = null, ?string $dateKey = null): array

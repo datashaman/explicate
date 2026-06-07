@@ -133,6 +133,43 @@ test('post list metadata uses sender recipient fallback and timestamp labels', f
     ]);
 });
 
+test('post list topic metadata uses stable keys', function () {
+    $senderPrincipal = $this->workspace->principalForUser($this->user);
+    $updatedAt = now()->subMinutes(8);
+
+    $this->post->timestamps = false;
+    $this->post->forceFill([
+        'status' => PostStatus::Published,
+        'sender_principal_id' => $senderPrincipal->id,
+        'updated_at' => $updatedAt,
+    ])->save();
+
+    expect($this->post->fresh()->load(['sender.user', 'topic'])->listTopicMeta(
+        showSender: true,
+    ))->toBe([
+        ['key' => 'sender', 'label' => 'Sender', 'value' => $this->user->name],
+        ['key' => 'topic', 'label' => 'Topic', 'value' => $this->topic->name],
+        ['key' => 'sent', 'label' => 'Sent', 'value' => '8 minutes ago', 'title' => $updatedAt->timezone(config('app.timezone'))->isoFormat('LLLL')],
+    ]);
+});
+
+test('draft post topic metadata hides sender', function () {
+    $updatedAt = now()->subMinutes(3);
+
+    $this->post->timestamps = false;
+    $this->post->forceFill([
+        'status' => PostStatus::Draft,
+        'updated_at' => $updatedAt,
+    ])->save();
+
+    expect($this->post->fresh()->load('topic')->listTopicMeta(
+        showSender: false,
+    ))->toBe([
+        ['key' => 'topic', 'label' => 'Topic', 'value' => $this->topic->name],
+        ['key' => 'saved', 'label' => 'Saved', 'value' => '3 minutes ago', 'title' => $updatedAt->timezone(config('app.timezone'))->isoFormat('LLLL')],
+    ]);
+});
+
 test('post list timestamp titles use the user timezone when provided', function () {
     $updatedAt = now()->setTimezone('UTC')->setTime(12, 0);
 
