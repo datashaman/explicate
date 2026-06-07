@@ -622,6 +622,8 @@ test('get post returns the post body and attachment metadata', function () {
 });
 
 test('list agent tasks returns post-derived work for an agent', function () {
+    Queue::fake();
+
     $user = User::factory()->create();
     $workspace = Workspace::factory()->for($user->currentTeam)->create([
         'slug' => 'strategy',
@@ -662,6 +664,8 @@ test('list agent tasks returns post-derived work for an agent', function () {
 });
 
 test('get agent task returns full post context for agent work', function () {
+    Queue::fake();
+
     $user = User::factory()->create();
     $workspace = Workspace::factory()->for($user->currentTeam)->create([
         'slug' => 'strategy',
@@ -1041,6 +1045,8 @@ test('post resource returns post context by uri template', function () {
 });
 
 test('agent tasks resource returns queued work by uri template', function () {
+    Queue::fake();
+
     $user = User::factory()->create();
     $workspace = Workspace::factory()->for($user->currentTeam)->create([
         'slug' => 'strategy',
@@ -1081,6 +1087,8 @@ test('agent tasks resource returns queued work by uri template', function () {
 });
 
 test('agent task resource returns queued work by uri template', function () {
+    Queue::fake();
+
     $user = User::factory()->create();
     $workspace = Workspace::factory()->for($user->currentTeam)->create([
         'slug' => 'strategy',

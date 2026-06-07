@@ -1,10 +1,11 @@
 @props([
     'post',
     'showTopic' => true,
+    'showReplyAffordance' => false,
 ])
 
 @php
-    $post->loadMissing(['agentTasks.agent', 'attachments', 'sender.user', 'sender.agent', 'topic']);
+    $post->loadMissing(['attachments', 'sender.user', 'sender.agent', 'topic']);
 
     $senderName = $post->sender?->label() ?? __('Unknown sender');
     $senderInitials = Str::of($senderName)
@@ -19,7 +20,6 @@
     $timestampTitle = $timestamp->timezone($timezone)->isoFormat('LLLL');
     $hasActions = isset($actions) && trim($actions->toHtml()) !== '';
     $body = $post->body ?: __('No content.');
-    $mentionedAgentSlugs = $post->mentionedAgentSlugs();
     $mentionedAgentsBySlug = $post->mentionedAgents()->keyBy('slug');
     $bodyHtml = (function () use ($body, $mentionedAgentsBySlug): \Illuminate\Support\HtmlString {
         $pattern = '/(?<![\w@])@([a-z0-9][a-z0-9-]*)\b/i';
@@ -47,9 +47,16 @@
 
         return new \Illuminate\Support\HtmlString($html);
     })();
-    $visibleAgentTasks = $post->agentTasks
-        ->filter(fn ($task) => $task->event_type === \App\Models\AgentTask::EventPostMentioned)
-        ->filter(fn ($task) => $task->agent && $mentionedAgentSlugs->contains($task->agent->slug));
+    $replyPosts = collect();
+
+    if ($showReplyAffordance) {
+        $post->loadMissing([
+            'startedThread.posts.sender.user',
+            'startedThread.posts.sender.agent',
+        ]);
+
+        $replyPosts = $post->startedThread?->posts ?? collect();
+    }
 @endphp
 
 <article {{ $attributes->class('flex min-w-0 gap-3') }} data-test="post-message">
@@ -128,15 +135,45 @@
             </div>
         @endif
 
-        @if ($visibleAgentTasks->isNotEmpty())
-            <div class="mt-2 space-y-1 text-xs text-neutral-500 dark:text-neutral-400" data-test="post-message-tasks">
-                @foreach ($visibleAgentTasks as $task)
-                    <div class="flex items-center gap-2">
-                        <flux:icon name="cpu-chip" variant="mini" class="size-3.5 text-amber-500" />
-                        <span>{{ $task->agent->name }} {{ $task->status->label() }}</span>
-                    </div>
-                @endforeach
+        @if ($showReplyAffordance && $replyPosts->isNotEmpty())
+            @php
+                $lastReply = $replyPosts->sortByDesc('created_at')->first();
+            @endphp
+
+            <div class="mt-3 flex items-center gap-2 text-sm" data-test="post-message-replies">
+                <div class="flex -space-x-1">
+                    @foreach ($replyPosts->take(3) as $replyPost)
+                        @php
+                            $replySenderName = $replyPost->sender?->label() ?? __('Unknown sender');
+                            $replySenderInitials = Str::of($replySenderName)
+                                ->explode(' ')
+                                ->filter()
+                                ->take(2)
+                                ->map(fn (string $word): string => Str::substr($word, 0, 1))
+                                ->implode('');
+                        @endphp
+
+                        <span
+                            class="flex size-6 items-center justify-center rounded-md border-2 border-white bg-neutral-200 text-[0.65rem] font-semibold leading-none text-neutral-700 dark:border-zinc-900 dark:bg-zinc-700 dark:text-neutral-100"
+                            title="{{ $replySenderName }}"
+                            data-test="post-message-reply-avatar"
+                        >
+                            {{ $replySenderInitials ?: '?' }}
+                        </span>
+                    @endforeach
+                </div>
+
+                <span class="font-medium text-blue-700 dark:text-blue-300">
+                    {{ trans_choice(':count reply|:count replies', $replyPosts->count(), ['count' => $replyPosts->count()]) }}
+                </span>
+
+                @if ($lastReply)
+                    <span class="text-neutral-500 dark:text-neutral-400">
+                        {{ __('Last reply :time', ['time' => $lastReply->created_at->diffForHumans()]) }}
+                    </span>
+                @endif
             </div>
         @endif
+
     </div>
 </article>

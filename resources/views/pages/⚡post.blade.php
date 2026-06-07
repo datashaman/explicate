@@ -164,7 +164,7 @@ new #[Layout('layouts::workspace'), Title('Post')] class extends Component {
                 @endphp
 
                 @foreach ($threadPosts as $threadPost)
-                    <x-post-message :post="$threadPost">
+	                    <x-post-message :post="$threadPost">
                         @if ($threadPost->is($post))
                             <x-slot:actions>
                                 @if ($post->status === App\Enums\PostStatus::Published)
@@ -174,11 +174,15 @@ new #[Layout('layouts::workspace'), Title('Post')] class extends Component {
                                     <flux:menu.item wire:click="unarchive" icon="archive-box-x-mark">{{ __('Unarchive') }}</flux:menu.item>
                                 @endif
                             </x-slot:actions>
-                        @endif
-                    </x-post-message>
-                @endforeach
+	                        @endif
+	                    </x-post-message>
 
-                @include('partials.post-attachments', [
+	                    @if ($loop->first && ! $loop->last)
+	                        <div class="ml-13 border-t border-neutral-200 dark:border-white/10" data-test="thread-op-replies-divider"></div>
+	                    @endif
+	                @endforeach
+
+	                @include('partials.post-attachments', [
                     'post' => $post,
                     'uploadModel' => 'uploads',
                     'uploadError' => 'uploads.*',

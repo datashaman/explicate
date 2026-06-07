@@ -306,7 +306,7 @@
                                 data-sort-{{ $sortKey }}="{{ $sortValue }}"
                             @endforeach
                         >
-                            <x-post-message :post="$post" :show-topic="$showPostMessageTopic ?? true">
+                            <x-post-message :post="$post" :show-topic="$showPostMessageTopic ?? true" :show-reply-affordance="true">
                                 <x-slot:actions>
                                     @if ($post->status === \App\Enums\PostStatus::Published)
                                         @isset($moveToDraftAction)

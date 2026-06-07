@@ -54,7 +54,7 @@ class DeletePostTool extends Tool
 
         DB::transaction(function () use ($post): void {
             $post->attachments()->delete();
-            $post->agentTasks()->delete();
+            $post->agentTasks()->get()->each->delete();
             $post->delete();
         });
 

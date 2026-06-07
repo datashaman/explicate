@@ -40,6 +40,7 @@ test('it executes a pending agent task through an anonymous laravel ai agent', f
     ]);
 
     $task = AgentTask::query()->whereBelongsTo($post)->sole();
+    $statusPost = $task->statusPost;
 
     $reply = app(ExecuteAgentTask::class)->handle($task);
 
@@ -51,6 +52,7 @@ test('it executes a pending agent task through an anonymous laravel ai agent', f
     });
 
     expect($reply)->not->toBeNull()
+        ->and($reply->id)->toBe($statusPost->id)
         ->and($reply->body)->toBe('The agent response.')
         ->and($reply->status)->toBe(PostStatus::Published)
         ->and($reply->sender_principal_id)->toBe($this->workspace->principalForAgent($agent)->id)
@@ -58,10 +60,16 @@ test('it executes a pending agent task through an anonymous laravel ai agent', f
         ->and($post->fresh()->thread_id)->toBeNull()
         ->and($reply->thread?->parent_post_id)->toBe($post->id)
         ->and($reply->thread?->topic->is($this->topic))->toBeTrue()
+        ->and($reply->thread?->posts()->count())->toBe(1)
         ->and($task->fresh()->status)->toBe(AgentTaskStatus::Completed)
+        ->and($task->fresh()->status_post_id)->toBe($statusPost->id)
         ->and($task->fresh()->attempts)->toBe(1)
         ->and($task->fresh()->locked_at)->toBeNull()
         ->and($task->fresh()->last_error)->toBeNull();
+
+    $post->update(['body' => '@researcher Add one more detail.']);
+
+    expect($reply->fresh()->body)->toBe('The agent response.');
 });
 
 test('it marks a task failed when the agent has no executable version', function () {
@@ -75,6 +83,7 @@ test('it marks a task failed when the agent has no executable version', function
     ]);
 
     $task = AgentTask::query()->whereBelongsTo($post)->sole();
+    $statusPost = $task->statusPost;
     $exception = null;
 
     try {
@@ -88,6 +97,8 @@ test('it marks a task failed when the agent has no executable version', function
     Ai::assertAgentNeverPrompted(AnonymousAgent::class);
 
     expect($task->fresh()->status)->toBe(AgentTaskStatus::Failed)
+        ->and($task->fresh()->status_post_id)->toBe($statusPost->id)
+        ->and($statusPost->fresh()->body)->toBe('Researcher failed: Agent does not have a version to execute.')
         ->and($task->fresh()->attempts)->toBe(1)
         ->and($task->fresh()->locked_at)->toBeNull()
         ->and($task->fresh()->last_error)->toBe('Agent does not have a version to execute.');
@@ -109,11 +120,13 @@ test('it replies in the existing thread when the mentioned post is already threa
         'status' => PostStatus::Published,
     ]);
 
-    $reply = app(ExecuteAgentTask::class)->handle(
-        AgentTask::query()->whereBelongsTo($post)->sole(),
-    );
+    $task = AgentTask::query()->whereBelongsTo($post)->sole();
+    $statusPost = $task->statusPost;
+
+    $reply = app(ExecuteAgentTask::class)->handle($task);
 
     expect($reply)->not->toBeNull()
+        ->and($reply->id)->toBe($statusPost->id)
         ->and($reply->thread_id)->toBe($thread->id)
         ->and($post->fresh()->thread_id)->toBe($thread->id)
         ->and($this->topic->threads()->count())->toBe(1);

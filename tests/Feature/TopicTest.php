@@ -281,8 +281,9 @@ test('dashboard post panel return label matches selected topic context', functio
     $this->actingAs($user)
         ->get(route('dashboard', ['topic' => $topic->slug, 'post' => $post->ulid, 'panel' => 'posts']))
         ->assertOk()
-        ->assertSee('data-test="posts-panel-return"', escape: false)
-        ->assertSee(e(route('dashboard', ['topic' => $topic->slug, 'panel' => 'posts'])), escape: false)
+        ->assertSee('id="posts-panel"', escape: false)
+        ->assertSee('id="thread-panel"', escape: false)
+        ->assertSee('data-test="thread-panel-close"', escape: false)
         ->assertSeeText('Design');
 });
 
@@ -456,7 +457,10 @@ test('dashboard keeps thread replies out of top-level topic lists', function () 
         ->get(route('dashboard', ['topic' => $topic->slug]))
         ->assertOk()
         ->assertSee('Top-level request')
-        ->assertDontSee('Threaded agent reply');
+        ->assertDontSee('Threaded agent reply')
+        ->assertSee('data-test="post-message-replies"', escape: false)
+        ->assertSee('data-test="post-message-reply-avatar"', escape: false)
+        ->assertSee('1 reply');
 
     $this->actingAs($user)
         ->get(route('dashboard', ['topic' => $topic->slug, 'post' => $sourcePost->ulid, 'panel' => 'posts']))
@@ -465,6 +469,7 @@ test('dashboard keeps thread replies out of top-level topic lists', function () 
         ->assertSee('Threaded agent reply')
         ->assertSee('id="posts-panel"', escape: false)
         ->assertSee('id="thread-panel"', escape: false)
+        ->assertSee('data-test="thread-op-replies-divider"', escape: false)
         ->assertSee('data-test="folder-post-message"', escape: false);
 });
 
@@ -516,6 +521,7 @@ test('dashboard opens a post thread panel from the feed', function () {
         ->assertSee('id="posts-panel"', escape: false)
         ->assertSee('id="thread-panel"', escape: false)
         ->assertSee('data-test="folder-post-message"', escape: false)
+        ->assertSee('data-test="thread-op-replies-divider"', escape: false)
         ->assertSee('data-test="dashboard-post-panel"', escape: false);
 });
 
@@ -652,6 +658,8 @@ test('dashboard feed post messages show image attachments as thumbnails', functi
 });
 
 test('dashboard feed post messages link agent mentions to agent panel', function () {
+    Queue::fake();
+
     [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);

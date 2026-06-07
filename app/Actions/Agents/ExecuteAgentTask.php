@@ -2,12 +2,9 @@
 
 namespace App\Actions\Agents;
 
-use App\Actions\Posts\CreatePost;
 use App\Enums\AgentTaskStatus;
-use App\Enums\PostStatus;
 use App\Models\AgentTask;
 use App\Models\Post;
-use App\Models\Thread;
 use Laravel\Ai\Enums\Lab;
 use RuntimeException;
 use Throwable;
@@ -16,8 +13,6 @@ use function Laravel\Ai\agent as laravelAiAgent;
 
 class ExecuteAgentTask
 {
-    public function __construct(private CreatePost $createPost) {}
-
     public function handle(AgentTask $task): ?Post
     {
         $task->loadMissing([
@@ -37,6 +32,7 @@ class ExecuteAgentTask
             'attempts' => $task->attempts + 1,
             'last_error' => null,
         ])->save();
+        $task->syncStatusPost();
 
         try {
             $version = $task->agent->latestVersion;
@@ -52,27 +48,20 @@ class ExecuteAgentTask
                     model: $version->model,
                 );
 
-            $reply = $this->createPost->handle(
-                topic: $task->post->topic,
-                sender: $task->agent->workspace->principalForAgent($task->agent),
-                body: $response->text,
-                status: PostStatus::Published,
-                thread: $this->threadFor($task->post),
-            );
-
             $task->forceFill([
                 'status' => AgentTaskStatus::Completed,
                 'locked_at' => null,
                 'last_error' => null,
             ])->save();
 
-            return $reply;
+            return $task->syncStatusPost($response->text);
         } catch (Throwable $throwable) {
             $task->forceFill([
                 'status' => AgentTaskStatus::Failed,
                 'locked_at' => null,
                 'last_error' => $throwable->getMessage(),
             ])->save();
+            $task->syncStatusPost();
 
             throw $throwable;
         }
@@ -81,17 +70,5 @@ class ExecuteAgentTask
     protected function promptFor(Post $post): string
     {
         return trim($post->body);
-    }
-
-    protected function threadFor(Post $post): Thread
-    {
-        if ($post->thread) {
-            return $post->thread;
-        }
-
-        return $post->startedThread()->firstOrCreate([], [
-            'topic_id' => $post->topic_id,
-            'title' => $post->preview(),
-        ]);
     }
 }

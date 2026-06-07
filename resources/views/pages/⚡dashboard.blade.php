@@ -1187,8 +1187,8 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                                 $selectedDashboardThreadPosts = $selectedDashboardPost->conversationPosts();
                             @endphp
 
-                            @foreach ($selectedDashboardThreadPosts as $threadPost)
-                                <x-post-message :post="$threadPost" :show-topic="$selectedDashboardFolder !== null">
+	                            @foreach ($selectedDashboardThreadPosts as $threadPost)
+	                                <x-post-message :post="$threadPost" :show-topic="$selectedDashboardFolder !== null">
                                     @if ($threadPost->is($selectedDashboardPost))
                                         <x-slot:actions>
                                             @if ($selectedDashboardPost->status === PostStatus::Published)
@@ -1198,11 +1198,15 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                                                 <flux:menu.item wire:click="unarchiveSelectedPost" icon="archive-box-x-mark">{{ __('Unarchive') }}</flux:menu.item>
                                             @endif
                                         </x-slot:actions>
-                                    @endif
-                                </x-post-message>
-                            @endforeach
+	                                    @endif
+	                                </x-post-message>
 
-                            @include('partials.post-attachments', [
+	                                @if ($loop->first && ! $loop->last)
+	                                    <div class="ml-13 border-t border-neutral-200 dark:border-white/10" data-test="thread-op-replies-divider"></div>
+	                                @endif
+	                            @endforeach
+
+	                            @include('partials.post-attachments', [
                                 'post' => $selectedDashboardPost,
                                 'uploadModel' => 'postUploads',
                                 'uploadError' => 'postUploads.*',

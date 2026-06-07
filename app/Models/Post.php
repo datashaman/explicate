@@ -80,7 +80,7 @@ class Post extends Model
             $tasksToRemove->whereNotIn('agent_id', $mentionedAgentIds);
         }
 
-        $tasksToRemove->delete();
+        $tasksToRemove->get()->each->delete();
 
         if ($this->status !== PostStatus::Published) {
             return;
@@ -94,6 +94,10 @@ class Post extends Model
                 'status' => AgentTaskStatus::Pending,
                 'available_at' => now(),
             ]);
+
+            if ($task->status !== AgentTaskStatus::Completed || ! $task->status_post_id) {
+                $task->syncStatusPost();
+            }
 
             if ($task->status === AgentTaskStatus::Pending) {
                 ProcessAgentTask::dispatch($task);

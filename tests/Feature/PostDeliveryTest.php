@@ -39,7 +39,11 @@ test('mentioning an agent in a published post creates agent work instead of a no
     expect($task)->not->toBeNull()
         ->and($task->event_type)->toBe(AgentTask::EventPostMentioned)
         ->and($task->status)->toBe(AgentTaskStatus::Pending)
-        ->and($task->available_at)->not->toBeNull();
+        ->and($task->available_at)->not->toBeNull()
+        ->and($task->statusPost)->not->toBeNull()
+        ->and($task->statusPost->body)->toBe('Researcher queued.')
+        ->and($task->statusPost->thread?->parent_post_id)->toBe($post->id)
+        ->and($post->fresh()->thread_id)->toBeNull();
 
     Queue::assertPushed(ProcessAgentTask::class, fn (ProcessAgentTask $job): bool => $job->task->is($task));
 });
@@ -79,10 +83,33 @@ test('publishing a draft with an agent mention creates agent work once', functio
         ->sole();
 
     expect($task->available_at)->not->toBeNull()
+        ->and($task->statusPost)->not->toBeNull()
+        ->and($task->statusPost->body)->toBe('Researcher queued.')
         ->and(AgentTask::query()
             ->whereBelongsTo($agent)
             ->whereBelongsTo($post)
             ->count())->toBe(1);
+});
+
+test('removing an agent mention removes the task status reply', function () {
+    Notification::fake();
+
+    Agent::factory()->for($this->workspace)->create(['name' => 'Researcher']);
+
+    $post = Post::factory()->for($this->topic)->create([
+        'sender_principal_id' => $this->senderPrincipal->id,
+        'body' => '@researcher Draft context.',
+        'status' => PostStatus::Published,
+    ]);
+
+    $task = AgentTask::query()->whereBelongsTo($post)->sole();
+    $statusPost = $task->statusPost;
+
+    $post->update(['body' => 'No agent mention now.']);
+
+    expect(AgentTask::query()->whereBelongsTo($post)->exists())->toBeFalse()
+        ->and(Post::query()->find($statusPost->id))->toBeNull()
+        ->and(Post::withTrashed()->find($statusPost->id)?->trashed())->toBeTrue();
 });
 
 test('mentioning multiple agents creates one task for each agent', function () {
