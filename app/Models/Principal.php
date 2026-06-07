@@ -51,14 +51,6 @@ class Principal extends Model
         return $this->hasMany(Post::class, 'sender_principal_id');
     }
 
-    /**
-     * @return HasMany<Post, $this>
-     */
-    public function receivedPosts(): HasMany
-    {
-        return $this->hasMany(Post::class, 'recipient_principal_id');
-    }
-
     public function label(): string
     {
         return $this->user?->name ?? $this->agent?->name ?? __('Unknown principal');

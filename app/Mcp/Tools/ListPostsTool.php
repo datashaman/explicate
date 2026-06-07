@@ -40,7 +40,7 @@ class ListPostsTool extends Tool
         $topic = $this->context->topicFor($user, $validated['topic_slug']);
 
         $posts = $topic->posts()
-            ->with(['topic.workspace', 'sender.user', 'sender.agent', 'recipient.user', 'recipient.agent'])
+            ->with(['topic.workspace', 'sender.user', 'sender.agent'])
             ->orderBy('title')
             ->get()
             ->map(fn ($post) => $this->postPayload($post))

@@ -378,7 +378,7 @@ test('list posts returns topic posts ordered by title', function () {
         );
 });
 
-test('list posts includes direct posts with sender and recipient context', function () {
+test('list posts includes sender context', function () {
     $user = User::factory()->create();
     $workspace = Workspace::factory()->for($user->currentTeam)->create([
         'slug' => 'strategy',
@@ -388,19 +388,13 @@ test('list posts includes direct posts with sender and recipient context', funct
     $topic = Topic::factory()->for($workspace)->create([
         'slug' => 'alpha-topic',
     ]);
-    $agent = Agent::factory()->for($workspace)->create([
-        'name' => 'Research Agent',
-        'slug' => 'research-agent',
-    ]);
     $senderPrincipal = $workspace->principalForUser($user);
-    $agentPrincipal = $workspace->principalForAgent($agent);
 
     Post::factory()->for($topic)->create([
-        'title' => 'Agent Request',
-        'slug' => 'agent-request',
+        'title' => 'Topic Request',
+        'slug' => 'topic-request',
         'status' => PostStatus::Published,
         'sender_principal_id' => $senderPrincipal->id,
-        'recipient_principal_id' => $agentPrincipal->id,
     ]);
 
     $response = TopicForgeServer::actingAs($user)->tool(ListPostsTool::class, [
@@ -410,11 +404,9 @@ test('list posts includes direct posts with sender and recipient context', funct
     $response
         ->assertOk()
         ->assertStructuredContent(fn ($json) => $json
-            ->where('posts.0.slug', 'agent-request')
+            ->where('posts.0.slug', 'topic-request')
             ->where('posts.0.sender.type', 'user')
             ->where('posts.0.sender.name', $user->name)
-            ->where('posts.0.recipient.type', 'agent')
-            ->where('posts.0.recipient.name', 'Research Agent')
             ->etc()
         );
 });

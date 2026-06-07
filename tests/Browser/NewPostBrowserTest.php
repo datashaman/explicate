@@ -27,14 +27,12 @@ test('dashboard new post button opens canonical create URL and sends the form', 
         ->type('@new-post-title', 'TEST')
         ->press('@new-post-send')
         ->wait(0.5)
-        ->assertDontSee('recipient field is required')
         ->assertNoJavaScriptErrors();
 
     $post = $topic->posts()->where('title', 'TEST')->first();
 
     expect($post)->not->toBeNull()
         ->and($post->sender_principal_id)->toBe($senderPrincipal->id)
-        ->and($post->recipient_principal_id)->toBeNull()
         ->and($post->status)->toBe(PostStatus::Published);
 });
 
@@ -62,7 +60,6 @@ test('new post query values become form defaults and form fields submit the post
         ->select('@new-post-topic', $engineering->id)
         ->press('@new-post-send')
         ->wait(0.5)
-        ->assertDontSee('recipient field is required')
         ->assertNoJavaScriptErrors();
 
     expect($design->posts()->where('title', 'Query default overridden')->exists())->toBeFalse();

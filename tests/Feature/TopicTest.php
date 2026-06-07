@@ -110,7 +110,6 @@ test('dashboard shows system folders with workspace post counts', function () {
     Post::factory()->for($topic)->create([
         'status' => PostStatus::Published,
         'sender_principal_id' => $userPrincipal->id,
-        'recipient_principal_id' => $userPrincipal->id,
     ]);
 
     $this->actingAs($user)
@@ -161,8 +160,6 @@ test('dashboard system draft folder shows draft posts across topics', function (
         ->assertSee('data-sort-topic=', escape: false)
         ->assertSeeText('Topic:')
         ->assertSeeText('Design')
-        ->assertDontSee('data-test="folder-list-sort-recipient"', escape: false)
-        ->assertDontSeeText('Recipient')
         ->assertSeeText('Saved:')
         ->assertSeeText('7 minutes ago')
         ->assertSee('data-test="folder-list-sort-saved"', escape: false)
@@ -188,7 +185,6 @@ test('dashboard feed folder does not show draft posts', function () {
         'title' => 'Visible post',
         'status' => PostStatus::Published,
         'sender_principal_id' => $userPrincipal->id,
-        'recipient_principal_id' => $userPrincipal->id,
     ]);
 
     $this->actingAs($user)
@@ -200,28 +196,25 @@ test('dashboard feed folder does not show draft posts', function () {
 
 test('dashboard feed folder shows all published topic posts', function () {
     [$user, $workspace] = userWithWorkspace();
-    [$recipient, $recipientPrincipal] = teamMemberPrincipal($user, $workspace);
 
     $topic = Topic::factory()->for($workspace)->create(['name' => 'Design', 'slug' => 'design']);
     $userPrincipal = $workspace->principalForUser($user);
 
     Post::factory()->for($topic)->create([
-        'title' => 'For me',
+        'title' => 'First topic post',
         'updated_at' => now()->subMinutes(9),
         'status' => PostStatus::Published,
-        'sender_principal_id' => $recipientPrincipal->id,
-        'recipient_principal_id' => $userPrincipal->id,
+        'sender_principal_id' => $userPrincipal->id,
     ]);
 
     Post::factory()->for($topic)->create([
-        'title' => 'For someone else',
+        'title' => 'Second topic post',
         'status' => PostStatus::Published,
         'sender_principal_id' => $userPrincipal->id,
-        'recipient_principal_id' => $recipientPrincipal->id,
     ]);
 
     Post::factory()->for($topic)->create([
-        'title' => 'For the topic',
+        'title' => 'Third topic post',
         'status' => PostStatus::Published,
         'sender_principal_id' => $userPrincipal->id,
     ]);
@@ -231,19 +224,16 @@ test('dashboard feed folder shows all published topic posts', function () {
         ->assertOk()
         ->assertSee('data-test="folder-title"', escape: false)
         ->assertSeeText('Feed')
-        ->assertSee('For me')
-        ->assertSee('For someone else')
-        ->assertSee('For the topic')
+        ->assertSee('First topic post')
+        ->assertSee('Second topic post')
+        ->assertSee('Third topic post')
         ->assertDontSeeText('Author')
         ->assertSee('data-test="folder-list-sort-sender"', escape: false)
         ->assertSeeText('Sender:')
-        ->assertSeeText($recipient->name)
+        ->assertSeeText($user->name)
         ->assertSee('data-test="folder-list-sort-topic"', escape: false)
         ->assertSeeText('Topic:')
         ->assertSeeText('Design')
-        ->assertSeeText($user->name)
-        ->assertDontSee('data-test="folder-list-sort-recipient"', escape: false)
-        ->assertDontSeeText('Recipient:')
         ->assertSeeText('Sent:')
         ->assertSeeText('9 minutes ago');
 });
@@ -314,8 +304,6 @@ test('dashboard archived folder shows archived feed', function () {
         ->assertSee('data-test="folder-list-sort-topic"', escape: false)
         ->assertSeeText('Topic:')
         ->assertSeeText('Design')
-        ->assertDontSee('data-test="folder-list-sort-recipient"', escape: false)
-        ->assertDontSeeText('Recipient:')
         ->assertSeeText('Sent:')
         ->assertSeeText('11 minutes ago');
 
@@ -423,9 +411,8 @@ test('dashboard shows selected topic in the main panel', function () {
     ]);
     Post::factory()->for($otherTopic)->create(['title' => 'Other post']);
     Post::factory()->for($selectedTopic)->create([
-        'title' => 'Direct post',
+        'title' => 'Another selected post',
         'status' => PostStatus::Published,
-        'recipient_principal_id' => $workspace->principalForUser($user)->id,
     ]);
 
     $this->actingAs($user)
@@ -435,7 +422,7 @@ test('dashboard shows selected topic in the main panel', function () {
         ->assertSee($selectedPost->title)
         ->assertSee(e(route('dashboard', ['topic' => $selectedTopic->slug, 'post' => $selectedPost->slug, 'panel' => 'posts'])), escape: false)
         ->assertDontSee(route('posts.show', ['post' => $selectedPost]), escape: false)
-        ->assertSee('Direct post')
+        ->assertSee('Another selected post')
         ->assertDontSee('Other post');
 });
 
@@ -488,32 +475,6 @@ test('dashboard can save selected draft post', function () {
     expect($post->fresh())
         ->title->toBe('Updated brief')
         ->body->toBe('Updated body');
-});
-
-test('dashboard save clears legacy direct recipient', function () {
-    [$user, $workspace] = userWithWorkspace();
-
-    $topic = Topic::factory()->for($workspace)->create(['name' => 'Design', 'slug' => 'design']);
-    $agent = Agent::factory()->for($workspace)->create(['name' => 'Researcher']);
-    $agentPrincipal = $workspace->principalForAgent($agent);
-    $post = Post::factory()->for($topic)->create([
-        'title' => 'Draft note',
-        'status' => PostStatus::Draft,
-        'recipient_principal_id' => $agentPrincipal->id,
-    ]);
-
-    $this->actingAs($user);
-
-    Livewire::test('pages::dashboard')
-        ->set('selectedTopicSlug', $topic->slug)
-        ->set('selectedPostSlug', $post->slug)
-        ->set('postTitle', 'Topic draft')
-        ->call('saveSelectedPost')
-        ->assertHasNoErrors();
-
-    expect($post->fresh())
-        ->title->toBe('Topic draft')
-        ->recipient_principal_id->toBeNull();
 });
 
 test('dashboard published post panel shows sender and topic', function () {
@@ -905,33 +866,10 @@ test('dashboard posts a new post to a topic', function () {
 
     expect($post)->not->toBeNull()
         ->and($post->sender_principal_id)->toBe($senderPrincipal->id)
-        ->and($post->recipient_principal_id)->toBeNull()
         ->and($post->status)->toBe(PostStatus::Published);
 });
 
-test('dashboard ignores removed direct recipient input when posting a new post', function () {
-    [$user, $workspace] = userWithWorkspace();
-
-    $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
-    $agent = Agent::factory()->for($workspace)->create(['name' => 'Researcher']);
-    $workspace->principalForAgent($agent);
-
-    $this->actingAs($user);
-
-    Livewire::test('pages::dashboard')
-        ->set('selectedTopicSlug', $topic->slug)
-        ->set('panelAction', 'new-post')
-        ->set('newPostTitle', 'Topic-only note')
-        ->set('newPostBody', 'For everyone in the topic')
-        ->set('newPostTopicId', $topic->id)
-        ->call('sendDashboardPost')
-        ->assertHasNoErrors();
-
-    expect($topic->posts()->where('title', 'Topic-only note')->sole())
-        ->recipient_principal_id->toBeNull();
-});
-
-test('dashboard does not default a direct recipient when posting a new post', function () {
+test('dashboard sets sender when posting a new post', function () {
     [$user, $workspace] = userWithWorkspace();
     $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
     $senderPrincipal = $workspace->principalForUser($user);
@@ -951,7 +889,6 @@ test('dashboard does not default a direct recipient when posting a new post', fu
 
     expect($post)->not->toBeNull()
         ->and($post->sender_principal_id)->toBe($senderPrincipal->id)
-        ->and($post->recipient_principal_id)->toBeNull()
         ->and($post->status)->toBe(PostStatus::Published);
 });
 

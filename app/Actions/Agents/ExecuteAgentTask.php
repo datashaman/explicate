@@ -50,7 +50,6 @@ class ExecuteAgentTask
 
             $reply = $task->post->topic->posts()->create([
                 'sender_principal_id' => $task->agent->workspace->principalForAgent($task->agent)->id,
-                'recipient_principal_id' => $task->post->sender_principal_id,
                 'title' => __('Re: :title', ['title' => $task->post->title]),
                 'body' => $response->text,
                 'status' => PostStatus::Published,

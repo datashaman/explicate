@@ -39,7 +39,7 @@ class AgentTasksResource extends Resource implements HasUriTemplate
             );
 
             $tasks = $agent->tasks()
-                ->with(['agent.workspace', 'post.topic.workspace', 'post.sender.user', 'post.sender.agent', 'post.recipient.user', 'post.recipient.agent'])
+                ->with(['agent.workspace', 'post.topic.workspace', 'post.sender.user', 'post.sender.agent'])
                 ->orderByDesc('priority')
                 ->orderBy('available_at')
                 ->orderBy('id')

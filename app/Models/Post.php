@@ -5,7 +5,6 @@ namespace App\Models;
 use App\Enums\AgentTaskStatus;
 use App\Enums\PostListColumn;
 use App\Enums\PostStatus;
-use App\Events\PostSent;
 use Database\Factories\PostFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -17,7 +16,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
-#[Fillable(['topic_id', 'thread_id', 'sender_principal_id', 'recipient_principal_id', 'title', 'slug', 'ulid', 'body', 'status'])]
+#[Fillable(['topic_id', 'thread_id', 'sender_principal_id', 'title', 'slug', 'ulid', 'body', 'status'])]
 class Post extends Model
 {
     /** @use HasFactory<PostFactory> */
@@ -51,16 +50,9 @@ class Post extends Model
             }
         });
 
-        static::created(function (Post $post) {
-            if ($post->status === PostStatus::Published) {
-                PostSent::dispatch($post);
-            }
-        });
-
         static::updated(function (Post $post) {
             if ($post->wasChanged('status') && $post->status === PostStatus::Published) {
                 $post->makeAssignedAgentTasksAvailable();
-                PostSent::dispatch($post);
             }
         });
     }
@@ -187,14 +179,6 @@ class Post extends Model
     /**
      * @return BelongsTo<Principal, $this>
      */
-    public function recipient(): BelongsTo
-    {
-        return $this->belongsTo(Principal::class, 'recipient_principal_id');
-    }
-
-    /**
-     * @return BelongsTo<Principal, $this>
-     */
     public function sender(): BelongsTo
     {
         return $this->belongsTo(Principal::class, 'sender_principal_id');
@@ -203,20 +187,12 @@ class Post extends Model
     /**
      * @return list<array{key: string, label: string, value: string, title?: string}>
      */
-    public function listMeta(bool $showSender, bool $showRecipient, ?string $recipientFallback = null, ?string $timezone = null, ?string $recipientLabel = null): array
+    public function listMeta(bool $showSender, ?string $timezone = null): array
     {
         $meta = [];
 
         if ($showSender && $this->sender) {
             $meta[] = ['key' => PostListColumn::Sender->value, 'label' => __('Sender'), 'value' => $this->sender->label()];
-        }
-
-        if ($showRecipient) {
-            $recipient = $this->recipient?->label() ?? $recipientFallback;
-
-            if ($recipient) {
-                $meta[] = ['key' => 'to', 'label' => $recipientLabel ?? __('To'), 'value' => $recipient];
-            }
         }
 
         $meta[] = [
@@ -255,7 +231,7 @@ class Post extends Model
     /**
      * @return array{name: string, sender: string, to: string, sent?: string, saved?: string, attachments: string, status: string}
      */
-    public function listSortValues(?string $recipientFallback = null, ?string $dateKey = null): array
+    public function listSortValues(?string $dateKey = null): array
     {
         $attachmentsCount = (int) ($this->attachments_count ?? $this->attachments()->count());
         $dateKey ??= $this->dateListColumn()->value;
@@ -263,7 +239,6 @@ class Post extends Model
         $values = [
             PostListColumn::Name->value => Str::lower($this->title),
             PostListColumn::Sender->value => Str::lower($this->sender?->label() ?? ''),
-            'to' => Str::lower($this->recipient?->label() ?? $recipientFallback ?? ''),
             PostListColumn::Attachments->value => str_pad((string) $attachmentsCount, 10, '0', STR_PAD_LEFT),
             'status' => Str::lower($this->status->label()),
         ];

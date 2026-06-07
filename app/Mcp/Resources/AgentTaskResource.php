@@ -38,7 +38,7 @@ class AgentTaskResource extends Resource implements HasUriTemplate
                 (int) $request->get('task'),
                 (string) $request->get('workspace'),
             );
-            $task->load(['agent.workspace', 'post.topic.workspace', 'post.sender.user', 'post.sender.agent', 'post.recipient.user', 'post.recipient.agent']);
+            $task->load(['agent.workspace', 'post.topic.workspace', 'post.sender.user', 'post.sender.agent']);
 
             return Response::json([
                 'workspace' => $task->agent->workspace->only(['id', 'name', 'slug']),

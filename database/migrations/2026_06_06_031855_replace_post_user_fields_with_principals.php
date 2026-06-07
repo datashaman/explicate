@@ -15,10 +15,6 @@ return new class extends Migration
             $table->foreignId('sender_principal_id')
                 ->nullable()
                 ->index();
-
-            $table->foreignId('recipient_principal_id')
-                ->nullable()
-                ->index();
         });
 
         //
@@ -35,10 +31,5 @@ return new class extends Migration
             });
         }
 
-        if (Schema::hasColumn('posts', 'recipient_principal_id')) {
-            Schema::table('posts', function (Blueprint $table) {
-                $table->dropColumn('recipient_principal_id');
-            });
-        }
     }
 };

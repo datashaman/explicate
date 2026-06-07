@@ -24,7 +24,6 @@ class PostFactory extends Factory
             'topic_id' => Topic::factory(),
             'thread_id' => null,
             'sender_principal_id' => null,
-            'recipient_principal_id' => null,
             'title' => $name,
             'slug' => fn (array $attributes): string => Str::slug($attributes['title']),
             'ulid' => fn (): string => (string) Str::ulid(),

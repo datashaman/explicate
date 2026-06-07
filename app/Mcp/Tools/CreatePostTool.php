@@ -32,7 +32,6 @@ class CreatePostTool extends Tool
             'title' => ['required', 'string', 'max:255'],
             'body' => ['nullable', 'string'],
             'status' => ['nullable', 'string', 'in:'.implode(',', array_column(PostStatus::cases(), 'value'))],
-            'recipient_principal_id' => ['nullable', 'integer'],
             'agent_ids' => ['nullable', 'array'],
             'agent_ids.*' => ['integer'],
         ]);
@@ -40,24 +39,13 @@ class CreatePostTool extends Tool
         /** @var User $user */
         $user = $this->context->requireUser($request->user());
         $topic = $this->context->topicFor($user, $validated['topic_slug']);
-        $workspace = $topic->workspace;
-        $senderPrincipal = $workspace->principalForUser($user);
-        $recipientPrincipalId = null;
-
-        if (isset($validated['recipient_principal_id'])) {
-            $recipient = $workspace->principals()
-                ->whereKey($validated['recipient_principal_id'])
-                ->firstOrFail();
-
-            $recipientPrincipalId = $recipient->id;
-        }
+        $senderPrincipal = $topic->workspace->principalForUser($user);
 
         $post = new Post([
             'title' => $validated['title'],
             'body' => $validated['body'] ?? null,
             'status' => $validated['status'] ?? PostStatus::Draft->value,
             'sender_principal_id' => $senderPrincipal->id,
-            'recipient_principal_id' => $recipientPrincipalId,
         ]);
 
         $topic->posts()->save($post);
@@ -75,7 +63,6 @@ class CreatePostTool extends Tool
                 'slug' => $post->slug,
                 'status' => $post->status->value,
                 'sender_principal_id' => $post->sender_principal_id,
-                'recipient_principal_id' => $post->recipient_principal_id,
                 'assigned_agent_ids' => $post->agentTasks()
                     ->where('event_type', AgentTask::EventPostAssigned)
                     ->pluck('agent_id')
@@ -105,9 +92,6 @@ class CreatePostTool extends Tool
             'status' => $schema->string()
                 ->description('Optional post status.')
                 ->enum(PostStatus::class)
-                ->nullable(),
-            'recipient_principal_id' => $schema->integer()
-                ->description('Optional principal id when this post is addressed to a user or agent instead of the topic.')
                 ->nullable(),
             'agent_ids' => $schema->array()
                 ->description('Optional workspace agent ids to assign to this post, creating agent tasks.')

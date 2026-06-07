@@ -312,7 +312,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             ->map(fn (Post $post) => [
                 'href' => route('dashboard', ['topic' => $topic->slug, 'post' => $post->slug, 'panel' => 'posts']),
                 'name' => $post->title,
-                'meta' => $post->listMeta(showSender: true, showRecipient: false, timezone: Auth::user()->displayTimezone()),
+                'meta' => $post->listMeta(showSender: true, timezone: Auth::user()->displayTimezone()),
                 'attachments_count' => $post->attachments_count,
                 'sort' => $post->listSortValues(dateKey: PostListColumn::Sent->value),
                 'badge' => $post->status === PostStatus::Published ? null : [
@@ -336,7 +336,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         }
 
         return Post::query()
-            ->with(['topic', 'sender.user', 'sender.agent', 'recipient.user', 'recipient.agent'])
+            ->with(['topic', 'sender.user', 'sender.agent'])
             ->withCount('attachments')
             ->whereHas('topic', fn ($query) => $query->where('workspace_id', $workspace->id))
             ->where('status', $folder->status())
@@ -353,10 +353,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                         ...$post->listSortValues(dateKey: PostListColumn::Saved->value),
                         PostListColumn::Topic->value => Str::lower($post->topic->name),
                     ]
-                    : $post->listSortValues(
-                        recipientFallback: $post->topic->name,
-                        dateKey: PostListColumn::Sent->value,
-                    );
+                    : $post->listSortValues(dateKey: PostListColumn::Sent->value);
 
                 return [
                     'href' => route('dashboard', [
@@ -646,7 +643,6 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             'body' => $validated['newPostBody'] ?: null,
             'status' => $status,
             'sender_principal_id' => $senderPrincipal->id,
-            'recipient_principal_id' => null,
         ]);
         $post->assignAgents($validated['newPostAgentIds']);
 
@@ -781,7 +777,6 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         $post->update([
             'title' => $validated['postTitle'],
             'body' => $validated['postBody'],
-            'recipient_principal_id' => null,
         ]);
         $post->assignAgents($validated['postAgentIds']);
         $this->storePostAttachments($post, $uploads, $uploadMetadata);

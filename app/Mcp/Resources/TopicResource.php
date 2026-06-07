@@ -59,7 +59,6 @@ class TopicResource extends Resource implements HasUriTemplate
                     ->values()
                     ->all(),
                 'posts' => $topic->posts()
-                    ->whereNull('recipient_principal_id')
                     ->orderBy('title')
                     ->get()
                     ->map(fn ($post) => [

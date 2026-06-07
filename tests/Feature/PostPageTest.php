@@ -1,7 +1,6 @@
 <?php
 
 use App\Enums\PostStatus;
-use App\Models\Agent;
 use App\Models\Attachment;
 use App\Models\Post;
 use App\Models\Topic;
@@ -75,23 +74,6 @@ test('draft post can be saved', function () {
     expect($this->post->fresh()->body)->toBe('Hello world');
 });
 
-test('draft post save clears legacy direct recipient', function () {
-    $agent = Agent::factory()->for($this->workspace)->create(['name' => 'Researcher']);
-    $agentPrincipal = $this->workspace->principalForAgent($agent);
-    $this->post->update(['recipient_principal_id' => $agentPrincipal->id]);
-
-    $this->actingAs($this->user);
-
-    Livewire::test('pages::post', ['post' => $this->post])
-        ->set('title', 'Topic draft')
-        ->call('save')
-        ->assertHasNoErrors();
-
-    expect($this->post->fresh())
-        ->title->toBe('Topic draft')
-        ->recipient_principal_id->toBeNull();
-});
-
 test('published post page shows sender and topic', function () {
     $senderPrincipal = $this->workspace->principalForUser($this->user);
 
@@ -111,7 +93,7 @@ test('published post page shows sender and topic', function () {
         ->assertDontSee('Return to draft');
 });
 
-test('post list metadata uses sender recipient fallback and timestamp labels', function () {
+test('post list metadata uses sender and timestamp labels', function () {
     $senderPrincipal = $this->workspace->principalForUser($this->user);
     $updatedAt = now()->subMinutes(5);
 
@@ -124,11 +106,8 @@ test('post list metadata uses sender recipient fallback and timestamp labels', f
 
     expect($this->post->fresh()->load('sender.user')->listMeta(
         showSender: true,
-        showRecipient: true,
-        recipientFallback: $this->topic->name,
     ))->toBe([
         ['key' => 'sender', 'label' => 'Sender', 'value' => $this->user->name],
-        ['key' => 'to', 'label' => 'To', 'value' => $this->topic->name],
         ['key' => 'sent', 'label' => 'Sent', 'value' => '5 minutes ago', 'title' => $updatedAt->timezone(config('app.timezone'))->isoFormat('LLLL')],
     ]);
 });
@@ -184,7 +163,6 @@ test('post list timestamp titles use the user timezone when provided', function 
 
         expect($this->post->fresh()->listMeta(
             showSender: false,
-            showRecipient: false,
             timezone: 'Africa/Johannesburg',
         ))->toBe([
             [
@@ -211,10 +189,9 @@ test('post list sort values are normalized for deterministic column sorting', fu
         'updated_at' => now()->setTimestamp(123),
     ])->save();
 
-    expect($this->post->fresh()->loadCount('attachments')->load('sender.user')->listSortValues('Topic fallback'))->toMatchArray([
+    expect($this->post->fresh()->loadCount('attachments')->load('sender.user')->listSortValues())->toMatchArray([
         'name' => 'mixed case title',
         'sender' => str($this->user->name)->lower()->toString(),
-        'to' => 'topic fallback',
         'saved' => '00000000000000000123',
         'attachments' => '0000000002',
         'status' => 'draft',
@@ -261,7 +238,6 @@ test('draft post publishes as a topic post', function () {
     expect($this->post->fresh())
         ->title->toBe('Topic post')
         ->sender_principal_id->toBe($senderPrincipal->id)
-        ->recipient_principal_id->toBeNull()
         ->status->toBe(PostStatus::Published);
 });
 

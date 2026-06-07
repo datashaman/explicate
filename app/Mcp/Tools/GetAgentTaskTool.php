@@ -43,7 +43,7 @@ class GetAgentTaskTool extends Tool
             $validated['agent_slug'],
             (int) $validated['task_id'],
         );
-        $task->load(['agent.workspace', 'post.topic.workspace', 'post.sender.user', 'post.sender.agent', 'post.recipient.user', 'post.recipient.agent']);
+        $task->load(['agent.workspace', 'post.topic.workspace', 'post.sender.user', 'post.sender.agent']);
 
         return Response::structured([
             'workspace' => $task->agent->workspace->only(['id', 'name', 'slug']),

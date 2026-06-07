@@ -43,7 +43,7 @@ class GetPostTool extends Tool
             $validated['topic_slug'],
             $validated['post_slug'],
         );
-        $post->load(['topic.workspace', 'attachments', 'sender.user', 'sender.agent', 'recipient.user', 'recipient.agent']);
+        $post->load(['topic.workspace', 'attachments', 'sender.user', 'sender.agent']);
 
         return Response::structured([
             'workspace' => $post->topic->workspace->only(['id', 'name', 'slug']),

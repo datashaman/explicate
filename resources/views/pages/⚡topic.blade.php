@@ -72,7 +72,7 @@ new #[Layout('layouts::workspace'), Title('Topic')] class extends Component {
             ->map(fn (Post $post) => [
                 'href' => route('posts.show', ['post' => $post]),
                 'name' => $post->title,
-                'meta' => $post->listMeta(showSender: true, showRecipient: false, timezone: Auth::user()->displayTimezone()),
+                'meta' => $post->listMeta(showSender: true, timezone: Auth::user()->displayTimezone()),
                 'attachments_count' => $post->attachments_count,
                 'sort' => $post->listSortValues(dateKey: PostListColumn::Sent->value),
                 'badge' => $post->status === PostStatus::Published ? null : [

@@ -38,7 +38,7 @@ class PostResource extends Resource implements HasUriTemplate
                 (string) $request->get('post'),
                 (string) $request->get('workspace'),
             );
-            $post->load(['topic.workspace', 'attachments', 'sender.user', 'sender.agent', 'recipient.user', 'recipient.agent']);
+            $post->load(['topic.workspace', 'attachments', 'sender.user', 'sender.agent']);
 
             return Response::json([
                 'workspace' => $post->topic->workspace->only(['id', 'name', 'slug']),

@@ -13,7 +13,7 @@ trait FormatsMcpPayloads
      */
     protected function postPayload(Post $post, bool $includeBody = false): array
     {
-        $post->loadMissing(['topic.workspace', 'sender.user', 'sender.agent', 'recipient.user', 'recipient.agent', 'assignedAgents']);
+        $post->loadMissing(['topic.workspace', 'sender.user', 'sender.agent', 'assignedAgents']);
 
         $payload = [
             'id' => $post->id,
@@ -25,12 +25,6 @@ trait FormatsMcpPayloads
                 'id' => $post->sender->id,
                 'type' => $post->sender->type,
                 'name' => $post->sender->label(),
-            ] : null,
-            'recipient_principal_id' => $post->recipient_principal_id,
-            'recipient' => $post->recipient ? [
-                'id' => $post->recipient->id,
-                'type' => $post->recipient->type,
-                'name' => $post->recipient->label(),
             ] : null,
             'assigned_agents' => $post->assignedAgents
                 ->map(fn ($agent): array => [
@@ -57,7 +51,7 @@ trait FormatsMcpPayloads
      */
     protected function agentTaskPayload(AgentTask $task, bool $includePostBody = false): array
     {
-        $task->loadMissing(['agent.workspace', 'post.topic.workspace', 'post.sender.user', 'post.sender.agent', 'post.recipient.user', 'post.recipient.agent']);
+        $task->loadMissing(['agent.workspace', 'post.topic.workspace', 'post.sender.user', 'post.sender.agent']);
 
         return [
             'id' => $task->id,

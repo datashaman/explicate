@@ -54,7 +54,6 @@ test('it executes a pending agent task through an anonymous laravel ai agent', f
         ->and($reply->body)->toBe('The agent response.')
         ->and($reply->status)->toBe(PostStatus::Published)
         ->and($reply->sender_principal_id)->toBe($this->workspace->principalForAgent($agent)->id)
-        ->and($reply->recipient_principal_id)->toBe($this->senderPrincipal->id)
         ->and($task->fresh()->status)->toBe(AgentTaskStatus::Completed)
         ->and($task->fresh()->attempts)->toBe(1)
         ->and($task->fresh()->locked_at)->toBeNull()

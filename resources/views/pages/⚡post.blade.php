@@ -95,7 +95,6 @@ new #[Layout('layouts::workspace'), Title('Post')] class extends Component {
         $this->post->update([
             'title' => $validated['title'],
             'body' => $validated['body'],
-            'recipient_principal_id' => null,
         ]);
         $this->post->assignAgents($validated['agentIds']);
         $this->storeAttachments($uploads, $uploadMetadata);
@@ -132,7 +131,6 @@ new #[Layout('layouts::workspace'), Title('Post')] class extends Component {
         $this->post->update([
             'title' => $validated['title'],
             'body' => $validated['body'],
-            'recipient_principal_id' => null,
             'sender_principal_id' => $this->post->sender_principal_id ?: $workspace->principalForUser(Auth::user())->id,
             'status' => PostStatus::Published,
         ]);
