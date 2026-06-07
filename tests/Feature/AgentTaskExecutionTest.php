@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\Agents\ExecuteAgentTask;
+use App\Ai\Agents\TopicForgeMentionAgent;
 use App\Ai\Tools\TopicForgeToolFactory;
 use App\Enums\AgentTaskStatus;
 use App\Enums\PostStatus;
@@ -14,7 +15,6 @@ use App\Models\Topic;
 use App\Models\Workspace;
 use Illuminate\Support\Facades\Queue;
 use Laravel\Ai\Ai;
-use Laravel\Ai\AnonymousAgent;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Tools\Request as AiToolRequest;
 use Laravel\Ai\Tools\ToolNameResolver;
@@ -27,8 +27,8 @@ beforeEach(function () {
     Queue::fake();
 });
 
-test('it executes a pending agent task through an anonymous laravel ai agent', function () {
-    Ai::fakeAgent(AnonymousAgent::class, ['The agent response.'])->preventStrayPrompts();
+test('it executes a pending agent task through the topic forge mention agent', function () {
+    Ai::fakeAgent(TopicForgeMentionAgent::class, ['The agent response.'])->preventStrayPrompts();
 
     $agent = Agent::factory()->for($this->workspace)->create(['name' => 'Researcher']);
     AgentVersion::factory()->for($agent)->create([
@@ -48,7 +48,7 @@ test('it executes a pending agent task through an anonymous laravel ai agent', f
 
     $reply = app(ExecuteAgentTask::class)->handle($task);
 
-    Ai::assertAgentWasPrompted(AnonymousAgent::class, function (AgentPrompt $prompt): bool {
+    Ai::assertAgentWasPrompted(TopicForgeMentionAgent::class, function (AgentPrompt $prompt): bool {
         $toolNames = collect($prompt->agent->tools())
             ->map(fn ($tool): string => ToolNameResolver::resolve($tool))
             ->all();
@@ -57,6 +57,8 @@ test('it executes a pending agent task through an anonymous laravel ai agent', f
             && $prompt->model === 'gemini-2.5-flash'
             && $prompt->provider()->name() === 'gemini'
             && str_starts_with($prompt->agent->instructions(), 'Answer as a concise researcher.')
+            && str_contains($prompt->agent->instructions(), 'You are Researcher (@researcher).')
+            && str_contains($prompt->agent->instructions(), 'When the conversation mentions @researcher')
             && str_contains($prompt->agent->instructions(), 'Topic Forge artifact policy:')
             && str_contains($prompt->agent->instructions(), 'Use the workspace filesystem tools for substantial artifacts')
             && str_contains($prompt->agent->instructions(), 'reference that path in your reply')
@@ -90,7 +92,7 @@ test('it executes a pending agent task through an anonymous laravel ai agent', f
 });
 
 test('it marks a task failed when the agent has no executable version', function () {
-    Ai::fakeAgent(AnonymousAgent::class)->preventStrayPrompts();
+    Ai::fakeAgent(TopicForgeMentionAgent::class)->preventStrayPrompts();
 
     $agent = Agent::factory()->for($this->workspace)->create(['name' => 'Researcher']);
     $post = Post::factory()->for($this->topic)->create([
@@ -111,7 +113,7 @@ test('it marks a task failed when the agent has no executable version', function
     expect($exception)->not->toBeNull()
         ->and($exception->getMessage())->toBe('Agent does not have a version to execute.');
 
-    Ai::assertAgentNeverPrompted(AnonymousAgent::class);
+    Ai::assertAgentNeverPrompted(TopicForgeMentionAgent::class);
 
     expect($task->fresh()->status)->toBe(AgentTaskStatus::Failed)
         ->and($task->fresh()->status_post_id)->toBe($statusPost->id)
@@ -122,7 +124,7 @@ test('it marks a task failed when the agent has no executable version', function
 });
 
 test('it replies in the existing thread when the mentioned post is already threaded', function () {
-    Ai::fakeAgent(AnonymousAgent::class, ['Threaded response.'])->preventStrayPrompts();
+    Ai::fakeAgent(TopicForgeMentionAgent::class, ['Threaded response.'])->preventStrayPrompts();
 
     $agent = Agent::factory()->for($this->workspace)->create(['name' => 'Researcher']);
     AgentVersion::factory()->for($agent)->create([
@@ -150,7 +152,7 @@ test('it replies in the existing thread when the mentioned post is already threa
 });
 
 test('it does not execute mentioned draft posts until they are published', function () {
-    Ai::fakeAgent(AnonymousAgent::class)->preventStrayPrompts();
+    Ai::fakeAgent(TopicForgeMentionAgent::class)->preventStrayPrompts();
 
     $agent = Agent::factory()->for($this->workspace)->create(['name' => 'Researcher']);
     AgentVersion::factory()->for($agent)->create();
@@ -162,7 +164,60 @@ test('it does not execute mentioned draft posts until they are published', funct
 
     expect(AgentTask::query()->whereBelongsTo($post)->count())->toBe(0);
 
-    Ai::assertAgentNeverPrompted(AnonymousAgent::class);
+    Ai::assertAgentNeverPrompted(TopicForgeMentionAgent::class);
+});
+
+test('it sends previous thread posts as conversation messages with sender identity', function () {
+    Ai::fakeAgent(TopicForgeMentionAgent::class, ['Thread context response.'])->preventStrayPrompts();
+
+    $agent = Agent::factory()->for($this->workspace)->create([
+        'name' => 'Specification Writer',
+        'slug' => 'specification-writer',
+    ]);
+    AgentVersion::factory()->for($agent)->create([
+        'provider' => Provider::Gemini,
+        'model' => 'gemini-2.5-flash',
+        'prompt' => 'Write precise specifications.',
+    ]);
+
+    $parentPost = Post::factory()->for($this->topic)->create([
+        'sender_principal_id' => $this->senderPrincipal->id,
+        'body' => 'Please draft the TodoMVC specification.',
+        'status' => PostStatus::Published,
+    ]);
+    $thread = Thread::factory()->for($this->topic)->create([
+        'parent_post_id' => $parentPost->id,
+        'title' => 'TodoMVC specification',
+    ]);
+
+    Post::factory()->for($this->topic)->for($thread)->create([
+        'sender_principal_id' => $this->workspace->principalForAgent($agent)->id,
+        'body' => 'I created an initial outline.',
+        'status' => PostStatus::Published,
+    ]);
+
+    $mentionPost = Post::factory()->for($this->topic)->for($thread)->create([
+        'sender_principal_id' => $this->senderPrincipal->id,
+        'body' => '@specification-writer Please revise it for acceptance criteria.',
+        'status' => PostStatus::Published,
+    ]);
+
+    $task = AgentTask::query()->whereBelongsTo($mentionPost)->sole();
+
+    app(ExecuteAgentTask::class)->handle($task);
+
+    $userName = $this->user->name;
+
+    Ai::assertAgentWasPrompted(TopicForgeMentionAgent::class, function (AgentPrompt $prompt) use ($userName): bool {
+        $messages = collect($prompt->agent->messages());
+
+        return $messages->count() === 2
+            && $messages[0]->role->value === 'user'
+            && $messages[0]->content === "{$userName}: Please draft the TodoMVC specification."
+            && $messages[1]->role->value === 'assistant'
+            && $messages[1]->content === 'Specification Writer (@specification-writer): I created an initial outline.'
+            && $prompt->prompt === '@specification-writer Please revise it for acceptance criteria.';
+    });
 });
 
 test('mention agent tools run against the task workspace context', function () {
