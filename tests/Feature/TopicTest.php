@@ -591,7 +591,7 @@ test('dashboard shows workspace agents in the right rail', function () {
         ->assertDontSee(route('agents.show', ['agent' => $agent->slug]), escape: false);
 });
 
-test('dashboard shows selected agent details in the right panel', function () {
+test('dashboard shows selected agent details in the main panel', function () {
     [$user, $workspace] = userWithWorkspace();
 
     $agent = Agent::factory()->for($workspace)->create([
@@ -606,7 +606,7 @@ test('dashboard shows selected agent details in the right panel', function () {
     ]);
 
     $this->actingAs($user)
-        ->get(route('dashboard', ['panel' => 'agents', 'agent' => $agent->slug]))
+        ->get(route('dashboard', ['agent' => $agent->slug]))
         ->assertOk()
         ->assertSee('data-test="dashboard-agent-panel"', escape: false)
         ->assertSee('Research Agent')
@@ -615,7 +615,8 @@ test('dashboard shows selected agent details in the right panel', function () {
         ->assertSee('Version history')
         ->assertSee('o4-mini')
         ->assertSee('Research carefully.')
-        ->assertSee('xl:grid-cols-[16rem_minmax(0,1fr)_32rem]', escape: false);
+        ->assertSee('xl:grid-cols-[16rem_minmax(0,1fr)]', escape: false)
+        ->assertDontSee('xl:grid-cols-[16rem_minmax(0,1fr)_32rem]', escape: false);
 });
 
 test('dashboard can save selected agent details', function () {

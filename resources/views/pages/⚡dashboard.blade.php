@@ -95,6 +95,14 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             $this->mobilePanel = 'posts';
         }
 
+        if ($this->selectedAgentSlug) {
+            $this->selectedTopicSlug = null;
+            $this->selectedSystemFolderSlug = null;
+            $this->selectedPostUlid = null;
+            $this->panelAction = null;
+            $this->mobilePanel = 'posts';
+        }
+
         $this->normalizeMobilePanel();
         $this->syncSelectedPostFields();
         $this->syncNewPostTopic();
@@ -119,6 +127,10 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
     public function selectedSystemFolder(): ?PostFolder
     {
+        if ($this->selectedAgentSlug) {
+            return null;
+        }
+
         if ($this->selectedSystemFolderSlug) {
             return PostFolder::tryFrom($this->selectedSystemFolderSlug);
         }
@@ -462,6 +474,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
     {
         if ($this->selectedTopicSlug) {
             $this->selectedSystemFolderSlug = null;
+            $this->selectedAgentSlug = null;
         }
 
         $this->selectedPostUlid = null;
@@ -474,6 +487,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
     {
         if ($this->selectedSystemFolderSlug) {
             $this->selectedTopicSlug = null;
+            $this->selectedAgentSlug = null;
             $this->selectedPostUlid = null;
             $this->panelAction = null;
             $this->mobilePanel = 'posts';
@@ -494,7 +508,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
     public function updatedSelectedAgentSlug(): void
     {
         if ($this->selectedAgentSlug) {
-            $this->mobilePanel = 'agents';
+            $this->mobilePanel = 'posts';
         }
 
         $this->syncSelectedAgentFields();
@@ -516,11 +530,11 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
     private function normalizeMobilePanel(): void
     {
-        if (! in_array($this->mobilePanel, ['topics', 'posts', 'agents'], true)) {
+        if (! in_array($this->mobilePanel, ['topics', 'posts'], true)) {
             $this->mobilePanel = 'topics';
         }
 
-        if (! $this->selectedTopic() && ! $this->selectedSystemFolder() && ! $this->isCreatingPost() && $this->mobilePanel === 'posts') {
+        if (! $this->selectedAgent() && ! $this->selectedTopic() && ! $this->selectedSystemFolder() && ! $this->isCreatingPost() && $this->mobilePanel === 'posts') {
             $this->mobilePanel = 'topics';
         }
     }
@@ -636,7 +650,11 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         $agent = $workspace->agents()->where('slug', $agentSlug)->firstOrFail();
 
         $this->selectedAgentSlug = $agent->slug;
-        $this->mobilePanel = 'agents';
+        $this->selectedTopicSlug = null;
+        $this->selectedSystemFolderSlug = null;
+        $this->selectedPostUlid = null;
+        $this->panelAction = null;
+        $this->mobilePanel = 'posts';
         $this->syncSelectedAgentFields();
     }
 
@@ -887,14 +905,10 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 <div class="flex min-h-0 w-full flex-1">
     @if ($this->workspace())
         @php
-            $hasSelectedPostsPanel = (bool) ($this->selectedTopic() || $this->selectedSystemFolder() || $this->isCreatingPost());
+            $hasSelectedPostsPanel = (bool) ($this->selectedAgent() || $this->selectedTopic() || $this->selectedSystemFolder() || $this->isCreatingPost());
         @endphp
 
-        <div @class([
-            'grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)] items-stretch gap-2 xl:auto-rows-fr',
-            'xl:grid-cols-[16rem_minmax(0,1fr)_32rem]' => $this->selectedAgent(),
-            'xl:grid-cols-[16rem_minmax(0,1fr)]' => ! $this->selectedAgent(),
-        ])>
+        <div class="grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)] items-stretch gap-2 xl:auto-rows-fr xl:grid-cols-[16rem_minmax(0,1fr)]">
             <div
                 id="topics-panel"
                 data-mobile-panel="topics"
@@ -986,7 +1000,10 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                                 wire:click="openAgent('{{ $agent->slug }}')"
                                 wire:key="workspace-agent-row-{{ $agent->id }}"
                                 data-test="workspace-agent-row-{{ $agent->slug }}"
-                                class="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-neutral-100 dark:hover:bg-white/5"
+                                @class([
+                                    'flex w-full cursor-pointer items-center gap-3 px-4 py-3 text-left hover:bg-neutral-100 dark:hover:bg-white/5',
+                                    'bg-amber-100/80 dark:bg-amber-500/15' => $selectedAgentSlug === $agent->slug,
+                                ])
                             >
                                 <div class="flex size-8 shrink-0 items-center justify-center rounded-full bg-amber-50 text-amber-500 dark:bg-amber-500/10 dark:text-amber-300">
                                     <flux:icon name="cpu-chip" class="size-4" />
@@ -1001,8 +1018,9 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                 </section>
             </div>
 
-            @if ($this->selectedTopic() || $this->selectedSystemFolder() || $this->isCreatingPost())
+            @if ($this->selectedAgent() || $this->selectedTopic() || $this->selectedSystemFolder() || $this->isCreatingPost())
                 @php
+                    $selectedDashboardAgent = $this->selectedAgent();
                     $selectedDashboardPost = $this->selectedPost();
                     $selectedDashboardFolder = $this->selectedSystemFolder();
                 @endphp
@@ -1015,7 +1033,15 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                         'hidden xl:flex' => $this->mobilePanel !== 'posts',
                     ])
                 >
-                    @if ($this->isCreatingPost())
+                    @if ($selectedDashboardAgent)
+                        <div class="flex items-center justify-between gap-3 border-b border-neutral-300 bg-amber-50 px-4 py-3 dark:border-white/10 dark:bg-amber-500/10">
+                            <flux:heading size="sm" class="min-w-0 flex-1 truncate">{{ $selectedDashboardAgent->name }}</flux:heading>
+                        </div>
+
+                        @include('partials.dashboard-agent-form', [
+                            'selectedDashboardAgent' => $selectedDashboardAgent,
+                        ])
+                    @elseif ($this->isCreatingPost())
                         <div class="flex items-center justify-between gap-3 border-b border-neutral-300 bg-emerald-50 px-4 py-3 dark:border-white/10 dark:bg-emerald-500/10">
                             <flux:heading size="sm" class="min-w-0 flex-1 truncate">{{ __('New post') }}</flux:heading>
 
@@ -1145,124 +1171,10 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                 </section>
             @endif
 
-            @if ($selectedDashboardAgent = $this->selectedAgent())
-                <div
-                    data-mobile-panel="agents"
-                    @class([
-                        'h-full min-h-0 xl:block',
-                        'hidden xl:block' => $this->mobilePanel !== 'agents',
-                    ])
-                >
-                    <aside id="agents-panel" class="h-full min-h-0">
-                        <div class="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none" data-test="dashboard-agent-panel">
-                            <div class="flex items-center justify-between gap-3 border-b border-neutral-300 bg-amber-50 px-4 py-3 dark:border-white/10 dark:bg-amber-500/10">
-                                <flux:heading size="sm" class="min-w-0 flex-1 truncate">{{ $selectedDashboardAgent->name }}</flux:heading>
-
-                                <flux:button wire:click="closeAgent" size="xs" variant="filled" icon="arrow-left">
-                                    {{ __('Agents') }}
-                                </flux:button>
-                            </div>
-
-                            <div class="flex flex-1 flex-col gap-4 overflow-auto px-4 py-4 xl:min-h-0">
-                                @if ($selectedDashboardAgent->latestVersion)
-                                    <div class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm dark:border-amber-300/20 dark:bg-amber-500/10">
-                                        <div class="font-medium text-amber-950 dark:text-amber-100">{{ __('Current') }}: v{{ $selectedDashboardAgent->latestVersion->version }}</div>
-                                        <div class="text-amber-700 dark:text-amber-200">
-                                            {{ $selectedDashboardAgent->latestVersion->provider->label() }} / {{ $selectedDashboardAgent->latestVersion->model }}
-                                        </div>
-                                    </div>
-                                @endif
-
-                                <div class="rounded-lg border border-neutral-200 dark:border-white/10">
-                                    <div class="border-b border-neutral-100 px-4 py-3 dark:border-white/5">
-                                        <flux:heading size="sm">{{ __('Agent details') }}</flux:heading>
-                                    </div>
-
-                                    <form wire:submit="saveSelectedAgentDetails" class="space-y-4 p-4">
-                                        <flux:input wire:model="selectedAgentName" :label="__('Name')" type="text" required />
-
-                                        <div class="flex justify-end">
-                                            <flux:button type="submit" variant="filled">{{ __('Save agent') }}</flux:button>
-                                        </div>
-                                    </form>
-                                </div>
-
-                                <div class="rounded-lg border border-neutral-200 dark:border-white/10">
-                                    <div class="border-b border-neutral-100 px-4 py-3 dark:border-white/5">
-                                        <flux:heading size="sm">{{ __('New version') }}</flux:heading>
-                                    </div>
-
-                                    <form wire:submit="saveSelectedAgentVersion" class="space-y-4 p-4">
-                                        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                                            <flux:select wire:model.live="selectedAgentProvider" :label="__('Provider')" placeholder="{{ __('Select provider…') }}" required>
-                                                <x-provider-options />
-                                            </flux:select>
-
-                                            <flux:select wire:model="selectedAgentModel" :label="__('Model')" placeholder="{{ __('Select model…') }}" :disabled="!$selectedAgentProvider" required>
-                                                @foreach ($this->selectedAgentAvailableModels as $availableModel)
-                                                    <flux:select.option :value="$availableModel">{{ $availableModel }}</flux:select.option>
-                                                @endforeach
-                                            </flux:select>
-                                        </div>
-
-                                        @if ($this->selectedAgentShowReasoningEffort)
-                                            <flux:select wire:model="selectedAgentReasoningEffort" :label="__('Reasoning effort')" placeholder="{{ __('Select effort…') }}">
-                                                <x-reasoning-effort-options />
-                                            </flux:select>
-                                        @endif
-
-                                        <flux:textarea wire:model="selectedAgentPrompt" :label="__('Prompt')" rows="7" :placeholder="__('System prompt…')" />
-
-                                        <div class="flex justify-end">
-                                            <flux:button type="submit" variant="primary">{{ __('Save version') }}</flux:button>
-                                        </div>
-                                    </form>
-                                </div>
-
-                                <div class="rounded-lg border border-neutral-200 dark:border-white/10">
-                                    <div class="border-b border-neutral-100 px-4 py-3 dark:border-white/5">
-                                        <flux:heading size="sm">{{ __('Version history') }}</flux:heading>
-                                    </div>
-
-                                    @if ($selectedDashboardAgent->versions->isEmpty())
-                                        <div class="px-4 py-6 text-center">
-                                            <flux:text class="text-sm text-neutral-400 dark:text-neutral-600">{{ __('No versions yet.') }}</flux:text>
-                                        </div>
-                                    @else
-                                        <div class="divide-y divide-neutral-100 dark:divide-white/5">
-                                            @foreach ($selectedDashboardAgent->versions as $version)
-                                                <div class="px-4 py-3">
-                                                    <div class="flex items-center justify-between gap-3">
-                                                        <flux:badge color="zinc" size="sm">v{{ $version->version }}</flux:badge>
-                                                        <flux:text class="text-xs text-neutral-400" :title="$version->created_at->timezone(Auth::user()->displayTimezone())->isoFormat('LLLL')">{{ $version->created_at->diffForHumans() }}</flux:text>
-                                                    </div>
-                                                    <div class="mt-1.5 space-y-0.5">
-                                                        <flux:text class="text-xs text-neutral-600 dark:text-neutral-400">
-                                                            {{ $version->provider->label() }} / {{ $version->model }}
-                                                        </flux:text>
-                                                        @if ($version->reasoning_effort)
-                                                            <flux:text class="text-xs text-neutral-500">
-                                                                {{ __('Reasoning:') }} {{ $version->reasoning_effort->label() }}
-                                                            </flux:text>
-                                                        @endif
-                                                        @if ($version->prompt)
-                                                            <flux:text class="line-clamp-2 text-xs text-neutral-400">{{ $version->prompt }}</flux:text>
-                                                        @endif
-                                                    </div>
-                                                </div>
-                                            @endforeach
-                                        </div>
-                                    @endif
-                                </div>
-                            </div>
-                        </div>
-                    </aside>
-                </div>
-            @endif
         </div>
 
         <nav class="fixed inset-x-0 bottom-0 z-40 bg-white/95 px-2 py-2 backdrop-blur xl:hidden dark:bg-zinc-900/95">
-            <div @class(['grid gap-2', $this->selectedAgent() ? 'grid-cols-3' : 'grid-cols-2'])>
+            <div class="grid grid-cols-2 gap-2">
                 <button
                     type="button"
                     wire:click="showMobilePanel('topics')"
@@ -1293,22 +1205,6 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                     <flux:icon name="document-text" class="size-4" />
                     <span>{{ __('Feed') }}</span>
                 </button>
-                @if ($this->selectedAgent())
-                    <button
-                        type="button"
-                        wire:click="showMobilePanel('agents')"
-                        data-mobile-nav="agents"
-                        aria-pressed="{{ $this->mobilePanel === 'agents' ? 'true' : 'false' }}"
-                        @class([
-                            'flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition',
-                            'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-400/30 dark:bg-amber-500/15 dark:text-amber-200' => $this->mobilePanel === 'agents',
-                            'border-neutral-200 bg-neutral-50 text-neutral-700 dark:border-white/10 dark:bg-white/5 dark:text-neutral-200' => $this->mobilePanel !== 'agents',
-                        ])
-                    >
-                        <flux:icon name="cpu-chip" class="size-4" />
-                        <span>{{ __('Agent') }}</span>
-                    </button>
-                @endif
             </div>
         </nav>
 
