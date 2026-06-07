@@ -436,6 +436,43 @@ test('dashboard shows selected topic in the main panel', function () {
         ->assertDontSee('Other post');
 });
 
+test('dashboard selected topic shows a sticky composer in the main panel', function () {
+    [$user, $workspace] = userWithWorkspace();
+
+    $topic = Topic::factory()->for($workspace)->create(['name' => 'Selected Topic', 'slug' => 'selected-topic']);
+
+    $this->actingAs($user)
+        ->get(route('dashboard', ['topic' => $topic->slug]))
+        ->assertOk()
+        ->assertSee('data-test="main-panel-composer-shell"', escape: false)
+        ->assertSee('data-test="main-panel-composer"', escape: false)
+        ->assertSee('wire:submit="sendQuickPost"', escape: false)
+        ->assertSee('Message Selected Topic')
+        ->assertSee('shrink-0 border-t border-neutral-200', escape: false);
+});
+
+test('dashboard main composer creates a published top level post', function () {
+    [$user, $workspace] = userWithWorkspace();
+
+    $topic = Topic::factory()->for($workspace)->create(['name' => 'Selected Topic', 'slug' => 'selected-topic']);
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::dashboard')
+        ->set('selectedTopicSlug', $topic->slug)
+        ->set('quickPostBody', 'A smoother post from the composer.')
+        ->call('sendQuickPost')
+        ->assertHasNoErrors()
+        ->assertSet('quickPostBody', '');
+
+    $post = Post::query()->where('body', 'A smoother post from the composer.')->sole();
+
+    expect($post->topic->is($topic))->toBeTrue()
+        ->and($post->sender->is($workspace->principalForUser($user)))->toBeTrue()
+        ->and($post->status)->toBe(PostStatus::Published)
+        ->and($post->thread_id)->toBeNull();
+});
+
 test('dashboard keeps thread replies out of top-level topic lists', function () {
     [$user, $workspace] = userWithWorkspace();
 
@@ -570,6 +607,89 @@ test('dashboard opens a post thread panel from the feed', function () {
         ->assertSee('data-test="folder-post-message"', escape: false)
         ->assertSee('data-test="thread-op-replies-divider"', escape: false)
         ->assertSee('data-test="dashboard-post-panel"', escape: false);
+});
+
+test('dashboard thread panel shows an inline reply composer', function () {
+    [$user, $workspace] = userWithWorkspace();
+
+    $topic = Topic::factory()->for($workspace)->create(['name' => 'Selected Topic', 'slug' => 'selected-topic']);
+    $sourcePost = Post::factory()->for($topic)->create([
+        'body' => 'Top-level request',
+        'status' => PostStatus::Published,
+        'sender_principal_id' => $workspace->principalForUser($user)->id,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('dashboard', ['topic' => $topic->slug, 'post' => $sourcePost->ulid, 'panel' => 'posts']))
+        ->assertOk()
+        ->assertSee('data-test="thread-panel-composer-shell"', escape: false)
+        ->assertSee('data-test="thread-panel-composer"', escape: false)
+        ->assertSee('wire:submit="sendThreadReply"', escape: false)
+        ->assertSee('Reply...');
+});
+
+test('dashboard thread composer replies in the selected post thread', function () {
+    [$user, $workspace] = userWithWorkspace();
+
+    $topic = Topic::factory()->for($workspace)->create(['name' => 'Selected Topic', 'slug' => 'selected-topic']);
+    $sourcePost = Post::factory()->for($topic)->create([
+        'body' => 'Top-level request',
+        'status' => PostStatus::Published,
+        'sender_principal_id' => $workspace->principalForUser($user)->id,
+    ]);
+    $thread = Thread::factory()->for($topic)->create([
+        'parent_post_id' => $sourcePost->id,
+        'title' => 'Top-level request',
+    ]);
+    $firstReply = Post::factory()->for($topic)->for($thread)->create([
+        'body' => 'Existing reply',
+        'status' => PostStatus::Published,
+    ]);
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::dashboard')
+        ->set('selectedPostUlid', $firstReply->ulid)
+        ->set('threadReplyBody', 'Replying from the thread composer.')
+        ->call('sendThreadReply')
+        ->assertHasNoErrors()
+        ->assertSet('threadReplyBody', '');
+
+    $reply = Post::query()->where('body', 'Replying from the thread composer.')->sole();
+
+    expect($reply->topic->is($topic))->toBeTrue()
+        ->and($reply->sender->is($workspace->principalForUser($user)))->toBeTrue()
+        ->and($reply->status)->toBe(PostStatus::Published)
+        ->and($reply->thread_id)->toBe($thread->id)
+        ->and($reply->startedThread()->exists())->toBeFalse();
+});
+
+test('dashboard thread composer starts a thread from the selected top level post', function () {
+    [$user, $workspace] = userWithWorkspace();
+
+    $topic = Topic::factory()->for($workspace)->create(['name' => 'Selected Topic', 'slug' => 'selected-topic']);
+    $sourcePost = Post::factory()->for($topic)->create([
+        'body' => 'Top-level request without replies',
+        'status' => PostStatus::Published,
+        'sender_principal_id' => $workspace->principalForUser($user)->id,
+    ]);
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::dashboard')
+        ->set('selectedPostUlid', $sourcePost->ulid)
+        ->set('threadReplyBody', 'Starting the thread inline.')
+        ->call('sendThreadReply')
+        ->assertHasNoErrors()
+        ->assertSet('threadReplyBody', '');
+
+    $reply = Post::query()->where('body', 'Starting the thread inline.')->sole();
+    $thread = $sourcePost->fresh()->startedThread;
+
+    expect($thread)->not->toBeNull()
+        ->and($thread->parentPost->is($sourcePost))->toBeTrue()
+        ->and($reply->thread_id)->toBe($thread->id)
+        ->and($reply->thread->parentPost->is($sourcePost))->toBeTrue();
 });
 
 test('dashboard shows selected draft post in the main panel', function () {

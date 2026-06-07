@@ -13,6 +13,7 @@ use App\Enums\ReasoningEffort;
 use App\Enums\WorkspaceFileType;
 use App\Models\Agent;
 use App\Models\Post;
+use App\Models\Thread;
 use App\Models\Topic;
 use App\Models\WorkspaceFile;
 use Flux\Flux;
@@ -79,6 +80,10 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
     public string $postBody = '';
 
     public string $newPostBody = '';
+
+    public string $quickPostBody = '';
+
+    public string $threadReplyBody = '';
 
     public ?int $newPostTopicId = null;
 
@@ -708,6 +713,53 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         $this->createDashboardPostWithStatus(PostStatus::Published);
     }
 
+    public function sendQuickPost(): void
+    {
+        $workspace = $this->workspace();
+        $topic = $this->selectedTopic();
+
+        abort_unless($workspace && $topic, 403);
+
+        $validated = $this->validate([
+            'quickPostBody' => ['required', 'string'],
+        ], [], [
+            'quickPostBody' => __('message'),
+        ]);
+
+        app(CreatePost::class)->handle(
+            topic: $topic,
+            sender: $workspace->principalForUser(Auth::user()),
+            body: $validated['quickPostBody'],
+            status: PostStatus::Published,
+        );
+
+        $this->reset('quickPostBody');
+    }
+
+    public function sendThreadReply(): void
+    {
+        $workspace = $this->workspace();
+        $post = $this->selectedPost();
+
+        abort_unless($workspace && $post && $post->status === PostStatus::Published, 403);
+
+        $validated = $this->validate([
+            'threadReplyBody' => ['required', 'string'],
+        ], [], [
+            'threadReplyBody' => __('reply'),
+        ]);
+
+        app(CreatePost::class)->handle(
+            topic: $post->topic,
+            sender: $workspace->principalForUser(Auth::user()),
+            body: $validated['threadReplyBody'],
+            status: PostStatus::Published,
+            thread: $this->threadForReply($post),
+        );
+
+        $this->reset('threadReplyBody');
+    }
+
     private function createDashboardPostWithStatus(PostStatus $status): void
     {
         $workspace = $this->workspace();
@@ -749,6 +801,20 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         $this->syncSelectedPostFields();
 
         Flux::toast(variant: 'success', text: $status === PostStatus::Draft ? __('Draft created.') : __('Post published.'));
+    }
+
+    private function threadForReply(Post $post): Thread
+    {
+        $post->loadMissing(['thread', 'startedThread']);
+
+        if ($post->thread) {
+            return $post->thread;
+        }
+
+        return $post->startedThread()->firstOrCreate([], [
+            'topic_id' => $post->topic_id,
+            'title' => $post->preview(),
+        ]);
     }
 
     public function openAgent(string $agentSlug): void
@@ -1390,33 +1456,51 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                             'dataTest' => 'dashboard-post-create-panel',
                         ])
                     @else
-                        @include('partials.folder-view', [
-                            'breadcrumbs' => [
-                                ['label' => $this->workspace()->name, 'href' => route('dashboard')],
-                                ['label' => $selectedDashboardFolder?->label() ?? $this->selectedTopic()?->name ?? __('New post')],
-                            ],
-                            'titleLabel' => $selectedDashboardFolder?->label() ?? $this->selectedTopic()?->name ?? __('Feed'),
-                            'items' => collect($selectedDashboardFolder ? $this->selectedSystemFolderItems() : $this->selectedTopicItems()),
-                            'itemPresentation' => 'posts',
-                            'openPostAction' => 'openPost',
-                            'showPostMessageTopic' => (bool) $selectedDashboardFolder,
-                            'icon' => 'document-text',
-                            'iconClass' => 'size-12 text-neutral-400 group-hover:text-neutral-300',
-                            'emptyText' => __('No posts'),
-                            'createHref' => $this->selectedTopic() ? route('posts.create', ['topic' => $this->selectedTopic()->slug]) : route('posts.create'),
-                            'createLabel' => __('New post'),
-                            'createTest' => 'dashboard-new-post-button',
-                            'showArchivedModel' => 'showArchived',
-                            'listColumns' => $this->selectedPostListColumns(),
-                            'listDefaultSort' => $selectedDashboardFolder?->dateKey() ?? PostListColumn::Sent->value,
-                            'listDefaultSortDirection' => 'desc',
-                            'moveToDraftAction' => 'movePostToDraft',
-                            'archiveAction' => 'archivePost',
-                            'unarchiveAction' => 'unarchivePost',
-                            'toolbarClass' => 'border-b border-neutral-300 bg-emerald-50 px-4 py-3 dark:border-white/10 dark:bg-emerald-500/10',
-                            'rootClass' => 'flex min-h-0 flex-1 flex-col overflow-hidden xl:h-full',
-                            'contentClass' => 'min-h-0 flex-1 overflow-auto px-4 py-4',
-                        ])
+                        @php
+                            $selectedDashboardTopic = $this->selectedTopic();
+                        @endphp
+
+                        <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
+                            @include('partials.folder-view', [
+                                'breadcrumbs' => [
+                                    ['label' => $this->workspace()->name, 'href' => route('dashboard')],
+                                    ['label' => $selectedDashboardFolder?->label() ?? $selectedDashboardTopic?->name ?? __('New post')],
+                                ],
+                                'titleLabel' => $selectedDashboardFolder?->label() ?? $selectedDashboardTopic?->name ?? __('Feed'),
+                                'items' => collect($selectedDashboardFolder ? $this->selectedSystemFolderItems() : $this->selectedTopicItems()),
+                                'itemPresentation' => 'posts',
+                                'openPostAction' => 'openPost',
+                                'showPostMessageTopic' => (bool) $selectedDashboardFolder,
+                                'icon' => 'document-text',
+                                'iconClass' => 'size-12 text-neutral-400 group-hover:text-neutral-300',
+                                'emptyText' => __('No posts'),
+                                'createHref' => $selectedDashboardTopic ? route('posts.create', ['topic' => $selectedDashboardTopic->slug]) : route('posts.create'),
+                                'createLabel' => __('New post'),
+                                'createTest' => 'dashboard-new-post-button',
+                                'showArchivedModel' => 'showArchived',
+                                'listColumns' => $this->selectedPostListColumns(),
+                                'listDefaultSort' => $selectedDashboardFolder?->dateKey() ?? PostListColumn::Sent->value,
+                                'listDefaultSortDirection' => 'desc',
+                                'moveToDraftAction' => 'movePostToDraft',
+                                'archiveAction' => 'archivePost',
+                                'unarchiveAction' => 'unarchivePost',
+                                'toolbarClass' => 'border-b border-neutral-300 bg-emerald-50 px-4 py-3 dark:border-white/10 dark:bg-emerald-500/10',
+                                'rootClass' => 'flex min-h-0 flex-1 flex-col overflow-hidden xl:h-full',
+                                'contentClass' => 'min-h-0 flex-1 overflow-auto px-4 py-4',
+                            ])
+
+                            @if ($selectedDashboardTopic && ! $selectedDashboardFolder)
+                                <div class="shrink-0 border-t border-neutral-200 bg-neutral-50/80 px-4 pb-20 pt-3 xl:py-3 dark:border-white/10 dark:bg-zinc-950/40" data-test="main-panel-composer-shell">
+                                    @include('partials.post-composer', [
+                                        'bodyModel' => 'quickPostBody',
+                                        'buttonTest' => 'main-panel-composer-send',
+                                        'dataTest' => 'main-panel-composer',
+                                        'placeholder' => __('Message :topic', ['topic' => $selectedDashboardTopic->name]),
+                                        'submitAction' => 'sendQuickPost',
+                                    ])
+                                </div>
+                            @endif
+                        </div>
                     @endif
                 </section>
             @else
@@ -1478,13 +1562,13 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                             'dataTest' => 'dashboard-post-panel',
                         ])
                     @else
-                        <div class="flex min-h-0 flex-1 flex-col gap-6 overflow-auto px-4 py-4" data-test="dashboard-post-panel">
+                        <div class="flex min-h-0 flex-1 flex-col gap-6 overflow-auto px-4 pb-20 pt-4 xl:py-4" data-test="dashboard-post-panel">
                             @php
                                 $selectedDashboardThreadPosts = $selectedDashboardPost->conversationPosts();
                             @endphp
 
-	                            @foreach ($selectedDashboardThreadPosts as $threadPost)
-	                                <x-post-message :post="$threadPost" :show-topic="$selectedDashboardFolder !== null">
+                            @foreach ($selectedDashboardThreadPosts as $threadPost)
+                                <x-post-message :post="$threadPost" :show-topic="$selectedDashboardFolder !== null">
                                     @if ($threadPost->is($selectedDashboardPost))
                                         <x-slot:actions>
                                             @if ($selectedDashboardPost->status === PostStatus::Published)
@@ -1494,20 +1578,32 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                                                 <flux:menu.item wire:click="unarchiveSelectedPost" icon="archive-box-x-mark">{{ __('Unarchive') }}</flux:menu.item>
                                             @endif
                                         </x-slot:actions>
-	                                    @endif
-	                                </x-post-message>
+                                    @endif
+                                </x-post-message>
 
-	                                @if ($loop->first && ! $loop->last)
-	                                    <div class="ml-13 border-t border-neutral-200 dark:border-white/10" data-test="thread-op-replies-divider"></div>
-	                                @endif
-	                            @endforeach
+                                @if ($loop->first && ! $loop->last)
+                                    <div class="ml-13 border-t border-neutral-200 dark:border-white/10" data-test="thread-op-replies-divider"></div>
+                                @endif
+                            @endforeach
 
-	                            @include('partials.post-attachments', [
+                            @include('partials.post-attachments', [
                                 'post' => $selectedDashboardPost,
                                 'uploadModel' => 'postUploads',
                                 'uploadError' => 'postUploads.*',
                                 'deleteAction' => 'deleteSelectedPostAttachment',
                             ])
+
+                            @if ($selectedDashboardPost->status === PostStatus::Published)
+                                <div class="pl-13" data-test="thread-panel-composer-shell">
+                                    @include('partials.post-composer', [
+                                        'bodyModel' => 'threadReplyBody',
+                                        'buttonTest' => 'thread-panel-composer-send',
+                                        'dataTest' => 'thread-panel-composer',
+                                        'placeholder' => __('Reply...'),
+                                        'submitAction' => 'sendThreadReply',
+                                    ])
+                                </div>
+                            @endif
                         </div>
                     @endif
                 </section>
