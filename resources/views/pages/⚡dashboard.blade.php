@@ -1146,7 +1146,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
                                 <div class="flex flex-wrap gap-2">
                                     @if ($selectedDashboardPost->sender)
-                                        <flux:badge color="zinc" size="sm">{{ __('From') }}: {{ $selectedDashboardPost->sender->label() }}</flux:badge>
+                                        <flux:badge color="zinc" size="sm">{{ __('Sender') }}: {{ $selectedDashboardPost->sender->label() }}</flux:badge>
                                     @endif
 
                                     <flux:badge color="zinc" size="sm">

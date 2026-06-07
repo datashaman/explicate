@@ -33,6 +33,7 @@ class DatabaseSeeder extends Seeder
 
         $workspace = Workspace::factory()->for($team)->create(['name' => 'My First Workspace']);
         $user->switchWorkspace($workspace);
+        $senderPrincipal = $workspace->principalForUser($user);
 
         $topics = Topic::factory()->for($workspace)->createMany([
             ['name' => 'Design'],
@@ -114,6 +115,7 @@ class DatabaseSeeder extends Seeder
             'slug' => 'homepage-hero-directions',
             'body' => "Explore three tonal directions for the homepage hero.\n\n1. Product-led\n2. Proof-led\n3. Narrative-led",
             'status' => PostStatus::Draft,
+            'sender_principal_id' => $senderPrincipal->id,
         ]);
 
         Attachment::factory()->count(2)->for($designDraft)->create();
@@ -123,6 +125,7 @@ class DatabaseSeeder extends Seeder
             'slug' => 'brand-voice-notes',
             'body' => 'Capture phrases to avoid and preferred tone examples.',
             'status' => PostStatus::Published,
+            'sender_principal_id' => $senderPrincipal->id,
         ]);
 
         Post::factory()->for($topicsByName['Engineering'])->create([
@@ -130,6 +133,7 @@ class DatabaseSeeder extends Seeder
             'slug' => 'agent-orchestration-outline',
             'body' => "Document the post lifecycle and queue boundaries.\n\nInclude failure handling and retry policy.",
             'status' => PostStatus::Draft,
+            'sender_principal_id' => $senderPrincipal->id,
         ]);
 
         Post::factory()->for($topicsByName['Engineering'])->create([
@@ -137,6 +141,7 @@ class DatabaseSeeder extends Seeder
             'slug' => 'model-fallback-strategy',
             'body' => 'Compare provider fallback order and expected quality tradeoffs.',
             'status' => PostStatus::Archived,
+            'sender_principal_id' => $senderPrincipal->id,
         ]);
 
         Post::factory()->for($topicsByName['Marketing'])->create([
@@ -144,6 +149,7 @@ class DatabaseSeeder extends Seeder
             'slug' => 'q3-campaign-angles',
             'body' => 'List campaign themes tied to the strongest product outcomes.',
             'status' => PostStatus::Published,
+            'sender_principal_id' => $senderPrincipal->id,
         ]);
 
         Post::factory()->for($topicsByName['Marketing'])->create([
@@ -151,6 +157,7 @@ class DatabaseSeeder extends Seeder
             'slug' => 'landing-page-test-ideas',
             'body' => 'Propose headline, CTA, and proof-module experiments.',
             'status' => PostStatus::Draft,
+            'sender_principal_id' => $senderPrincipal->id,
         ]);
 
         Post::factory()->for($topicsByName['Research'])->create([
@@ -158,6 +165,7 @@ class DatabaseSeeder extends Seeder
             'slug' => 'competitor-workflow-notes',
             'body' => 'Track workflow patterns from adjacent tools and notable gaps.',
             'status' => PostStatus::Draft,
+            'sender_principal_id' => $senderPrincipal->id,
         ]);
     }
 }

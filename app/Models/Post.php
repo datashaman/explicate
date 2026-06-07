@@ -207,7 +207,7 @@ class Post extends Model
         $meta = [];
 
         if ($showSender && $this->sender) {
-            $meta[] = ['label' => __('From'), 'value' => $this->sender->label()];
+            $meta[] = ['label' => __('Sender'), 'value' => $this->sender->label()];
         }
 
         if ($showRecipient) {
@@ -228,7 +228,7 @@ class Post extends Model
     }
 
     /**
-     * @return array{name: string, from: string, to: string, sent?: string, saved?: string, attachments: string, status: string}
+     * @return array{name: string, sender: string, to: string, sent?: string, saved?: string, attachments: string, status: string}
      */
     public function listSortValues(?string $recipientFallback = null, ?string $dateKey = null): array
     {
@@ -237,7 +237,7 @@ class Post extends Model
 
         $values = [
             'name' => Str::lower($this->title),
-            'from' => Str::lower($this->sender?->label() ?? ''),
+            'sender' => Str::lower($this->sender?->label() ?? ''),
             'to' => Str::lower($this->recipient?->label() ?? $recipientFallback ?? ''),
             'attachments' => str_pad((string) $attachmentsCount, 10, '0', STR_PAD_LEFT),
             'status' => Str::lower($this->status->label()),

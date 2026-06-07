@@ -222,7 +222,7 @@ new #[Layout('layouts::workspace'), Title('Topic')] class extends Component {
                 'showArchivedModel' => 'showArchived',
                 'listColumns' => [
                     ['key' => 'name', 'label' => __('Post'), 'class' => 'min-w-0 flex-1'],
-                    ['key' => 'from', 'label' => __('From'), 'class' => 'w-28 shrink-0'],
+                    ['key' => 'sender', 'label' => __('Sender'), 'class' => 'w-28 shrink-0'],
                     ['key' => 'sent', 'label' => __('Sent'), 'class' => 'w-28 shrink-0'],
                     ['key' => 'attachments', 'label' => __('Attachments'), 'class' => 'w-24 shrink-0'],
                 ],

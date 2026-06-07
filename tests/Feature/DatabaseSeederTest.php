@@ -19,6 +19,15 @@ test('database seeder creates demo workspace content', function () {
     expect($user->currentWorkspace->topics)->toHaveCount(4);
     expect($user->currentWorkspace->agents)->toHaveCount(4);
 
+    $senderPrincipal = $user->currentWorkspace->principalForUser($user);
+    $workspacePosts = Post::query()
+        ->whereHas('topic', fn ($query) => $query->whereBelongsTo($user->currentWorkspace))
+        ->get();
+
+    expect($workspacePosts)->not->toBeEmpty();
+    expect($workspacePosts->pluck('sender_principal_id')->unique()->values()->all())
+        ->toBe([$senderPrincipal->id]);
+
     $designTopic = $user->currentWorkspace->topics()->where('name', 'Design')->first();
     $engineeringTopic = $user->currentWorkspace->topics()->where('name', 'Engineering')->first();
 
