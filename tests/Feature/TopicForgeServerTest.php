@@ -30,8 +30,10 @@ use App\Mcp\Tools\ListAgentsTool;
 use App\Mcp\Tools\ListAgentTasksTool;
 use App\Mcp\Tools\ListFilesTool;
 use App\Mcp\Tools\ListPostsTool;
+use App\Mcp\Tools\ListReposTool;
 use App\Mcp\Tools\ListTopicsTool;
 use App\Mcp\Tools\ListWorkspacesTool;
+use App\Mcp\Tools\RunGitCommandTool;
 use App\Mcp\Tools\SwitchWorkspaceTool;
 use App\Mcp\Tools\UpdateAgentTool;
 use App\Mcp\Tools\WhoAmITool;
@@ -45,6 +47,8 @@ use App\Models\Post;
 use App\Models\Topic;
 use App\Models\User;
 use App\Models\Workspace;
+use App\Models\WorkspaceRepository;
+use App\Services\GitRepositoryService;
 use Illuminate\Container\Container;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Queue;
@@ -54,16 +58,11 @@ use Laravel\Mcp\Server\Transport\JsonRpcResponse;
 use Symfony\Component\Process\Process;
 
 afterEach(function () {
-    $workspacesDir = storage_path('app/workspaces');
-    if (is_dir($workspacesDir)) {
-        $iterator = new RecursiveIteratorIterator(
-            new RecursiveDirectoryIterator($workspacesDir, RecursiveDirectoryIterator::SKIP_DOTS),
-            RecursiveIteratorIterator::CHILD_FIRST
-        );
-        foreach ($iterator as $entry) {
-            $entry->isDir() ? rmdir($entry->getRealPath()) : unlink($entry->getRealPath());
+    foreach (['app/workspaces', 'app/workspace-repos'] as $dir) {
+        $path = storage_path($dir);
+        if (is_dir($path)) {
+            exec("rm -rf {$path}");
         }
-        rmdir($workspacesDir);
     }
 });
 
@@ -279,6 +278,8 @@ test('topic forge tools expose switch workspace instead of workspace slug parame
         'get-file',
         'write-file',
         'delete-file',
+        'list-repos',
+        'run-git-command',
     ] as $toolName) {
         expect($tools[$toolName]['inputSchema']['properties'] ?? [])->not->toHaveKey('workspace_slug');
     }
@@ -1565,6 +1566,79 @@ test('topic forge mcp route is protected by the passport api guard', function ()
 
     expect($route)->not->toBeNull();
     expect($route->gatherMiddleware())->toContain('auth:api');
+});
+
+test('list-repos tool returns workspace repositories', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->for($user->currentTeam)->create();
+    $user->switchWorkspace($workspace);
+
+    WorkspaceRepository::factory()->for($workspace)->create([
+        'name' => 'api-service',
+        'url' => 'git@github.com:org/api-service.git',
+        'branch' => 'main',
+    ]);
+
+    TopicForgeServer::actingAs($user)->tool(ListReposTool::class, [])
+        ->assertOk()
+        ->assertStructuredContent(fn ($json) => $json
+            ->where('workspace.slug', $workspace->slug)
+            ->where('repositories.0.name', 'api-service')
+            ->where('repositories.0.url', 'git@github.com:org/api-service.git')
+            ->where('repositories.0.branch', 'main')
+            ->has('repositories.0.cloned')
+            ->etc()
+        );
+});
+
+test('run-git-command tool returns error when repo is not cloned', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->for($user->currentTeam)->create();
+    $user->switchWorkspace($workspace);
+
+    WorkspaceRepository::factory()->for($workspace)->create(['name' => 'api-service']);
+
+    TopicForgeServer::actingAs($user)->tool(RunGitCommandTool::class, [
+        'repo' => 'api-service',
+        'command' => 'git log --oneline -1',
+    ])->assertHasErrors(['has not been cloned']);
+});
+
+test('run-git-command tool executes command in cloned repo directory', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->for($user->currentTeam)->create();
+    $user->switchWorkspace($workspace);
+
+    $bare = sys_get_temp_dir().'/bare-'.uniqid();
+    exec("git init --bare {$bare} 2>&1");
+    $tmp = sys_get_temp_dir().'/clone-'.uniqid();
+    exec("git clone {$bare} {$tmp} 2>&1");
+    file_put_contents("{$tmp}/README.md", '# test');
+    exec("git -C {$tmp} config user.email test@test.com && git -C {$tmp} config user.name T && git -C {$tmp} add . && git -C {$tmp} commit -m init && git -C {$tmp} push origin HEAD:main 2>&1");
+    exec("rm -rf {$tmp}");
+
+    $repo = WorkspaceRepository::factory()->for($workspace)->create([
+        'name' => 'myrepo',
+        'url' => $bare,
+        'branch' => 'main',
+        'auth_type' => 'ssh',
+    ]);
+
+    (new GitRepositoryService($repo))->sync();
+
+    TopicForgeServer::actingAs($user)->tool(RunGitCommandTool::class, [
+        'repo' => 'myrepo',
+        'command' => 'git log --oneline -1',
+    ])
+        ->assertOk()
+        ->assertStructuredContent(fn ($json) => $json
+            ->where('repo', 'myrepo')
+            ->where('exit_code', 0)
+            ->etc()
+        )
+        ->assertSee('init');
+
+    exec("rm -rf {$bare}");
 });
 
 function topicForgeServerMethodResponse(string $method, array $params = []): array

@@ -16,8 +16,10 @@ use App\Mcp\Tools\ListAgentsTool;
 use App\Mcp\Tools\ListAgentTasksTool;
 use App\Mcp\Tools\ListFilesTool;
 use App\Mcp\Tools\ListPostsTool;
+use App\Mcp\Tools\ListReposTool;
 use App\Mcp\Tools\ListTopicsTool;
 use App\Mcp\Tools\ListWorkspacesTool;
+use App\Mcp\Tools\RunGitCommandTool;
 use App\Mcp\Tools\SwitchWorkspaceTool;
 use App\Mcp\Tools\UpdateAgentTool;
 use App\Mcp\Tools\WhoAmITool;
@@ -48,6 +50,8 @@ final class TopicForgeTools
         GetFileTool::class,
         WriteFileTool::class,
         DeleteFileTool::class,
+        ListReposTool::class,
+        RunGitCommandTool::class,
     ];
 
     /** @var list<class-string<Tool>> */
@@ -71,5 +75,7 @@ final class TopicForgeTools
         GetFileTool::class,
         WriteFileTool::class,
         DeleteFileTool::class,
+        ListReposTool::class,
+        RunGitCommandTool::class,
     ];
 }

@@ -43,7 +43,7 @@ class GitRepositoryService
      */
     public function run(array $command): array
     {
-        return $this->runGit($command, workingDir: $this->repository->localPath());
+        return $this->runGit($command, workingDir: $this->repository->localPath(), allowFailure: true);
     }
 
     private function clone(string $path): void
@@ -67,7 +67,7 @@ class GitRepositoryService
      * @param  array<string>  $command
      * @return array{stdout: string, stderr: string, exit_code: int}
      */
-    private function runGit(array $command, ?string $workingDir): array
+    private function runGit(array $command, ?string $workingDir, bool $allowFailure = false): array
     {
         $env = $this->buildEnv();
         $keyFile = $env['_ssh_key_file'] ?? null;
@@ -94,7 +94,7 @@ class GitRepositoryService
 
             $exitCode = proc_close($process);
 
-            if ($exitCode !== 0) {
+            if ($exitCode !== 0 && ! $allowFailure) {
                 throw new RuntimeException("Git command failed (exit {$exitCode}): ".trim($stderr ?: $stdout));
             }
 
