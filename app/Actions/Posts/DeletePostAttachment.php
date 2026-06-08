@@ -3,7 +3,6 @@
 namespace App\Actions\Posts;
 
 use App\Models\Post;
-use Illuminate\Support\Facades\Storage;
 
 class DeletePostAttachment
 {
@@ -11,7 +10,8 @@ class DeletePostAttachment
     {
         $attachment = $post->attachments()->findOrFail($attachmentId);
 
-        Storage::disk('public')->delete($attachment->path);
+        $post->loadMissing('topic.workspace');
+        $post->topic->workspace->filesystem()->delete($attachment->path);
 
         $attachment->delete();
     }

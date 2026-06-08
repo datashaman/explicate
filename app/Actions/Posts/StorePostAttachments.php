@@ -13,15 +13,19 @@ class StorePostAttachments
      */
     public function handle(Post $post, array $uploads): void
     {
+        if (empty($uploads)) {
+            return;
+        }
+
+        $post->loadMissing('topic.workspace');
+        $filesystem = $post->topic->workspace->filesystem();
         $metadata = $this->metadata($uploads);
 
         foreach ($uploads as $index => $upload) {
             $attachmentMetadata = $metadata[$index];
-            $path = $upload->storeAs(
-                'attachments/'.Str::uuid(),
-                $attachmentMetadata['filename'],
-                'public'
-            );
+            $path = 'attachments/'.Str::uuid().'/'.$attachmentMetadata['filename'];
+
+            $filesystem->write($path, file_get_contents($upload->getRealPath()));
 
             $post->attachments()->create([
                 'filename' => $attachmentMetadata['filename'],

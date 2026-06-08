@@ -558,8 +558,6 @@ test('dashboard main composer creates a published top level post', function () {
 });
 
 test('dashboard main composer stores attachments with the published post', function () {
-    Storage::fake('public');
-
     [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['name' => 'Selected Topic', 'slug' => 'selected-topic']);
@@ -580,9 +578,10 @@ test('dashboard main composer stores attachments with the published post', funct
     $attachment = $post->attachments()->sole();
 
     expect($attachment->filename)->toBe('brief.pdf')
-        ->and($attachment->path)->toContain('attachments/');
+        ->and($attachment->path)->toContain('attachments/')
+        ->and($workspace->filesystem()->exists($attachment->path))->toBeTrue();
 
-    Storage::disk('public')->assertExists($attachment->path);
+    $workspace->filesystem()->delete('attachments');
 });
 
 test('dashboard main composer can remove a pending attachment before posting', function () {
@@ -834,8 +833,6 @@ test('dashboard thread composer replies in the selected post thread', function (
 });
 
 test('dashboard thread composer stores attachments with the reply', function () {
-    Storage::fake('public');
-
     [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['name' => 'Selected Topic', 'slug' => 'selected-topic']);
@@ -866,9 +863,10 @@ test('dashboard thread composer stores attachments with the reply', function () 
 
     expect($reply->thread_id)->toBe($thread->id)
         ->and($attachment->filename)->toBe('reply-brief.pdf')
-        ->and($attachment->path)->toContain('attachments/');
+        ->and($attachment->path)->toContain('attachments/')
+        ->and($workspace->filesystem()->exists($attachment->path))->toBeTrue();
 
-    Storage::disk('public')->assertExists($attachment->path);
+    $workspace->filesystem()->delete('attachments');
 });
 
 test('dashboard thread composer can remove a pending attachment before replying', function () {
@@ -1206,13 +1204,11 @@ test('dashboard feed post messages render markdown safely', function () {
 });
 
 test('attachment route serves image files inline', function () {
-    Storage::fake('public');
-
     [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create();
     $post = Post::factory()->for($topic)->create();
-    Storage::disk('public')->put('attachments/screenshot.png', 'image-content');
+    $workspace->filesystem()->write('attachments/screenshot.png', 'image-content');
 
     $attachment = Attachment::factory()->for($post)->create([
         'filename' => 'screenshot.png',
@@ -1225,6 +1221,8 @@ test('attachment route serves image files inline', function () {
         ->get(route('attachments.show', ['attachment' => $attachment]))
         ->assertOk()
         ->assertHeader('content-type', 'image/png');
+
+    $workspace->filesystem()->delete('attachments');
 });
 
 test('dashboard saves pending attachments with selected draft post', function () {
@@ -1255,8 +1253,6 @@ test('dashboard saves pending attachments with selected draft post', function ()
 });
 
 test('dashboard can delete attachments from selected draft post', function () {
-    Storage::fake('public');
-
     [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
@@ -1268,7 +1264,7 @@ test('dashboard can delete attachments from selected draft post', function () {
         'path' => 'attachments/report.pdf',
     ]);
 
-    Storage::disk('public')->put($attachment->path, 'report');
+    $workspace->filesystem()->write($attachment->path, 'report');
 
     $this->actingAs($user);
 
@@ -1278,8 +1274,8 @@ test('dashboard can delete attachments from selected draft post', function () {
         ->call('deleteSelectedPostAttachment', $attachment->id)
         ->assertHasNoErrors();
 
-    expect($attachment->fresh()->deleted_at)->not->toBeNull();
-    Storage::disk('public')->assertMissing($attachment->path);
+    expect($attachment->fresh()->deleted_at)->not->toBeNull()
+        ->and($workspace->filesystem()->exists($attachment->path))->toBeFalse();
 });
 
 test('dashboard shows workspace agents in the right rail', function () {

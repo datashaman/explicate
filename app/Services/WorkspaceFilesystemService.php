@@ -64,6 +64,11 @@ class WorkspaceFilesystemService
         return [...$folders, ...$files];
     }
 
+    public function path(string $path): string
+    {
+        return $this->resolvePath($path);
+    }
+
     public function read(string $path): string
     {
         $absolute = $this->resolvePath($path);

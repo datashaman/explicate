@@ -7,7 +7,6 @@ use App\Models\Topic;
 use App\Models\Workspace;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Date;
-use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 
 beforeEach(function () {
@@ -217,8 +216,6 @@ test('published post cannot be saved', function () {
 });
 
 test('attachments are saved with a draft post', function () {
-    Storage::fake('public');
-
     $this->actingAs($this->user);
 
     $file = UploadedFile::fake()->create('report.pdf', 512, 'application/pdf');
@@ -229,8 +226,13 @@ test('attachments are saved with a draft post', function () {
         ->call('save')
         ->assertHasNoErrors();
 
-    expect($this->post->attachments()->count())->toBe(1);
-    expect($this->post->attachments()->first()->filename)->toBe('report.pdf');
+    $attachment = $this->post->attachments()->first();
+
+    expect($this->post->attachments()->count())->toBe(1)
+        ->and($attachment->filename)->toBe('report.pdf')
+        ->and($this->workspace->filesystem()->exists($attachment->path))->toBeTrue();
+
+    $this->workspace->filesystem()->delete('attachments');
 });
 
 test('draft post publishes as a topic post', function () {
