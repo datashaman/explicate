@@ -13,7 +13,7 @@ use App\Mcp\Resources\WhoamiResource;
 use App\Mcp\Resources\WorkspaceAgentsResource;
 use App\Mcp\Resources\WorkspacesResource;
 use App\Mcp\Resources\WorkspaceTopicsResource;
-use App\Mcp\TopicForgeTools;
+use App\Mcp\ExplicateTools;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use Laravel\Mcp\Server;
@@ -23,17 +23,17 @@ use Laravel\Mcp\Server\Attributes\Version;
 use Laravel\Mcp\Server\Transport\StdioTransport;
 use Throwable;
 
-#[Name('Topic Forge Server')]
+#[Name('Explicate Server')]
 #[Version('0.0.1')]
 #[Instructions('Use this server to inspect the authenticated user\'s current team, browse workspaces, topics, agents, and posts, read topic and post state, and create topics, agents, or draft and published posts inside accessible topics.')]
-class TopicForgeServer extends Server
+class ExplicateServer extends Server
 {
     public int $maxPaginationLength = 250;
 
     public int $defaultPaginationLength = 250;
 
     protected array $tools = [
-        ...TopicForgeTools::Tools,
+        ...ExplicateTools::Tools,
     ];
 
     protected array $resources = [

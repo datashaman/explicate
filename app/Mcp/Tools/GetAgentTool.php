@@ -2,8 +2,8 @@
 
 namespace App\Mcp\Tools;
 
-use App\Mcp\TopicForgeContext;
-use App\Mcp\TopicForgeUris;
+use App\Mcp\ExplicateContext;
+use App\Mcp\ExplicateUris;
 use App\Models\User;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
@@ -21,7 +21,7 @@ use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 #[IsIdempotent]
 class GetAgentTool extends Tool
 {
-    public function __construct(protected TopicForgeContext $context) {}
+    public function __construct(protected ExplicateContext $context) {}
 
     /**
      * Handle the tool request.
@@ -45,7 +45,7 @@ class GetAgentTool extends Tool
                 'slug' => $agent->slug,
                 'latest_version' => $agent->latestVersion?->version,
                 'latest_model' => $agent->latestVersion?->model,
-                'resource_uri' => TopicForgeUris::agent($agent),
+                'resource_uri' => ExplicateUris::agent($agent),
             ],
             'versions' => $agent->versions
                 ->sortByDesc('version')

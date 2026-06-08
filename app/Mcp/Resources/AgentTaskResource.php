@@ -3,9 +3,9 @@
 namespace App\Mcp\Resources;
 
 use App\Mcp\Concerns\FormatsMcpPayloads;
+use App\Mcp\ExplicateContext;
+use App\Mcp\ExplicateUris;
 use App\Mcp\Resources\Concerns\HandlesResourceExceptions;
-use App\Mcp\TopicForgeContext;
-use App\Mcp\TopicForgeUris;
 use App\Models\User;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -20,11 +20,11 @@ class AgentTaskResource extends Resource implements HasUriTemplate
     use FormatsMcpPayloads;
     use HandlesResourceExceptions;
 
-    public function __construct(protected TopicForgeContext $context) {}
+    public function __construct(protected ExplicateContext $context) {}
 
     public function uriTemplate(): UriTemplate
     {
-        return new UriTemplate(TopicForgeUris::AgentTaskTemplate);
+        return new UriTemplate(ExplicateUris::AgentTaskTemplate);
     }
 
     public function handle(Request $request): Response
@@ -46,8 +46,8 @@ class AgentTaskResource extends Resource implements HasUriTemplate
                     'id' => $task->agent->id,
                     'name' => $task->agent->name,
                     'slug' => $task->agent->slug,
-                    'resource_uri' => TopicForgeUris::agent($task->agent),
-                    'tasks_resource_uri' => TopicForgeUris::agentTasks($task->agent),
+                    'resource_uri' => ExplicateUris::agent($task->agent),
+                    'tasks_resource_uri' => ExplicateUris::agentTasks($task->agent),
                 ],
                 'task' => $this->agentTaskWithPostPayload($task),
             ]);

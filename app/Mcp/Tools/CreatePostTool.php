@@ -4,8 +4,8 @@ namespace App\Mcp\Tools;
 
 use App\Actions\Posts\CreatePost;
 use App\Enums\PostStatus;
-use App\Mcp\TopicForgeContext;
-use App\Mcp\TopicForgeUris;
+use App\Mcp\ExplicateContext;
+use App\Mcp\ExplicateUris;
 use App\Models\User;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Validation\Rule;
@@ -20,7 +20,7 @@ use Laravel\Mcp\Server\Tool;
 #[Description('Create a post inside a topic in the current workspace.')]
 class CreatePostTool extends Tool
 {
-    public function __construct(protected TopicForgeContext $context) {}
+    public function __construct(protected ExplicateContext $context) {}
 
     /**
      * Handle the tool request.
@@ -47,7 +47,7 @@ class CreatePostTool extends Tool
             'workspace' => $topic->workspace->only(['id', 'name', 'slug']),
             'topic' => [
                 ...$topic->only(['id', 'name', 'slug']),
-                'resource_uri' => TopicForgeUris::topic($topic),
+                'resource_uri' => ExplicateUris::topic($topic),
             ],
             'post' => [
                 'id' => $post->id,
@@ -55,7 +55,7 @@ class CreatePostTool extends Tool
                 'preview' => $post->preview(),
                 'status' => $post->status->value,
                 'sender_principal_id' => $post->sender_principal_id,
-                'resource_uri' => TopicForgeUris::post($post),
+                'resource_uri' => ExplicateUris::post($post),
             ],
         ]);
     }

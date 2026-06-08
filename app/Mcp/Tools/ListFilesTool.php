@@ -3,8 +3,8 @@
 namespace App\Mcp\Tools;
 
 use App\Mcp\Concerns\FormatsMcpPayloads;
-use App\Mcp\TopicForgeContext;
-use App\Mcp\TopicForgeUris;
+use App\Mcp\ExplicateContext;
+use App\Mcp\ExplicateUris;
 use App\Models\User;
 use App\Services\WorkspaceFilesystemService;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
@@ -25,7 +25,7 @@ class ListFilesTool extends Tool
 {
     use FormatsMcpPayloads;
 
-    public function __construct(protected TopicForgeContext $context) {}
+    public function __construct(protected ExplicateContext $context) {}
 
     public function handle(Request $request): Response|ResponseFactory
     {
@@ -37,7 +37,7 @@ class ListFilesTool extends Tool
         return Response::structured([
             'workspace' => [
                 ...$workspace->only(['id', 'name', 'slug']),
-                'resource_uri' => TopicForgeUris::workspaceFiles($workspace),
+                'resource_uri' => ExplicateUris::workspaceFiles($workspace),
             ],
             'files' => collect($this->collectAllEntries($fs, ''))
                 ->map(fn (array $entry): array => $this->workspaceFilePayload($entry, $workspace))

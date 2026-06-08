@@ -5,8 +5,8 @@ namespace App\Mcp\Tools;
 use App\Actions\Agents\CreateAgent;
 use App\Enums\Provider;
 use App\Enums\ReasoningEffort;
-use App\Mcp\TopicForgeContext;
-use App\Mcp\TopicForgeUris;
+use App\Mcp\ExplicateContext;
+use App\Mcp\ExplicateUris;
 use App\Models\User;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Validation\Rule;
@@ -21,7 +21,7 @@ use Laravel\Mcp\Server\Tool;
 #[Description('Create an agent in the authenticated user\'s current workspace.')]
 class CreateAgentTool extends Tool
 {
-    public function __construct(protected TopicForgeContext $context) {}
+    public function __construct(protected ExplicateContext $context) {}
 
     /**
      * Handle the tool request.
@@ -54,7 +54,7 @@ class CreateAgentTool extends Tool
                 'id' => $agent->id,
                 'name' => $agent->name,
                 'slug' => $agent->slug,
-                'resource_uri' => TopicForgeUris::agent($agent),
+                'resource_uri' => ExplicateUris::agent($agent),
             ],
             'latest_version' => [
                 'version' => $agent->latestVersion?->version,

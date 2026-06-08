@@ -2,7 +2,7 @@
 
 namespace App\Mcp\Tools;
 
-use App\Mcp\TopicForgeUris;
+use App\Mcp\ExplicateUris;
 use App\Models\User;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
@@ -15,7 +15,7 @@ use Laravel\Mcp\Server\Tools\Annotations\IsIdempotent;
 use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 
 #[Name('who-am-i')]
-#[Description('Show the authenticated Topic Forge MCP user and current team/workspace context.')]
+#[Description('Show the authenticated Explicate MCP user and current team/workspace context.')]
 #[IsReadOnly]
 #[IsIdempotent]
 class WhoAmITool extends Tool
@@ -33,7 +33,7 @@ class WhoAmITool extends Tool
 
         if (! $user instanceof User) {
             return Response::structured([
-                'resource_uri' => TopicForgeUris::Whoami,
+                'resource_uri' => ExplicateUris::Whoami,
                 'authenticated' => false,
                 'user' => null,
                 'team' => null,
@@ -42,7 +42,7 @@ class WhoAmITool extends Tool
         }
 
         return Response::structured([
-            'resource_uri' => TopicForgeUris::Whoami,
+            'resource_uri' => ExplicateUris::Whoami,
             'authenticated' => true,
             'user' => $user->only(['id', 'name', 'email']),
             'team' => $user->currentTeam?->only(['id', 'name', 'slug']),

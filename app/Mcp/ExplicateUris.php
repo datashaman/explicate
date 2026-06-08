@@ -9,33 +9,33 @@ use App\Models\Post;
 use App\Models\Topic;
 use App\Models\Workspace;
 
-final class TopicForgeUris
+final class ExplicateUris
 {
-    public const Whoami = 'topic-forge://whoami';
+    public const Whoami = 'explicate://whoami';
 
-    public const Playbook = 'topic-forge://playbook';
+    public const Playbook = 'explicate://playbook';
 
-    public const Workspaces = 'topic-forge://workspaces';
+    public const Workspaces = 'explicate://workspaces';
 
-    public const WorkspaceTopicsTemplate = 'topic-forge://workspaces/{workspace}/topics';
+    public const WorkspaceTopicsTemplate = 'explicate://workspaces/{workspace}/topics';
 
-    public const WorkspaceAgentsTemplate = 'topic-forge://workspaces/{workspace}/agents';
+    public const WorkspaceAgentsTemplate = 'explicate://workspaces/{workspace}/agents';
 
-    public const WorkspaceFilesTemplate = 'topic-forge://workspaces/{workspace}/files';
+    public const WorkspaceFilesTemplate = 'explicate://workspaces/{workspace}/files';
 
-    public const WorkspaceFileTemplate = 'topic-forge://workspaces/{workspace}/files/{path}';
+    public const WorkspaceFileTemplate = 'explicate://workspaces/{workspace}/files/{path}';
 
-    public const TopicTemplate = 'topic-forge://workspaces/{workspace}/topics/{topic}';
+    public const TopicTemplate = 'explicate://workspaces/{workspace}/topics/{topic}';
 
-    public const TopicPostsTemplate = 'topic-forge://workspaces/{workspace}/topics/{topic}/posts';
+    public const TopicPostsTemplate = 'explicate://workspaces/{workspace}/topics/{topic}/posts';
 
-    public const PostTemplate = 'topic-forge://workspaces/{workspace}/topics/{topic}/posts/{post}';
+    public const PostTemplate = 'explicate://workspaces/{workspace}/topics/{topic}/posts/{post}';
 
-    public const AgentTemplate = 'topic-forge://workspaces/{workspace}/agents/{agent}';
+    public const AgentTemplate = 'explicate://workspaces/{workspace}/agents/{agent}';
 
-    public const AgentTasksTemplate = 'topic-forge://workspaces/{workspace}/agents/{agent}/tasks';
+    public const AgentTasksTemplate = 'explicate://workspaces/{workspace}/agents/{agent}/tasks';
 
-    public const AgentTaskTemplate = 'topic-forge://workspaces/{workspace}/agents/{agent}/tasks/{task}';
+    public const AgentTaskTemplate = 'explicate://workspaces/{workspace}/agents/{agent}/tasks/{task}';
 
     public static function workspaceTopics(Workspace|UserWorkspace|string $workspace): string
     {

@@ -2,7 +2,7 @@
 
 namespace App\Ai\Agents;
 
-use App\Models\Agent as TopicForgeAgent;
+use App\Models\Agent as ExplicateAgent;
 use App\Models\Post;
 use App\Models\Principal;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
@@ -18,12 +18,12 @@ use Laravel\Ai\Promptable;
 use Stringable;
 
 #[UseCheapestModel]
-class TopicForgeAgentRouter implements Agent, Conversational, HasStructuredOutput
+class ExplicateAgentRouter implements Agent, Conversational, HasStructuredOutput
 {
     use Promptable;
 
     /**
-     * @param  EloquentCollection<int, TopicForgeAgent>  $candidateAgents
+     * @param  EloquentCollection<int, ExplicateAgent>  $candidateAgents
      */
     public function __construct(
         private readonly Post $post,
@@ -33,7 +33,7 @@ class TopicForgeAgentRouter implements Agent, Conversational, HasStructuredOutpu
     public function instructions(): Stringable|string
     {
         return <<<'INSTRUCTIONS'
-You are Topic Forge's thread reply router.
+You are Explicate's thread reply router.
 
 Decide whether any existing agent participant should respond to the latest thread post.
 

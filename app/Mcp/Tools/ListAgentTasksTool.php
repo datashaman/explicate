@@ -3,8 +3,8 @@
 namespace App\Mcp\Tools;
 
 use App\Mcp\Concerns\FormatsMcpPayloads;
-use App\Mcp\TopicForgeContext;
-use App\Mcp\TopicForgeUris;
+use App\Mcp\ExplicateContext;
+use App\Mcp\ExplicateUris;
 use App\Models\User;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
@@ -24,7 +24,7 @@ class ListAgentTasksTool extends Tool
 {
     use FormatsMcpPayloads;
 
-    public function __construct(protected TopicForgeContext $context) {}
+    public function __construct(protected ExplicateContext $context) {}
 
     /**
      * Handle the tool request.
@@ -55,8 +55,8 @@ class ListAgentTasksTool extends Tool
                 'id' => $agent->id,
                 'name' => $agent->name,
                 'slug' => $agent->slug,
-                'resource_uri' => TopicForgeUris::agent($agent),
-                'tasks_resource_uri' => TopicForgeUris::agentTasks($agent),
+                'resource_uri' => ExplicateUris::agent($agent),
+                'tasks_resource_uri' => ExplicateUris::agentTasks($agent),
             ],
             'tasks' => $tasks,
         ]);

@@ -2,7 +2,7 @@
 
 namespace App\Actions\Agents;
 
-use App\Ai\Agents\TopicForgeAgentRouter;
+use App\Ai\Agents\ExplicateAgentRouter;
 use App\Enums\AgentTaskStatus;
 use App\Enums\PostStatus;
 use App\Jobs\ProcessAgentTask;
@@ -140,7 +140,7 @@ class SyncAgentChatReplies
             return Collection::make();
         }
 
-        $response = TopicForgeAgentRouter::make(
+        $response = ExplicateAgentRouter::make(
             post: $post,
             candidateAgents: $candidateAgents,
         )->prompt($this->routerPrompt($post, $candidateAgents));

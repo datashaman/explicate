@@ -3,8 +3,8 @@
 namespace App\Mcp\Tools;
 
 use App\Mcp\Concerns\FormatsMcpPayloads;
-use App\Mcp\TopicForgeContext;
-use App\Mcp\TopicForgeUris;
+use App\Mcp\ExplicateContext;
+use App\Mcp\ExplicateUris;
 use App\Models\User;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
@@ -24,7 +24,7 @@ class GetPostTool extends Tool
 {
     use FormatsMcpPayloads;
 
-    public function __construct(protected TopicForgeContext $context) {}
+    public function __construct(protected ExplicateContext $context) {}
 
     /**
      * Handle the tool request.
@@ -49,7 +49,7 @@ class GetPostTool extends Tool
             'workspace' => $post->topic->workspace->only(['id', 'name', 'slug']),
             'topic' => [
                 ...$post->topic->only(['id', 'name', 'slug']),
-                'resource_uri' => TopicForgeUris::topic($post->topic),
+                'resource_uri' => ExplicateUris::topic($post->topic),
             ],
             'post' => $this->postPayload($post),
             'attachments' => $post->attachments

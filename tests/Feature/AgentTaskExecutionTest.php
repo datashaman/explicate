@@ -1,8 +1,8 @@
 <?php
 
 use App\Actions\Agents\ExecuteAgentTask;
-use App\Ai\Agents\TopicForgeMentionAgent;
-use App\Ai\Tools\TopicForgeToolFactory;
+use App\Ai\Agents\ExplicateMentionAgent;
+use App\Ai\Tools\ExplicateToolFactory;
 use App\Enums\AgentTaskStatus;
 use App\Enums\PostStatus;
 use App\Enums\Provider;
@@ -42,7 +42,7 @@ beforeEach(function () {
 });
 
 test('it executes a pending agent task through the topic forge mention agent', function () {
-    Ai::fakeAgent(TopicForgeMentionAgent::class, ['Researcher (@researcher): The agent response.'])->preventStrayPrompts();
+    Ai::fakeAgent(ExplicateMentionAgent::class, ['Researcher (@researcher): The agent response.'])->preventStrayPrompts();
 
     $agent = Agent::factory()->for($this->workspace)->create(['name' => 'Researcher']);
     AgentVersion::factory()->for($agent)->create([
@@ -62,7 +62,7 @@ test('it executes a pending agent task through the topic forge mention agent', f
 
     $reply = app(ExecuteAgentTask::class)->handle($task);
 
-    Ai::assertAgentWasPrompted(TopicForgeMentionAgent::class, function (AgentPrompt $prompt): bool {
+    Ai::assertAgentWasPrompted(ExplicateMentionAgent::class, function (AgentPrompt $prompt): bool {
         $toolNames = collect($prompt->agent->tools())
             ->map(fn ($tool): string => ToolNameResolver::resolve($tool))
             ->all();
@@ -74,12 +74,12 @@ test('it executes a pending agent task through the topic forge mention agent', f
             && str_contains($prompt->agent->instructions(), 'You are Researcher (@researcher).')
             && str_contains($prompt->agent->instructions(), 'When the conversation mentions @researcher')
             && str_contains($prompt->agent->instructions(), 'Do not prefix your reply with your name')
-            && str_contains($prompt->agent->instructions(), 'Topic Forge artifact policy:')
+            && str_contains($prompt->agent->instructions(), 'Explicate artifact policy:')
             && str_contains($prompt->agent->instructions(), 'Use the workspace filesystem tools for substantial artifacts')
             && str_contains($prompt->agent->instructions(), 'reference that path in your reply')
             && str_contains($prompt->agent->instructions(), 'use a Markdown link with the file path as the label')
             && str_contains($prompt->agent->instructions(), 'dashboard_url as the href')
-            && str_contains($prompt->agent->instructions(), 'Topic Forge task list policy:')
+            && str_contains($prompt->agent->instructions(), 'Explicate task list policy:')
             && str_contains($prompt->agent->instructions(), 'Maintain a private task list with the task-list tool')
             && in_array('list-files', $toolNames, true)
             && in_array('write-file', $toolNames, true)
@@ -110,7 +110,7 @@ test('it executes a pending agent task through the topic forge mention agent', f
 });
 
 test('it marks a task failed when the agent has no executable version', function () {
-    Ai::fakeAgent(TopicForgeMentionAgent::class)->preventStrayPrompts();
+    Ai::fakeAgent(ExplicateMentionAgent::class)->preventStrayPrompts();
 
     $agent = Agent::factory()->for($this->workspace)->create(['name' => 'Researcher']);
     $post = Post::factory()->for($this->topic)->create([
@@ -131,7 +131,7 @@ test('it marks a task failed when the agent has no executable version', function
     expect($exception)->not->toBeNull()
         ->and($exception->getMessage())->toBe('Agent does not have a version to execute.');
 
-    Ai::assertAgentNeverPrompted(TopicForgeMentionAgent::class);
+    Ai::assertAgentNeverPrompted(ExplicateMentionAgent::class);
 
     expect($task->fresh()->status)->toBe(AgentTaskStatus::Failed)
         ->and($task->fresh()->status_post_id)->toBe($statusPost->id)
@@ -142,7 +142,7 @@ test('it marks a task failed when the agent has no executable version', function
 });
 
 test('it replies in the existing thread when the mentioned post is already threaded', function () {
-    Ai::fakeAgent(TopicForgeMentionAgent::class, ['Threaded response.'])->preventStrayPrompts();
+    Ai::fakeAgent(ExplicateMentionAgent::class, ['Threaded response.'])->preventStrayPrompts();
 
     $agent = Agent::factory()->for($this->workspace)->create(['name' => 'Researcher']);
     AgentVersion::factory()->for($agent)->create([
@@ -170,7 +170,7 @@ test('it replies in the existing thread when the mentioned post is already threa
 });
 
 test('it does not execute mentioned draft posts until they are published', function () {
-    Ai::fakeAgent(TopicForgeMentionAgent::class)->preventStrayPrompts();
+    Ai::fakeAgent(ExplicateMentionAgent::class)->preventStrayPrompts();
 
     $agent = Agent::factory()->for($this->workspace)->create(['name' => 'Researcher']);
     AgentVersion::factory()->for($agent)->create();
@@ -182,11 +182,11 @@ test('it does not execute mentioned draft posts until they are published', funct
 
     expect(AgentTask::query()->whereBelongsTo($post)->count())->toBe(0);
 
-    Ai::assertAgentNeverPrompted(TopicForgeMentionAgent::class);
+    Ai::assertAgentNeverPrompted(ExplicateMentionAgent::class);
 });
 
 test('it sends previous thread posts as conversation messages with sender identity', function () {
-    Ai::fakeAgent(TopicForgeMentionAgent::class, ['Thread context response.'])->preventStrayPrompts();
+    Ai::fakeAgent(ExplicateMentionAgent::class, ['Thread context response.'])->preventStrayPrompts();
 
     $agent = Agent::factory()->for($this->workspace)->create([
         'name' => 'Specification Writer',
@@ -226,7 +226,7 @@ test('it sends previous thread posts as conversation messages with sender identi
 
     $userName = $this->user->name;
 
-    Ai::assertAgentWasPrompted(TopicForgeMentionAgent::class, function (AgentPrompt $prompt) use ($userName): bool {
+    Ai::assertAgentWasPrompted(ExplicateMentionAgent::class, function (AgentPrompt $prompt) use ($userName): bool {
         $messages = collect($prompt->agent->messages());
 
         return $messages->count() === 2
@@ -245,7 +245,7 @@ test('mention agent tools run against the task workspace context', function () {
     ]);
     $this->user->switchWorkspace($otherWorkspace);
 
-    $tool = collect(app(TopicForgeToolFactory::class)->forAgentTask($this->user, $this->workspace))
+    $tool = collect(app(ExplicateToolFactory::class)->forAgentTask($this->user, $this->workspace))
         ->first(fn ($tool): bool => ToolNameResolver::resolve($tool) === 'write-file');
 
     expect($tool)->not->toBeNull();

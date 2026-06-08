@@ -5,8 +5,8 @@ namespace App\Mcp\Tools;
 use App\Actions\Agents\CreateAgentVersion;
 use App\Enums\Provider;
 use App\Enums\ReasoningEffort;
-use App\Mcp\TopicForgeContext;
-use App\Mcp\TopicForgeUris;
+use App\Mcp\ExplicateContext;
+use App\Mcp\ExplicateUris;
 use App\Models\AgentVersion;
 use App\Models\User;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
@@ -22,7 +22,7 @@ use Laravel\Mcp\Server\Tool;
 #[Description('Update an agent in the authenticated user\'s current workspace.')]
 class UpdateAgentTool extends Tool
 {
-    public function __construct(protected TopicForgeContext $context) {}
+    public function __construct(protected ExplicateContext $context) {}
 
     /**
      * Handle the tool request.
@@ -78,7 +78,7 @@ class UpdateAgentTool extends Tool
                 'id' => $agent->id,
                 'name' => $agent->name,
                 'slug' => $agent->slug,
-                'resource_uri' => TopicForgeUris::agent($agent),
+                'resource_uri' => ExplicateUris::agent($agent),
             ],
             'latest_version' => $this->versionPayload($agent->latestVersion),
         ]);

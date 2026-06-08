@@ -1,7 +1,7 @@
 <?php
 
 use App\Actions\Agents\SyncAgentChatReplies;
-use App\Ai\Agents\TopicForgeAgentRouter;
+use App\Ai\Agents\ExplicateAgentRouter;
 use App\Enums\AgentTaskStatus;
 use App\Enums\PostStatus;
 use App\Jobs\ProcessAgentTask;
@@ -148,7 +148,7 @@ test('mentions only create work for agents in the post workspace', function () {
 });
 
 test('an unmentioned thread reply asks the router which participating agent should respond', function () {
-    Ai::fakeAgent(TopicForgeAgentRouter::class, [[
+    Ai::fakeAgent(ExplicateAgentRouter::class, [[
         'responses' => [
             ['agent_slug' => 'researcher', 'reason' => 'The user answered the agent question.'],
         ],
@@ -192,7 +192,7 @@ test('an unmentioned thread reply asks the router which participating agent shou
 
     Queue::assertPushed(ProcessAgentTask::class, fn (ProcessAgentTask $job): bool => $job->task->is($task));
 
-    Ai::assertAgentWasPrompted(TopicForgeAgentRouter::class, function (AgentPrompt $prompt): bool {
+    Ai::assertAgentWasPrompted(ExplicateAgentRouter::class, function (AgentPrompt $prompt): bool {
         $messages = collect($prompt->agent->messages());
 
         return str_contains($prompt->agent->instructions(), 'Return no agents for acknowledgements')
@@ -203,7 +203,7 @@ test('an unmentioned thread reply asks the router which participating agent shou
 });
 
 test('the thread router may decide no participating agent should respond', function () {
-    Ai::fakeAgent(TopicForgeAgentRouter::class, [[
+    Ai::fakeAgent(ExplicateAgentRouter::class, [[
         'responses' => [],
     ]])->preventStrayPrompts();
 
@@ -227,12 +227,12 @@ test('the thread router may decide no participating agent should respond', funct
 
     expect(AgentTask::query()->whereBelongsTo($reply)->exists())->toBeFalse();
 
-    Ai::assertAgentWasPrompted(TopicForgeAgentRouter::class, fn (AgentPrompt $prompt): bool => str_contains($prompt->prompt, 'Thanks, looks good.'));
+    Ai::assertAgentWasPrompted(ExplicateAgentRouter::class, fn (AgentPrompt $prompt): bool => str_contains($prompt->prompt, 'Thanks, looks good.'));
     Queue::assertNotPushed(ProcessAgentTask::class);
 });
 
 test('an explicit agent mention in a thread bypasses the router', function () {
-    Ai::fakeAgent(TopicForgeAgentRouter::class)->preventStrayPrompts();
+    Ai::fakeAgent(ExplicateAgentRouter::class)->preventStrayPrompts();
 
     $agent = Agent::factory()->for($this->workspace)->create(['name' => 'Researcher']);
     $thread = Thread::factory()->for($this->topic)->create();
@@ -251,11 +251,11 @@ test('an explicit agent mention in a thread bypasses the router', function () {
     expect(AgentTask::query()->whereBelongsTo($reply)->sole()->event_type)->toBe(AgentTask::EventChatSummoned);
 
     Queue::assertNotPushed(RouteThreadAgentReplies::class);
-    Ai::assertAgentNeverPrompted(TopicForgeAgentRouter::class);
+    Ai::assertAgentNeverPrompted(ExplicateAgentRouter::class);
 });
 
 test('agent authored replies do not summon themselves when their body contains their mention', function () {
-    Ai::fakeAgent(TopicForgeAgentRouter::class)->preventStrayPrompts();
+    Ai::fakeAgent(ExplicateAgentRouter::class)->preventStrayPrompts();
 
     $agent = Agent::factory()->for($this->workspace)->create(['name' => 'Specification Writer']);
     $thread = Thread::factory()->for($this->topic)->create();
@@ -270,11 +270,11 @@ test('agent authored replies do not summon themselves when their body contains t
 
     Queue::assertNotPushed(ProcessAgentTask::class);
     Queue::assertNotPushed(RouteThreadAgentReplies::class);
-    Ai::assertAgentNeverPrompted(TopicForgeAgentRouter::class);
+    Ai::assertAgentNeverPrompted(ExplicateAgentRouter::class);
 });
 
 test('agent authored replies can summon other mentioned agents', function () {
-    Ai::fakeAgent(TopicForgeAgentRouter::class)->preventStrayPrompts();
+    Ai::fakeAgent(ExplicateAgentRouter::class)->preventStrayPrompts();
 
     $writer = Agent::factory()->for($this->workspace)->create(['name' => 'Specification Writer']);
     $reviewer = Agent::factory()->for($this->workspace)->create(['name' => 'Reviewer']);
@@ -295,5 +295,5 @@ test('agent authored replies can summon other mentioned agents', function () {
 
     Queue::assertPushed(ProcessAgentTask::class, fn (ProcessAgentTask $job): bool => $job->task->is($task));
     Queue::assertNotPushed(RouteThreadAgentReplies::class);
-    Ai::assertAgentNeverPrompted(TopicForgeAgentRouter::class);
+    Ai::assertAgentNeverPrompted(ExplicateAgentRouter::class);
 });

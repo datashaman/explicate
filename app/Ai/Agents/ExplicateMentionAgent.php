@@ -3,7 +3,7 @@
 namespace App\Ai\Agents;
 
 use App\Ai\Tools\ManageAgentTaskListTool;
-use App\Ai\Tools\TopicForgeToolFactory;
+use App\Ai\Tools\ExplicateToolFactory;
 use App\Models\AgentTask;
 use App\Models\Post;
 use App\Models\Principal;
@@ -18,14 +18,14 @@ use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Promptable;
 use Stringable;
 
-class TopicForgeMentionAgent implements Agent, Conversational, HasTools
+class ExplicateMentionAgent implements Agent, Conversational, HasTools
 {
     use Promptable;
 
     public function __construct(
         private readonly AgentTask $task,
         private readonly User $toolUser,
-        private readonly TopicForgeToolFactory $toolFactory,
+        private readonly ExplicateToolFactory $toolFactory,
     ) {}
 
     /**
@@ -88,7 +88,7 @@ class TopicForgeMentionAgent implements Agent, Conversational, HasTools
         $agent = $this->task->agent;
 
         return <<<INSTRUCTIONS
-Topic Forge identity:
+Explicate identity:
 - You are {$agent->name} (@{$agent->slug}).
 - When the conversation mentions @{$agent->slug}, "{$agent->name}", "you", or "the agent", treat that as referring to you unless context clearly says otherwise.
 - Thread messages include sender labels so you can tell who said what.
@@ -99,7 +99,7 @@ INSTRUCTIONS;
     private function artifactInstructions(): string
     {
         return <<<'INSTRUCTIONS'
-Topic Forge artifact policy:
+Explicate artifact policy:
 - Keep the post reply concise. Use it to summarize what you did, mention important file paths, and ask short follow-up questions.
 - Use the workspace filesystem tools for substantial artifacts such as specifications, plans, reports, code, research notes, or any response that would otherwise be long.
 - Prefer creating or updating a well-named Markdown file with write-file, then reference that path in your reply instead of pasting large swaths of text into the post.
@@ -110,7 +110,7 @@ INSTRUCTIONS;
     private function taskInstructions(): string
     {
         return <<<'INSTRUCTIONS'
-Topic Forge task list policy:
+Explicate task list policy:
 - Maintain a private task list with the task-list tool when the work has more than one step, has dependencies, or risks going off track.
 - Add concrete next steps, check them off as you complete them, and remove items that are no longer relevant.
 - Keep the task list short and actionable.

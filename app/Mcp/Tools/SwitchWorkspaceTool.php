@@ -2,8 +2,8 @@
 
 namespace App\Mcp\Tools;
 
-use App\Mcp\TopicForgeContext;
-use App\Mcp\TopicForgeUris;
+use App\Mcp\ExplicateContext;
+use App\Mcp\ExplicateUris;
 use App\Models\User;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
@@ -14,10 +14,10 @@ use Laravel\Mcp\Server\Attributes\Name;
 use Laravel\Mcp\Server\Tool;
 
 #[Name('switch-workspace')]
-#[Description('Switch the authenticated user\'s current Topic Forge workspace context.')]
+#[Description('Switch the authenticated user\'s current Explicate workspace context.')]
 class SwitchWorkspaceTool extends Tool
 {
-    public function __construct(protected TopicForgeContext $context) {}
+    public function __construct(protected ExplicateContext $context) {}
 
     /**
      * Handle the tool request.
@@ -39,8 +39,8 @@ class SwitchWorkspaceTool extends Tool
             'workspace' => [
                 ...$workspace->only(['id', 'name', 'slug']),
                 'is_current' => true,
-                'topics_resource_uri' => TopicForgeUris::workspaceTopics($workspace),
-                'agents_resource_uri' => TopicForgeUris::workspaceAgents($workspace),
+                'topics_resource_uri' => ExplicateUris::workspaceTopics($workspace),
+                'agents_resource_uri' => ExplicateUris::workspaceAgents($workspace),
             ],
         ]);
     }
@@ -54,7 +54,7 @@ class SwitchWorkspaceTool extends Tool
     {
         return [
             'workspace_slug' => $schema->string()
-                ->description('The workspace slug to set as the current Topic Forge context.')
+                ->description('The workspace slug to set as the current Explicate context.')
                 ->required(),
         ];
     }

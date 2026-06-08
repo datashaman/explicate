@@ -2,7 +2,7 @@
 
 namespace App\Actions\Agents;
 
-use App\Ai\Agents\TopicForgeMentionAgent;
+use App\Ai\Agents\ExplicateMentionAgent;
 use App\Enums\AgentTaskStatus;
 use App\Models\AgentTask;
 use App\Models\Post;
@@ -46,7 +46,7 @@ class ExecuteAgentTask
                 throw new RuntimeException('Agent does not have a version to execute.');
             }
 
-            $response = TopicForgeMentionAgent::make(
+            $response = ExplicateMentionAgent::make(
                 task: $task,
                 toolUser: $this->toolUserFor($task),
             )->prompt(

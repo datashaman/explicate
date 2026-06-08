@@ -27,7 +27,7 @@ use App\Mcp\Tools\WhoAmITool;
 use App\Mcp\Tools\WriteFileTool;
 use Laravel\Mcp\Server\Tool;
 
-final class TopicForgeTools
+final class ExplicateTools
 {
     /** @var list<class-string<Tool>> */
     public const array Tools = [

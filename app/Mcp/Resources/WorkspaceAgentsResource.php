@@ -2,9 +2,9 @@
 
 namespace App\Mcp\Resources;
 
+use App\Mcp\ExplicateContext;
+use App\Mcp\ExplicateUris;
 use App\Mcp\Resources\Concerns\HandlesResourceExceptions;
-use App\Mcp\TopicForgeContext;
-use App\Mcp\TopicForgeUris;
 use App\Models\User;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -18,11 +18,11 @@ class WorkspaceAgentsResource extends Resource implements HasUriTemplate
 {
     use HandlesResourceExceptions;
 
-    public function __construct(protected TopicForgeContext $context) {}
+    public function __construct(protected ExplicateContext $context) {}
 
     public function uriTemplate(): UriTemplate
     {
-        return new UriTemplate(TopicForgeUris::WorkspaceAgentsTemplate);
+        return new UriTemplate(ExplicateUris::WorkspaceAgentsTemplate);
     }
 
     public function handle(Request $request): Response
@@ -41,7 +41,7 @@ class WorkspaceAgentsResource extends Resource implements HasUriTemplate
                     'slug' => $agent->slug,
                     'latest_version' => $agent->latestVersion?->version,
                     'latest_model' => $agent->latestVersion?->model,
-                    'resource_uri' => TopicForgeUris::agent($agent),
+                    'resource_uri' => ExplicateUris::agent($agent),
                 ])
                 ->values()
                 ->all();

@@ -12,7 +12,7 @@ use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
 use Throwable;
 
-class TopicForgeContext
+class ExplicateContext
 {
     public function requireUser(?User $user): User
     {
@@ -36,7 +36,7 @@ class TopicForgeContext
             }
         }
 
-        throw new AuthenticationException('You must be authenticated to use the Topic Forge MCP server.');
+        throw new AuthenticationException('You must be authenticated to use the Explicate MCP server.');
     }
 
     public function workspaceFor(User $user, ?string $workspaceSlug = null): Workspace

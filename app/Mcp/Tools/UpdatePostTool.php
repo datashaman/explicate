@@ -4,8 +4,8 @@ namespace App\Mcp\Tools;
 
 use App\Enums\PostStatus;
 use App\Mcp\Concerns\FormatsMcpPayloads;
-use App\Mcp\TopicForgeContext;
-use App\Mcp\TopicForgeUris;
+use App\Mcp\ExplicateContext;
+use App\Mcp\ExplicateUris;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
@@ -23,7 +23,7 @@ class UpdatePostTool extends Tool
 {
     use FormatsMcpPayloads;
 
-    public function __construct(protected TopicForgeContext $context) {}
+    public function __construct(protected ExplicateContext $context) {}
 
     public function handle(Request $request): Response|ResponseFactory
     {
@@ -54,7 +54,7 @@ class UpdatePostTool extends Tool
             'workspace' => $post->topic->workspace->only(['id', 'name', 'slug']),
             'topic' => [
                 ...$post->topic->only(['id', 'name', 'slug']),
-                'resource_uri' => TopicForgeUris::topic($post->topic),
+                'resource_uri' => ExplicateUris::topic($post->topic),
             ],
             'post' => $this->postPayload($post->fresh()),
         ]);

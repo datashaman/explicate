@@ -7,12 +7,12 @@
                 "boost:mcp"
             ]
         },
-        "topic-forge-local": {
+        "explicate-local": {
             "command": "php",
             "args": [
                 "artisan",
                 "mcp:start",
-                "topic-forge"
+                "explicate"
             ]
         }
     }

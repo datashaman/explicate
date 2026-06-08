@@ -15,7 +15,7 @@ use App\Mcp\Resources\WhoamiResource;
 use App\Mcp\Resources\WorkspaceAgentsResource;
 use App\Mcp\Resources\WorkspacesResource;
 use App\Mcp\Resources\WorkspaceTopicsResource;
-use App\Mcp\Servers\TopicForgeServer;
+use App\Mcp\Servers\ExplicateServer;
 use App\Mcp\Tools\CreateAgentTool;
 use App\Mcp\Tools\CreatePostTool;
 use App\Mcp\Tools\CreateTopicTool;
@@ -39,8 +39,8 @@ use App\Mcp\Tools\UpdateAgentTool;
 use App\Mcp\Tools\UpdatePostTool;
 use App\Mcp\Tools\WhoAmITool;
 use App\Mcp\Tools\WriteFileTool;
-use App\Mcp\TopicForgeContext;
-use App\Mcp\TopicForgeTools;
+use App\Mcp\ExplicateContext;
+use App\Mcp\ExplicateTools;
 use App\Models\Agent;
 use App\Models\AgentTask;
 use App\Models\AgentVersion;
@@ -70,9 +70,9 @@ afterEach(function () {
 
 test('mcp uri literals are centralized', function () {
     $matches = collect(File::allFiles(app_path('Mcp')))
-        ->reject(fn (SplFileInfo $file): bool => $file->getFilename() === 'TopicForgeUris.php')
+        ->reject(fn (SplFileInfo $file): bool => $file->getFilename() === 'ExplicateUris.php')
         ->flatMap(function (SplFileInfo $file): array {
-            preg_match_all('/topic-forge:\/\//', $file->getContents(), $fileMatches);
+            preg_match_all('/explicate:\/\//', $file->getContents(), $fileMatches);
 
             return collect($fileMatches[0])
                 ->map(fn (): string => $file->getRelativePathname())
@@ -96,7 +96,7 @@ test('list workspaces returns current team workspaces', function () {
     ]);
     $user->switchWorkspace($workspace);
 
-    $response = TopicForgeServer::actingAs($user)->tool(ListWorkspacesTool::class, []);
+    $response = ExplicateServer::actingAs($user)->tool(ListWorkspacesTool::class, []);
 
     $response
         ->assertOk()
@@ -130,12 +130,12 @@ test('who am i tool returns authenticated mcp identity', function () {
     ]);
     $user->switchWorkspace($workspace);
 
-    $response = TopicForgeServer::actingAs($user)->tool(WhoAmITool::class, []);
+    $response = ExplicateServer::actingAs($user)->tool(WhoAmITool::class, []);
 
     $response
         ->assertOk()
         ->assertStructuredContent([
-            'resource_uri' => 'topic-forge://whoami',
+            'resource_uri' => 'explicate://whoami',
             'authenticated' => true,
             'user' => [
                 'id' => $user->id,
@@ -150,12 +150,12 @@ test('who am i tool returns authenticated mcp identity', function () {
 test('who am i tool reports an unauthenticated mcp session', function () {
     auth()->guard('web')->logout();
 
-    $response = TopicForgeServer::tool(WhoAmITool::class, []);
+    $response = ExplicateServer::tool(WhoAmITool::class, []);
 
     $response
         ->assertOk()
         ->assertStructuredContent([
-            'resource_uri' => 'topic-forge://whoami',
+            'resource_uri' => 'explicate://whoami',
             'authenticated' => false,
             'user' => null,
             'team' => null,
@@ -182,7 +182,7 @@ test('list topics defaults to the current workspace', function () {
         'slug' => 'hidden-topic',
     ]);
 
-    $response = TopicForgeServer::actingAs($user)->tool(ListTopicsTool::class, []);
+    $response = ExplicateServer::actingAs($user)->tool(ListTopicsTool::class, []);
 
     $response
         ->assertOk()
@@ -194,7 +194,7 @@ test('list topics defaults to the current workspace', function () {
                     'name' => 'Alpha Topic',
                     'slug' => 'alpha-topic',
                     'posts_count' => 2,
-                    'resource_uri' => 'topic-forge://workspaces/strategy/topics/alpha-topic',
+                    'resource_uri' => 'explicate://workspaces/strategy/topics/alpha-topic',
                 ],
             ],
         ]);
@@ -220,7 +220,7 @@ test('switch workspace inbox the current mcp workspace context', function () {
     ]);
     $user->switchWorkspace($initialWorkspace);
 
-    $switchResponse = TopicForgeServer::actingAs($user)->tool(SwitchWorkspaceTool::class, [
+    $switchResponse = ExplicateServer::actingAs($user)->tool(SwitchWorkspaceTool::class, [
         'workspace_slug' => 'target-workspace',
     ]);
 
@@ -234,7 +234,7 @@ test('switch workspace inbox the current mcp workspace context', function () {
 
     expect($user->refresh()->currentWorkspace?->slug)->toBe('target-workspace');
 
-    $topicsResponse = TopicForgeServer::actingAs($user)->tool(ListTopicsTool::class, []);
+    $topicsResponse = ExplicateServer::actingAs($user)->tool(ListTopicsTool::class, []);
 
     $topicsResponse
         ->assertOk()
@@ -246,7 +246,7 @@ test('switch workspace inbox the current mcp workspace context', function () {
                     'name' => 'Target Topic',
                     'slug' => 'target-topic',
                     'posts_count' => 0,
-                    'resource_uri' => 'topic-forge://workspaces/target-workspace/topics/target-topic',
+                    'resource_uri' => 'explicate://workspaces/target-workspace/topics/target-topic',
                 ],
             ],
         ]);
@@ -289,7 +289,7 @@ test('topic forge tools expose switch workspace instead of workspace slug parame
 });
 
 test('agent tools exclude create-agent and update-agent', function () {
-    $agentTools = collect(TopicForgeTools::AgentTools)
+    $agentTools = collect(ExplicateTools::AgentTools)
         ->map(fn (string $tool): string => app($tool)->name())
         ->all();
 
@@ -307,7 +307,7 @@ test('workspace file tools let agents manage the current workspace filesystem', 
     $otherWorkspace = Workspace::factory()->for($user->currentTeam)->create();
     $user->switchWorkspace($workspace);
 
-    $writeResponse = TopicForgeServer::actingAs($user)->tool(WriteFileTool::class, [
+    $writeResponse = ExplicateServer::actingAs($user)->tool(WriteFileTool::class, [
         'path' => 'docs/spec.md',
         'content' => "# Specification\n",
     ]);
@@ -331,7 +331,7 @@ test('workspace file tools let agents manage the current workspace filesystem', 
             ->etc()
         );
 
-    TopicForgeServer::actingAs($user)->tool(ListFilesTool::class, [])
+    ExplicateServer::actingAs($user)->tool(ListFilesTool::class, [])
         ->assertOk()
         ->assertStructuredContent(fn ($json) => $json
             ->where('workspace.slug', 'strategy')
@@ -345,7 +345,7 @@ test('workspace file tools let agents manage the current workspace filesystem', 
             ->etc()
         );
 
-    TopicForgeServer::actingAs($user)->tool(GetFileTool::class, [
+    ExplicateServer::actingAs($user)->tool(GetFileTool::class, [
         'path' => 'docs/spec.md',
     ])
         ->assertOk()
@@ -360,7 +360,7 @@ test('workspace file tools let agents manage the current workspace filesystem', 
             ->etc()
         );
 
-    TopicForgeServer::actingAs($user)->tool(DeleteFileTool::class, [
+    ExplicateServer::actingAs($user)->tool(DeleteFileTool::class, [
         'path' => 'docs',
     ])
         ->assertOk()
@@ -381,7 +381,7 @@ test('create topic creates a topic in the current workspace', function () {
     $otherWorkspace = Workspace::factory()->for($user->currentTeam)->create();
     $user->switchWorkspace($workspace);
 
-    $response = TopicForgeServer::actingAs($user)->tool(CreateTopicTool::class, [
+    $response = ExplicateServer::actingAs($user)->tool(CreateTopicTool::class, [
         'name' => 'General',
     ]);
 
@@ -399,7 +399,7 @@ test('create topic creates a topic in the current workspace', function () {
             ->where('topic.name', 'General')
             ->where('topic.slug', 'general')
             ->where('topic.posts_count', 0)
-            ->where('topic.resource_uri', 'topic-forge://workspaces/strategy/topics/general')
+            ->where('topic.resource_uri', 'explicate://workspaces/strategy/topics/general')
             ->etc()
         );
 });
@@ -418,7 +418,7 @@ test('get topic returns attached agents for an accessible workspace', function (
     ]);
     Post::factory()->for($topic)->count(2)->create();
 
-    $response = TopicForgeServer::actingAs($user)->tool(GetTopicTool::class, [
+    $response = ExplicateServer::actingAs($user)->tool(GetTopicTool::class, [
         'topic_slug' => 'alpha-topic',
     ]);
 
@@ -428,7 +428,7 @@ test('get topic returns attached agents for an accessible workspace', function (
             ->where('workspace.slug', 'strategy')
             ->where('topic.slug', 'alpha-topic')
             ->where('topic.posts_count', 2)
-            ->where('topic.resource_uri', 'topic-forge://workspaces/strategy/topics/alpha-topic')
+            ->where('topic.resource_uri', 'explicate://workspaces/strategy/topics/alpha-topic')
             ->etc()
         );
 });
@@ -455,7 +455,7 @@ test('list agents returns workspace agents with latest versions', function () {
         'slug' => 'hidden-agent',
     ]);
 
-    $response = TopicForgeServer::actingAs($user)->tool(ListAgentsTool::class, []);
+    $response = ExplicateServer::actingAs($user)->tool(ListAgentsTool::class, []);
 
     $response
         ->assertOk()
@@ -464,7 +464,7 @@ test('list agents returns workspace agents with latest versions', function () {
             ->where('agents.0.slug', 'research-agent')
             ->where('agents.0.latest_version', 3)
             ->where('agents.0.latest_model', 'o4-mini')
-            ->where('agents.0.resource_uri', 'topic-forge://workspaces/strategy/agents/research-agent')
+            ->where('agents.0.resource_uri', 'explicate://workspaces/strategy/agents/research-agent')
             ->etc()
         );
 });
@@ -477,7 +477,7 @@ test('create agent creates an agent with an initial version in the current works
     $otherWorkspace = Workspace::factory()->for($user->currentTeam)->create();
     $user->switchWorkspace($workspace);
 
-    $response = TopicForgeServer::actingAs($user)->tool(CreateAgentTool::class, [
+    $response = ExplicateServer::actingAs($user)->tool(CreateAgentTool::class, [
         'name' => 'Research Agent',
         'provider' => Provider::OpenAI->value,
         'model' => 'o4-mini',
@@ -505,7 +505,7 @@ test('create agent creates an agent with an initial version in the current works
             ->where('workspace.slug', 'strategy')
             ->where('agent.name', 'Research Agent')
             ->where('agent.slug', 'research-agent')
-            ->where('agent.resource_uri', 'topic-forge://workspaces/strategy/agents/research-agent')
+            ->where('agent.resource_uri', 'explicate://workspaces/strategy/agents/research-agent')
             ->where('latest_version.version', 1)
             ->where('latest_version.provider', 'openai')
             ->where('latest_version.model', 'o4-mini')
@@ -539,7 +539,7 @@ test('get agent returns version history for an accessible workspace', function (
         'model' => 'o4-mini',
         'prompt' => 'Second prompt',
     ]);
-    $response = TopicForgeServer::actingAs($user)->tool(GetAgentTool::class, [
+    $response = ExplicateServer::actingAs($user)->tool(GetAgentTool::class, [
         'agent_slug' => 'research-agent',
     ]);
 
@@ -549,7 +549,7 @@ test('get agent returns version history for an accessible workspace', function (
             ->where('workspace.slug', 'strategy')
             ->where('agent.slug', 'research-agent')
             ->where('agent.latest_version', 2)
-            ->where('agent.resource_uri', 'topic-forge://workspaces/strategy/agents/research-agent')
+            ->where('agent.resource_uri', 'explicate://workspaces/strategy/agents/research-agent')
             ->where('versions.0.version', 2)
             ->where('versions.0.model', 'o4-mini')
             ->where('versions.0.prompt', 'Second prompt')
@@ -582,7 +582,7 @@ test('update agent renames the agent and creates a new version in the current wo
         'slug' => 'other-agent',
     ]);
 
-    $response = TopicForgeServer::actingAs($user)->tool(UpdateAgentTool::class, [
+    $response = ExplicateServer::actingAs($user)->tool(UpdateAgentTool::class, [
         'agent_slug' => 'research-agent',
         'name' => 'Updated Agent',
         'model' => 'o4-mini',
@@ -610,7 +610,7 @@ test('update agent renames the agent and creates a new version in the current wo
             ->where('workspace.slug', 'strategy')
             ->where('agent.name', 'Updated Agent')
             ->where('agent.slug', 'updated-agent')
-            ->where('agent.resource_uri', 'topic-forge://workspaces/strategy/agents/updated-agent')
+            ->where('agent.resource_uri', 'explicate://workspaces/strategy/agents/updated-agent')
             ->where('latest_version.version', 2)
             ->where('latest_version.provider', 'openai')
             ->where('latest_version.model', 'o4-mini')
@@ -639,7 +639,7 @@ test('list posts returns topic posts in feed order', function () {
         'status' => PostStatus::Draft,
     ]);
 
-    $response = TopicForgeServer::actingAs($user)->tool(ListPostsTool::class, [
+    $response = ExplicateServer::actingAs($user)->tool(ListPostsTool::class, [
         'topic_slug' => 'alpha-topic',
     ]);
 
@@ -648,7 +648,7 @@ test('list posts returns topic posts in feed order', function () {
         ->assertStructuredContent(fn ($json) => $json
             ->where('workspace.slug', 'strategy')
             ->where('topic.slug', 'alpha-topic')
-            ->where('topic.resource_uri', 'topic-forge://workspaces/strategy/topics/alpha-topic')
+            ->where('topic.resource_uri', 'explicate://workspaces/strategy/topics/alpha-topic')
             ->where('posts.0.preview', 'Zulu Note')
             ->where('posts.0.status', 'published')
             ->where('posts.1.preview', 'Alpha Draft')
@@ -674,7 +674,7 @@ test('list posts includes sender context', function () {
         'sender_principal_id' => $senderPrincipal->id,
     ]);
 
-    $response = TopicForgeServer::actingAs($user)->tool(ListPostsTool::class, [
+    $response = ExplicateServer::actingAs($user)->tool(ListPostsTool::class, [
         'topic_slug' => 'alpha-topic',
     ]);
 
@@ -710,7 +710,7 @@ test('get post returns the post body and attachment metadata', function () {
         'size' => 4096,
     ]);
 
-    $response = TopicForgeServer::actingAs($user)->tool(GetPostTool::class, [
+    $response = ExplicateServer::actingAs($user)->tool(GetPostTool::class, [
         'topic_slug' => 'alpha-topic',
         'post_ulid' => $post->ulid,
     ]);
@@ -720,11 +720,11 @@ test('get post returns the post body and attachment metadata', function () {
         ->assertStructuredContent(fn ($json) => $json
             ->where('workspace.slug', 'strategy')
             ->where('topic.slug', 'alpha-topic')
-            ->where('topic.resource_uri', 'topic-forge://workspaces/strategy/topics/alpha-topic')
+            ->where('topic.resource_uri', 'explicate://workspaces/strategy/topics/alpha-topic')
             ->where('post.ulid', $post->ulid)
             ->where('post.sender.name', $user->name)
             ->where('post.body', 'Alpha Draft')
-            ->where('post.resource_uri', "topic-forge://workspaces/strategy/topics/alpha-topic/posts/{$post->ulid}")
+            ->where('post.resource_uri', "explicate://workspaces/strategy/topics/alpha-topic/posts/{$post->ulid}")
             ->where('attachments.0.filename', 'report.pdf')
             ->where('attachments.0.mime_type', 'application/pdf')
             ->where('attachments.0.size', 4096)
@@ -755,7 +755,7 @@ test('list agent tasks returns post-derived work for an agent', function () {
     ]);
     $task = AgentTask::query()->whereBelongsTo($post)->first();
 
-    $response = TopicForgeServer::actingAs($user)->tool(ListAgentTasksTool::class, [
+    $response = ExplicateServer::actingAs($user)->tool(ListAgentTasksTool::class, [
         'agent_slug' => 'research-agent',
     ]);
 
@@ -764,12 +764,12 @@ test('list agent tasks returns post-derived work for an agent', function () {
         ->assertStructuredContent(fn ($json) => $json
             ->where('workspace.slug', 'strategy')
             ->where('agent.slug', 'research-agent')
-            ->where('agent.tasks_resource_uri', 'topic-forge://workspaces/strategy/agents/research-agent/tasks')
+            ->where('agent.tasks_resource_uri', 'explicate://workspaces/strategy/agents/research-agent/tasks')
             ->where('tasks.0.id', $task->id)
             ->where('tasks.0.status', 'pending')
             ->where('tasks.0.event_type', AgentTask::EventPostMentioned)
             ->where('tasks.0.post.ulid', $post->ulid)
-            ->where('tasks.0.resource_uri', "topic-forge://workspaces/strategy/agents/research-agent/tasks/{$task->id}")
+            ->where('tasks.0.resource_uri', "explicate://workspaces/strategy/agents/research-agent/tasks/{$task->id}")
             ->etc()
         );
 });
@@ -797,7 +797,7 @@ test('get agent task returns full post context for agent work', function () {
     ]);
     $task = AgentTask::query()->whereBelongsTo($post)->first();
 
-    $response = TopicForgeServer::actingAs($user)->tool(GetAgentTaskTool::class, [
+    $response = ExplicateServer::actingAs($user)->tool(GetAgentTaskTool::class, [
         'agent_slug' => 'research-agent',
         'task_id' => $task->id,
     ]);
@@ -825,7 +825,7 @@ test('create post creates a draft by default', function () {
         'slug' => 'alpha-topic',
     ]);
 
-    $response = TopicForgeServer::actingAs($user)->tool(CreatePostTool::class, [
+    $response = ExplicateServer::actingAs($user)->tool(CreatePostTool::class, [
         'topic_slug' => 'alpha-topic',
         'body' => 'Created through the MCP server.',
     ]);
@@ -840,10 +840,10 @@ test('create post creates a draft by default', function () {
         ->assertStructuredContent(fn ($json) => $json
             ->where('workspace.slug', 'strategy')
             ->where('topic.slug', 'alpha-topic')
-            ->where('topic.resource_uri', 'topic-forge://workspaces/strategy/topics/alpha-topic')
+            ->where('topic.resource_uri', 'explicate://workspaces/strategy/topics/alpha-topic')
             ->where('post.preview', 'Created through the MCP server.')
             ->where('post.status', 'draft')
-            ->where('post.resource_uri', "topic-forge://workspaces/strategy/topics/alpha-topic/posts/{$post->ulid}")
+            ->where('post.resource_uri', "explicate://workspaces/strategy/topics/alpha-topic/posts/{$post->ulid}")
             ->etc()
         );
 });
@@ -864,7 +864,7 @@ test('create post dispatches mentioned agent task once when published', function
         'name' => 'Research Agent',
     ]);
 
-    TopicForgeServer::actingAs($user)->tool(CreatePostTool::class, [
+    ExplicateServer::actingAs($user)->tool(CreatePostTool::class, [
         'topic_slug' => 'alpha-topic',
         'body' => '@research-agent Please summarize.',
         'status' => PostStatus::Published->value,
@@ -900,7 +900,7 @@ test('delete post soft deletes an own post and clears derived records', function
 
     expect(AgentTask::query()->whereBelongsTo($post)->count())->toBe(1);
 
-    $response = TopicForgeServer::actingAs($user)->tool(DeletePostTool::class, [
+    $response = ExplicateServer::actingAs($user)->tool(DeletePostTool::class, [
         'topic_slug' => 'alpha-topic',
         'post_ulid' => $post->ulid,
     ]);
@@ -937,7 +937,7 @@ test('delete post denies posts sent by another user', function () {
         'sender_principal_id' => $memberPrincipal->id,
     ]);
 
-    $response = TopicForgeServer::actingAs($user)->tool(DeletePostTool::class, [
+    $response = ExplicateServer::actingAs($user)->tool(DeletePostTool::class, [
         'topic_slug' => 'alpha-topic',
         'post_ulid' => $post->ulid,
     ]);
@@ -966,7 +966,7 @@ test('update post changes body and status of an own post', function () {
         'sender_principal_id' => $workspace->principalForUser($user)->id,
     ]);
 
-    $response = TopicForgeServer::actingAs($user)->tool(UpdatePostTool::class, [
+    $response = ExplicateServer::actingAs($user)->tool(UpdatePostTool::class, [
         'topic_slug' => 'alpha-topic',
         'post_ulid' => $post->ulid,
         'body' => 'Updated body.',
@@ -1004,7 +1004,7 @@ test('update post denies editing a post sent by another user', function () {
         'sender_principal_id' => $memberPrincipal->id,
     ]);
 
-    $response = TopicForgeServer::actingAs($user)->tool(UpdatePostTool::class, [
+    $response = ExplicateServer::actingAs($user)->tool(UpdatePostTool::class, [
         'topic_slug' => 'alpha-topic',
         'post_ulid' => $post->ulid,
         'body' => 'Overwritten.',
@@ -1033,22 +1033,22 @@ test('topic resource returns topic context by uri template', function () {
         'body' => 'Draft body',
     ]);
 
-    $resource = new class(app(TopicForgeContext::class)) extends TopicResource
+    $resource = new class(app(ExplicateContext::class)) extends TopicResource
     {
         public function uri(): string
         {
-            return 'topic-forge://workspaces/strategy/topics/alpha-topic';
+            return 'explicate://workspaces/strategy/topics/alpha-topic';
         }
     };
 
-    $response = TopicForgeServer::actingAs($user)->resource($resource);
+    $response = ExplicateServer::actingAs($user)->resource($resource);
 
     $response
         ->assertOk()
         ->assertSee('"slug":"alpha-topic"')
-        ->assertSee('"resource_uri":"topic-forge://workspaces/strategy/topics/alpha-topic"')
+        ->assertSee('"resource_uri":"explicate://workspaces/strategy/topics/alpha-topic"')
         ->assertSee('"preview":"Draft body"')
-        ->assertSee('"resource_uri":"topic-forge://workspaces/strategy/topics/alpha-topic/posts/'.$post->ulid.'"')
+        ->assertSee('"resource_uri":"explicate://workspaces/strategy/topics/alpha-topic/posts/'.$post->ulid.'"')
         ->assertSee('"body":"Draft body"');
 });
 
@@ -1065,22 +1065,22 @@ test('workspace topics resource returns topics for a workspace by uri template',
     ]);
     Post::factory()->for($topic)->count(2)->create();
 
-    $resource = new class(app(TopicForgeContext::class)) extends WorkspaceTopicsResource
+    $resource = new class(app(ExplicateContext::class)) extends WorkspaceTopicsResource
     {
         public function uri(): string
         {
-            return 'topic-forge://workspaces/strategy/topics';
+            return 'explicate://workspaces/strategy/topics';
         }
     };
 
-    $response = TopicForgeServer::actingAs($user)->resource($resource);
+    $response = ExplicateServer::actingAs($user)->resource($resource);
 
     $response
         ->assertOk()
         ->assertSee('"slug":"strategy"')
         ->assertSee('"slug":"alpha-topic"')
         ->assertSee('"posts_count":2')
-        ->assertSee('"resource_uri":"topic-forge://workspaces/strategy/topics/alpha-topic"');
+        ->assertSee('"resource_uri":"explicate://workspaces/strategy/topics/alpha-topic"');
 });
 
 test('workspace topics resource is readable through a concrete template uri', function () {
@@ -1100,14 +1100,14 @@ test('workspace topics resource is readable through a concrete template uri', fu
     app('auth')->shouldUse(null);
 
     $response = topicForgeServerMethodResponse('resources/read', [
-        'uri' => 'topic-forge://workspaces/strategy/topics',
+        'uri' => 'explicate://workspaces/strategy/topics',
     ]);
 
-    expect($response['result']['contents'][0]['uri'])->toBe('topic-forge://workspaces/strategy/topics');
+    expect($response['result']['contents'][0]['uri'])->toBe('explicate://workspaces/strategy/topics');
     expect($response['result']['contents'][0]['text'])->toContain('"slug":"strategy"');
     expect($response['result']['contents'][0]['text'])->toContain('"slug":"alpha-topic"');
     expect($response['result']['contents'][0]['text'])->toContain('"posts_count":2');
-    expect($response['result']['contents'][0]['text'])->toContain('"resource_uri":"topic-forge://workspaces/strategy/topics/alpha-topic"');
+    expect($response['result']['contents'][0]['text'])->toContain('"resource_uri":"explicate://workspaces/strategy/topics/alpha-topic"');
 });
 
 test('workspace agents resource returns agents for a workspace by uri template', function () {
@@ -1128,21 +1128,21 @@ test('workspace agents resource returns agents for a workspace by uri template',
         'version' => 3,
         'model' => 'o4-mini',
     ]);
-    $resource = new class(app(TopicForgeContext::class)) extends WorkspaceAgentsResource
+    $resource = new class(app(ExplicateContext::class)) extends WorkspaceAgentsResource
     {
         public function uri(): string
         {
-            return 'topic-forge://workspaces/strategy/agents';
+            return 'explicate://workspaces/strategy/agents';
         }
     };
 
-    $response = TopicForgeServer::actingAs($user)->resource($resource);
+    $response = ExplicateServer::actingAs($user)->resource($resource);
 
     $response
         ->assertOk()
         ->assertSee('"slug":"strategy"')
         ->assertSee('"slug":"research-agent"')
-        ->assertSee('"resource_uri":"topic-forge://workspaces/strategy/agents/research-agent"');
+        ->assertSee('"resource_uri":"explicate://workspaces/strategy/agents/research-agent"');
 });
 
 test('topic posts resource returns posts for a topic by uri template', function () {
@@ -1165,15 +1165,15 @@ test('topic posts resource returns posts for a topic by uri template', function 
         'status' => PostStatus::Draft,
     ]);
 
-    $resource = new class(app(TopicForgeContext::class)) extends TopicPostsResource
+    $resource = new class(app(ExplicateContext::class)) extends TopicPostsResource
     {
         public function uri(): string
         {
-            return 'topic-forge://workspaces/strategy/topics/alpha-topic/posts';
+            return 'explicate://workspaces/strategy/topics/alpha-topic/posts';
         }
     };
 
-    $response = TopicForgeServer::actingAs($user)->resource($resource);
+    $response = ExplicateServer::actingAs($user)->resource($resource);
 
     $response
         ->assertOk()
@@ -1203,22 +1203,22 @@ test('post resource returns post context by uri template', function () {
         'size' => 4096,
     ]);
 
-    $resource = new class(app(TopicForgeContext::class)) extends PostResource
+    $resource = new class(app(ExplicateContext::class)) extends PostResource
     {
         public function uri(): string
         {
-            return 'topic-forge://workspaces/strategy/topics/alpha-topic/posts/'.$GLOBALS['postResourceUlid'];
+            return 'explicate://workspaces/strategy/topics/alpha-topic/posts/'.$GLOBALS['postResourceUlid'];
         }
     };
 
     $GLOBALS['postResourceUlid'] = $post->ulid;
 
-    $response = TopicForgeServer::actingAs($user)->resource($resource);
+    $response = ExplicateServer::actingAs($user)->resource($resource);
 
     $response
         ->assertOk()
         ->assertSee('"ulid":"'.$post->ulid.'"')
-        ->assertSee('"resource_uri":"topic-forge://workspaces/strategy/topics/alpha-topic/posts/'.$post->ulid.'"')
+        ->assertSee('"resource_uri":"explicate://workspaces/strategy/topics/alpha-topic/posts/'.$post->ulid.'"')
         ->assertSee('"filename":"report.pdf"');
 });
 
@@ -1245,23 +1245,23 @@ test('agent tasks resource returns queued work by uri template', function () {
     ]);
     $task = AgentTask::query()->whereBelongsTo($post)->first();
 
-    $resource = new class(app(TopicForgeContext::class)) extends AgentTasksResource
+    $resource = new class(app(ExplicateContext::class)) extends AgentTasksResource
     {
         public function uri(): string
         {
-            return 'topic-forge://workspaces/strategy/agents/research-agent/tasks';
+            return 'explicate://workspaces/strategy/agents/research-agent/tasks';
         }
     };
 
-    $response = TopicForgeServer::actingAs($user)->resource($resource);
+    $response = ExplicateServer::actingAs($user)->resource($resource);
 
     $response
         ->assertOk()
         ->assertSee('"slug":"research-agent"')
-        ->assertSee('"tasks_resource_uri":"topic-forge://workspaces/strategy/agents/research-agent/tasks"')
+        ->assertSee('"tasks_resource_uri":"explicate://workspaces/strategy/agents/research-agent/tasks"')
         ->assertSee('"id":'.$task->id)
         ->assertSee('"ulid":"'.$post->ulid.'"')
-        ->assertSee('"resource_uri":"topic-forge://workspaces/strategy/agents/research-agent/tasks/'.$task->id.'"');
+        ->assertSee('"resource_uri":"explicate://workspaces/strategy/agents/research-agent/tasks/'.$task->id.'"');
 });
 
 test('agent task resource returns queued work by uri template', function () {
@@ -1287,20 +1287,20 @@ test('agent task resource returns queued work by uri template', function () {
     ]);
     $task = AgentTask::query()->whereBelongsTo($post)->first();
 
-    $resource = new class(app(TopicForgeContext::class), $task->id) extends AgentTaskResource
+    $resource = new class(app(ExplicateContext::class), $task->id) extends AgentTaskResource
     {
-        public function __construct(TopicForgeContext $context, private int $taskId)
+        public function __construct(ExplicateContext $context, private int $taskId)
         {
             parent::__construct($context);
         }
 
         public function uri(): string
         {
-            return "topic-forge://workspaces/strategy/agents/research-agent/tasks/{$this->taskId}";
+            return "explicate://workspaces/strategy/agents/research-agent/tasks/{$this->taskId}";
         }
     };
 
-    $response = TopicForgeServer::actingAs($user)->resource($resource);
+    $response = ExplicateServer::actingAs($user)->resource($resource);
 
     $response
         ->assertOk()
@@ -1325,21 +1325,21 @@ test('agent resource returns agent context by uri template', function () {
         'model' => 'o4-mini',
         'prompt' => 'Second prompt',
     ]);
-    $resource = new class(app(TopicForgeContext::class)) extends AgentResource
+    $resource = new class(app(ExplicateContext::class)) extends AgentResource
     {
         public function uri(): string
         {
-            return 'topic-forge://workspaces/strategy/agents/research-agent';
+            return 'explicate://workspaces/strategy/agents/research-agent';
         }
     };
 
-    $response = TopicForgeServer::actingAs($user)->resource($resource);
+    $response = ExplicateServer::actingAs($user)->resource($resource);
 
     $response
         ->assertOk()
         ->assertSee('"slug":"research-agent"')
-        ->assertSee('"resource_uri":"topic-forge://workspaces/strategy/agents/research-agent"')
-        ->assertSee('"tasks_resource_uri":"topic-forge://workspaces/strategy/agents/research-agent/tasks"');
+        ->assertSee('"resource_uri":"explicate://workspaces/strategy/agents/research-agent"')
+        ->assertSee('"tasks_resource_uri":"explicate://workspaces/strategy/agents/research-agent/tasks"');
 });
 
 test('topic forge server lists top-level resources', function () {
@@ -1349,40 +1349,40 @@ test('topic forge server lists top-level resources', function () {
 
     expect(collect($response['result']['resources'])->contains(
         fn (array $resource): bool => $resource['name'] === 'whoami-resource'
-            && $resource['uri'] === 'topic-forge://whoami'
+            && $resource['uri'] === 'explicate://whoami'
             && $resource['mimeType'] === 'application/json'
     ))->toBeTrue();
 
     expect(collect($response['result']['resources'])->contains(
         fn (array $resource): bool => $resource['name'] === 'playbook-resource'
-            && $resource['uri'] === 'topic-forge://playbook'
+            && $resource['uri'] === 'explicate://playbook'
             && $resource['mimeType'] === 'application/json'
     ))->toBeTrue();
 
     expect(collect($response['result']['resources'])->contains(
         fn (array $resource): bool => $resource['name'] === 'workspaces-resource'
-            && $resource['uri'] === 'topic-forge://workspaces'
+            && $resource['uri'] === 'explicate://workspaces'
             && $resource['mimeType'] === 'application/json'
     ))->toBeTrue();
 });
 
 test('playbook resource returns top-level navigation guidance', function () {
-    $response = TopicForgeServer::resource(PlaybookResource::class);
+    $response = ExplicateServer::resource(PlaybookResource::class);
 
     $response
         ->assertOk()
-        ->assertSee('"resource_uri":"topic-forge://playbook"')
-        ->assertSee('topic-forge://workspaces/{workspace}/topics/{topic}/posts/{post}');
+        ->assertSee('"resource_uri":"explicate://playbook"')
+        ->assertSee('explicate://workspaces/{workspace}/topics/{topic}/posts/{post}');
 });
 
 test('playbook resource is readable by its static uri', function () {
     $response = topicForgeServerMethodResponse('resources/read', [
-        'uri' => 'topic-forge://playbook',
+        'uri' => 'explicate://playbook',
     ]);
 
-    expect($response['result']['contents'][0]['uri'])->toBe('topic-forge://playbook');
-    expect($response['result']['contents'][0]['text'])->toContain('"resource_uri":"topic-forge://playbook"');
-    expect($response['result']['contents'][0]['text'])->toContain('Topic Forge Playbook');
+    expect($response['result']['contents'][0]['uri'])->toBe('explicate://playbook');
+    expect($response['result']['contents'][0]['text'])->toContain('"resource_uri":"explicate://playbook"');
+    expect($response['result']['contents'][0]['text'])->toContain('Explicate Playbook');
 });
 
 test('whoami resource returns authenticated mcp identity', function () {
@@ -1396,11 +1396,11 @@ test('whoami resource returns authenticated mcp identity', function () {
     ]);
     $user->switchWorkspace($workspace);
 
-    $response = TopicForgeServer::actingAs($user)->resource(WhoamiResource::class);
+    $response = ExplicateServer::actingAs($user)->resource(WhoamiResource::class);
 
     $response
         ->assertOk()
-        ->assertSee('"resource_uri":"topic-forge://whoami"')
+        ->assertSee('"resource_uri":"explicate://whoami"')
         ->assertSee('"authenticated":true')
         ->assertSee('"email":"whoami@example.com"')
         ->assertSee('"slug":"whoami-workspace"');
@@ -1420,10 +1420,10 @@ test('whoami resource is readable by its static uri', function () {
     app('auth')->shouldUse(null);
 
     $response = topicForgeServerMethodResponse('resources/read', [
-        'uri' => 'topic-forge://whoami',
+        'uri' => 'explicate://whoami',
     ]);
 
-    expect($response['result']['contents'][0]['uri'])->toBe('topic-forge://whoami');
+    expect($response['result']['contents'][0]['uri'])->toBe('explicate://whoami');
     expect($response['result']['contents'][0]['text'])->toContain('"email":"whoami-static@example.com"');
     expect($response['result']['contents'][0]['text'])->toContain('"slug":"whoami-static-workspace"');
 });
@@ -1440,15 +1440,15 @@ test('workspaces resource returns current team workspaces', function () {
     ]);
     $user->switchWorkspace($workspace);
 
-    $response = TopicForgeServer::actingAs($user)->resource(WorkspacesResource::class);
+    $response = ExplicateServer::actingAs($user)->resource(WorkspacesResource::class);
 
     $response
         ->assertOk()
-        ->assertSee('"resource_uri":"topic-forge://workspaces"')
+        ->assertSee('"resource_uri":"explicate://workspaces"')
         ->assertSee('"slug":"current-workspace"')
         ->assertSee('"is_current":true')
-        ->assertSee('"topics_resource_uri":"topic-forge://workspaces/current-workspace/topics"')
-        ->assertSee('"agents_resource_uri":"topic-forge://workspaces/research-workspace/agents"');
+        ->assertSee('"topics_resource_uri":"explicate://workspaces/current-workspace/topics"')
+        ->assertSee('"agents_resource_uri":"explicate://workspaces/research-workspace/agents"');
 });
 
 test('workspaces resource is readable by its static uri', function () {
@@ -1463,18 +1463,18 @@ test('workspaces resource is readable by its static uri', function () {
     app('auth')->shouldUse(null);
 
     $response = topicForgeServerMethodResponse('resources/read', [
-        'uri' => 'topic-forge://workspaces',
+        'uri' => 'explicate://workspaces',
     ]);
 
-    expect($response['result']['contents'][0]['uri'])->toBe('topic-forge://workspaces');
-    expect($response['result']['contents'][0]['text'])->toContain('"resource_uri":"topic-forge://workspaces"');
+    expect($response['result']['contents'][0]['uri'])->toBe('explicate://workspaces');
+    expect($response['result']['contents'][0]['text'])->toContain('"resource_uri":"explicate://workspaces"');
     expect($response['result']['contents'][0]['text'])->toContain('"slug":"current-workspace"');
-    expect($response['result']['contents'][0]['text'])->not->toContain('Topic Forge Playbook');
+    expect($response['result']['contents'][0]['text'])->not->toContain('Explicate Playbook');
 });
 
 test('local mcp resource auth errors stay on the json rpc channel', function () {
     $process = new Process(
-        ['php', 'artisan', 'mcp:start', 'topic-forge', '--no-interaction'],
+        ['php', 'artisan', 'mcp:start', 'explicate', '--no-interaction'],
         base_path(),
         [
             'APP_ENV' => 'testing',
@@ -1483,7 +1483,7 @@ test('local mcp resource auth errors stay on the json rpc channel', function () 
     );
     $process->setInput(implode("\n", [
         '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"debug","version":"0.0.1"}}}',
-        '{"jsonrpc":"2.0","id":2,"method":"resources/read","params":{"uri":"topic-forge://workspaces"}}',
+        '{"jsonrpc":"2.0","id":2,"method":"resources/read","params":{"uri":"explicate://workspaces"}}',
     ])."\n");
 
     $process->mustRun();
@@ -1496,7 +1496,7 @@ test('local mcp resource auth errors stay on the json rpc channel', function () 
         ->map(fn (string $line): array => json_decode($line, true, flags: JSON_THROW_ON_ERROR));
 
     expect($posts)->toHaveCount(2);
-    expect($posts[1]['error']['message'])->toBe('You must be authenticated to use the Topic Forge MCP server.');
+    expect($posts[1]['error']['message'])->toBe('You must be authenticated to use the Explicate MCP server.');
 });
 
 test('local mcp resources authenticate from the configured env user', function () {
@@ -1513,7 +1513,7 @@ test('local mcp resources authenticate from the configured env user', function (
     auth()->guard('web')->logout();
 
     $response = topicForgeServerMethodResponse('resources/read', [
-        'uri' => 'topic-forge://workspaces',
+        'uri' => 'explicate://workspaces',
     ]);
 
     expect($response['result']['contents'][0]['text'])->toContain('"slug":"local-resource-workspace"');
@@ -1522,7 +1522,7 @@ test('local mcp resources authenticate from the configured env user', function (
 
 test('invalid local mcp auth config does not write laravel exceptions to stdout', function () {
     $process = new Process(
-        ['php', 'artisan', 'mcp:start', 'topic-forge', '--no-interaction'],
+        ['php', 'artisan', 'mcp:start', 'explicate', '--no-interaction'],
         base_path(),
         [
             'APP_ENV' => 'testing',
@@ -1531,7 +1531,7 @@ test('invalid local mcp auth config does not write laravel exceptions to stdout'
     );
     $process->setInput(implode("\n", [
         '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"debug","version":"0.0.1"}}}',
-        '{"jsonrpc":"2.0","id":2,"method":"resources/read","params":{"uri":"topic-forge://workspaces"}}',
+        '{"jsonrpc":"2.0","id":2,"method":"resources/read","params":{"uri":"explicate://workspaces"}}',
     ])."\n");
 
     $process->mustRun();
@@ -1544,7 +1544,7 @@ test('invalid local mcp auth config does not write laravel exceptions to stdout'
         ->map(fn (string $line): array => json_decode($line, true, flags: JSON_THROW_ON_ERROR));
 
     expect($posts)->toHaveCount(2);
-    expect($posts[0]['result']['serverInfo']['name'])->toBe('Topic Forge Server');
+    expect($posts[0]['result']['serverInfo']['name'])->toBe('Explicate Server');
     expect($posts[1]['error']['message'])->toBe('The configured MCP local auth user could not be resolved.');
 });
 
@@ -1554,40 +1554,40 @@ test('topic forge server lists topic, post, and agent resource templates', funct
     expect($response['result']['resourceTemplates'])->toHaveCount(8);
 
     expect(collect($response['result']['resourceTemplates'])->contains(
-        fn (array $resource): bool => $resource['uriTemplate'] === 'topic-forge://workspaces/{workspace}/topics'
+        fn (array $resource): bool => $resource['uriTemplate'] === 'explicate://workspaces/{workspace}/topics'
     ))->toBeTrue();
 
     expect(collect($response['result']['resourceTemplates'])->contains(
-        fn (array $resource): bool => $resource['uriTemplate'] === 'topic-forge://workspaces/{workspace}/agents'
+        fn (array $resource): bool => $resource['uriTemplate'] === 'explicate://workspaces/{workspace}/agents'
     ))->toBeTrue();
 
     expect(collect($response['result']['resourceTemplates'])->contains(
-        fn (array $resource): bool => $resource['uriTemplate'] === 'topic-forge://workspaces/{workspace}/topics/{topic}/posts'
+        fn (array $resource): bool => $resource['uriTemplate'] === 'explicate://workspaces/{workspace}/topics/{topic}/posts'
     ))->toBeTrue();
 
     expect(collect($response['result']['resourceTemplates'])->contains(
         fn (array $resource): bool => $resource['name'] === 'topic-resource'
-            && $resource['uriTemplate'] === 'topic-forge://workspaces/{workspace}/topics/{topic}'
+            && $resource['uriTemplate'] === 'explicate://workspaces/{workspace}/topics/{topic}'
     ))->toBeTrue();
 
     expect(collect($response['result']['resourceTemplates'])->contains(
         fn (array $resource): bool => $resource['name'] === 'post-resource'
-            && $resource['uriTemplate'] === 'topic-forge://workspaces/{workspace}/topics/{topic}/posts/{post}'
+            && $resource['uriTemplate'] === 'explicate://workspaces/{workspace}/topics/{topic}/posts/{post}'
     ))->toBeTrue();
 
     expect(collect($response['result']['resourceTemplates'])->contains(
         fn (array $resource): bool => $resource['name'] === 'agent-resource'
-            && $resource['uriTemplate'] === 'topic-forge://workspaces/{workspace}/agents/{agent}'
+            && $resource['uriTemplate'] === 'explicate://workspaces/{workspace}/agents/{agent}'
     ))->toBeTrue();
 
     expect(collect($response['result']['resourceTemplates'])->contains(
         fn (array $resource): bool => $resource['name'] === 'agent-tasks-resource'
-            && $resource['uriTemplate'] === 'topic-forge://workspaces/{workspace}/agents/{agent}/tasks'
+            && $resource['uriTemplate'] === 'explicate://workspaces/{workspace}/agents/{agent}/tasks'
     ))->toBeTrue();
 
     expect(collect($response['result']['resourceTemplates'])->contains(
         fn (array $resource): bool => $resource['name'] === 'agent-task-resource'
-            && $resource['uriTemplate'] === 'topic-forge://workspaces/{workspace}/agents/{agent}/tasks/{task}'
+            && $resource['uriTemplate'] === 'explicate://workspaces/{workspace}/agents/{agent}/tasks/{task}'
     ))->toBeTrue();
 });
 
@@ -1598,7 +1598,7 @@ test('workspace access is denied outside the current team scope', function () {
         'slug' => 'foreign-workspace',
     ]);
 
-    $response = TopicForgeServer::actingAs($user)->tool(SwitchWorkspaceTool::class, [
+    $response = ExplicateServer::actingAs($user)->tool(SwitchWorkspaceTool::class, [
         'workspace_slug' => $foreignWorkspace->slug,
     ]);
 
@@ -1618,7 +1618,7 @@ test('local mcp auth can resolve the user from config', function () {
     config()->set('mcp.local_auth_user', 'local-agent@example.com');
     auth()->guard('web')->logout();
 
-    $response = TopicForgeServer::tool(ListWorkspacesTool::class, []);
+    $response = ExplicateServer::tool(ListWorkspacesTool::class, []);
 
     $response
         ->assertOk()
@@ -1630,7 +1630,7 @@ test('local mcp auth can resolve the user from config', function () {
 });
 
 test('oauth metadata endpoint advertises passport endpoints for the mcp server', function () {
-    $response = $this->getJson('/.well-known/oauth-authorization-server/mcp/topic-forge');
+    $response = $this->getJson('/.well-known/oauth-authorization-server/mcp/explicate');
 
     $response
         ->assertOk()
@@ -1643,7 +1643,7 @@ test('oauth metadata endpoint advertises passport endpoints for the mcp server',
 
 test('topic forge mcp route is protected by the passport api guard', function () {
     $route = collect(app('router')->getRoutes()->getRoutes())
-        ->first(fn ($route) => $route->uri() === 'mcp/topic-forge' && in_array('POST', $route->methods(), true));
+        ->first(fn ($route) => $route->uri() === 'mcp/explicate' && in_array('POST', $route->methods(), true));
 
     expect($route)->not->toBeNull();
     expect($route->gatherMiddleware())->toContain('auth:api');
@@ -1660,7 +1660,7 @@ test('list-repos tool returns workspace repositories', function () {
         'branch' => 'main',
     ]);
 
-    TopicForgeServer::actingAs($user)->tool(ListReposTool::class, [])
+    ExplicateServer::actingAs($user)->tool(ListReposTool::class, [])
         ->assertOk()
         ->assertStructuredContent(fn ($json) => $json
             ->where('workspace.slug', $workspace->slug)
@@ -1679,7 +1679,7 @@ test('run-git-command tool returns error when repo is not cloned', function () {
 
     WorkspaceRepository::factory()->for($workspace)->create(['name' => 'api-service']);
 
-    TopicForgeServer::actingAs($user)->tool(RunGitCommandTool::class, [
+    ExplicateServer::actingAs($user)->tool(RunGitCommandTool::class, [
         'repo' => 'api-service',
         'command' => 'git log --oneline -1',
     ])->assertHasErrors(['has not been cloned']);
@@ -1707,7 +1707,7 @@ test('run-git-command tool executes command in cloned repo directory', function 
 
     (new GitRepositoryService($repo))->sync();
 
-    TopicForgeServer::actingAs($user)->tool(RunGitCommandTool::class, [
+    ExplicateServer::actingAs($user)->tool(RunGitCommandTool::class, [
         'repo' => 'myrepo',
         'command' => 'git log --oneline -1',
     ])
@@ -1725,7 +1725,7 @@ test('run-git-command tool executes command in cloned repo directory', function 
 function topicForgeServerMethodResponse(string $method, array $params = []): array
 {
     $server = Container::getInstance()->make(
-        TopicForgeServer::class,
+        ExplicateServer::class,
         ['transport' => new FakeTransporter]
     );
     $server->start();

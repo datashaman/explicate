@@ -2,9 +2,9 @@
 
 namespace App\Mcp\Resources;
 
+use App\Mcp\ExplicateContext;
+use App\Mcp\ExplicateUris;
 use App\Mcp\Resources\Concerns\HandlesResourceExceptions;
-use App\Mcp\TopicForgeContext;
-use App\Mcp\TopicForgeUris;
 use App\Models\User;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -18,11 +18,11 @@ class TopicResource extends Resource implements HasUriTemplate
 {
     use HandlesResourceExceptions;
 
-    public function __construct(protected TopicForgeContext $context) {}
+    public function __construct(protected ExplicateContext $context) {}
 
     public function uriTemplate(): UriTemplate
     {
-        return new UriTemplate(TopicForgeUris::TopicTemplate);
+        return new UriTemplate(ExplicateUris::TopicTemplate);
     }
 
     /**
@@ -45,7 +45,7 @@ class TopicResource extends Resource implements HasUriTemplate
                 'workspace' => $topic->workspace->only(['id', 'name', 'slug']),
                 'topic' => [
                     ...$topic->only(['id', 'name', 'slug']),
-                    'resource_uri' => TopicForgeUris::topic($topic),
+                    'resource_uri' => ExplicateUris::topic($topic),
                 ],
                 'posts' => $topic->posts()
                     ->topLevel()
@@ -56,7 +56,7 @@ class TopicResource extends Resource implements HasUriTemplate
                         'preview' => $post->preview(),
                         'status' => $post->status->value,
                         'body' => $post->body,
-                        'resource_uri' => TopicForgeUris::post($post),
+                        'resource_uri' => ExplicateUris::post($post),
                     ])
                     ->values()
                     ->all(),

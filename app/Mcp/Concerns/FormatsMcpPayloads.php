@@ -2,7 +2,7 @@
 
 namespace App\Mcp\Concerns;
 
-use App\Mcp\TopicForgeUris;
+use App\Mcp\ExplicateUris;
 use App\Models\AgentTask;
 use App\Models\Post;
 use App\Models\Workspace;
@@ -84,7 +84,7 @@ trait FormatsMcpPayloads
             'type' => $entry['type'],
             'name' => $entry['name'],
             'path' => $entry['path'],
-            'resource_uri' => TopicForgeUris::workspaceFile($workspace, $entry['path']),
+            'resource_uri' => ExplicateUris::workspaceFile($workspace, $entry['path']),
             'dashboard_url' => route('dashboard', [
                 'action' => 'files',
                 'file' => $entry['path'],
@@ -103,13 +103,13 @@ trait FormatsMcpPayloads
     {
         $post->loadMissing('topic.workspace');
 
-        return TopicForgeUris::post($post);
+        return ExplicateUris::post($post);
     }
 
     protected function agentTaskResourceUri(AgentTask $task): string
     {
         $task->loadMissing('agent.workspace');
 
-        return TopicForgeUris::agentTask($task);
+        return ExplicateUris::agentTask($task);
     }
 }

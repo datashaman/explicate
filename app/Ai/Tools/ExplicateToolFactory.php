@@ -2,12 +2,12 @@
 
 namespace App\Ai\Tools;
 
-use App\Mcp\TopicForgeTools;
+use App\Mcp\ExplicateTools;
 use App\Models\User;
 use App\Models\Workspace;
 use Illuminate\Contracts\Container\Container;
 
-class TopicForgeToolFactory
+class ExplicateToolFactory
 {
     public function __construct(private readonly Container $container) {}
 
@@ -16,7 +16,7 @@ class TopicForgeToolFactory
      */
     public function forAgentTask(User $user, Workspace $workspace): array
     {
-        return collect(TopicForgeTools::AgentTools)
+        return collect(ExplicateTools::AgentTools)
             ->map(fn (string $tool): McpToolAdapter => new McpToolAdapter(
                 $this->container->make($tool),
                 $user,

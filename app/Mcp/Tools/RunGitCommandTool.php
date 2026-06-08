@@ -2,7 +2,7 @@
 
 namespace App\Mcp\Tools;
 
-use App\Mcp\TopicForgeContext;
+use App\Mcp\ExplicateContext;
 use App\Models\User;
 use App\Services\GitRepositoryService;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
@@ -17,7 +17,7 @@ use Laravel\Mcp\Server\Tool;
 #[Description('Run a shell command inside a connected git repository. The command executes in the repository root directory with authentication environment variables injected. Returns stdout, stderr, and the exit code.')]
 class RunGitCommandTool extends Tool
 {
-    public function __construct(protected TopicForgeContext $context) {}
+    public function __construct(protected ExplicateContext $context) {}
 
     public function handle(Request $request): Response|ResponseFactory
     {

@@ -2,8 +2,8 @@
 
 namespace App\Mcp\Tools;
 
-use App\Mcp\TopicForgeContext;
-use App\Mcp\TopicForgeUris;
+use App\Mcp\ExplicateContext;
+use App\Mcp\ExplicateUris;
 use App\Models\User;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
@@ -21,7 +21,7 @@ use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 #[IsIdempotent]
 class GetTopicTool extends Tool
 {
-    public function __construct(protected TopicForgeContext $context) {}
+    public function __construct(protected ExplicateContext $context) {}
 
     /**
      * Handle the tool request.
@@ -44,7 +44,7 @@ class GetTopicTool extends Tool
                 'name' => $topic->name,
                 'slug' => $topic->slug,
                 'posts_count' => $topic->posts()->topLevel()->count(),
-                'resource_uri' => TopicForgeUris::topic($topic),
+                'resource_uri' => ExplicateUris::topic($topic),
             ],
         ]);
     }

@@ -2,9 +2,9 @@
 
 namespace App\Mcp\Resources;
 
+use App\Mcp\ExplicateContext;
+use App\Mcp\ExplicateUris;
 use App\Mcp\Resources\Concerns\HandlesResourceExceptions;
-use App\Mcp\TopicForgeContext;
-use App\Mcp\TopicForgeUris;
 use App\Models\User;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -13,14 +13,14 @@ use Laravel\Mcp\Server\Attributes\MimeType;
 use Laravel\Mcp\Server\Attributes\Uri;
 use Laravel\Mcp\Server\Resource;
 
-#[Description('Show the authenticated Topic Forge MCP user and current team/workspace context.')]
-#[Uri(TopicForgeUris::Whoami)]
+#[Description('Show the authenticated Explicate MCP user and current team/workspace context.')]
+#[Uri(ExplicateUris::Whoami)]
 #[MimeType('application/json')]
 class WhoamiResource extends Resource
 {
     use HandlesResourceExceptions;
 
-    public function __construct(protected TopicForgeContext $context) {}
+    public function __construct(protected ExplicateContext $context) {}
 
     /**
      * Handle the resource request.
@@ -32,7 +32,7 @@ class WhoamiResource extends Resource
             $user = $this->context->requireUser($request->user());
 
             return Response::json([
-                'resource_uri' => TopicForgeUris::Whoami,
+                'resource_uri' => ExplicateUris::Whoami,
                 'authenticated' => true,
                 'user' => $user->only(['id', 'name', 'email']),
                 'team' => $user->currentTeam?->only(['id', 'name', 'slug']),
