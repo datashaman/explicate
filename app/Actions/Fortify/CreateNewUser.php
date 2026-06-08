@@ -2,6 +2,7 @@
 
 namespace App\Actions\Fortify;
 
+use App\Actions\Onboarding\SetupNewUser;
 use App\Actions\Teams\CreateTeam;
 use App\Concerns\PasswordValidationRules;
 use App\Concerns\ProfileValidationRules;
@@ -14,10 +15,10 @@ class CreateNewUser implements CreatesNewUsers
 {
     use PasswordValidationRules, ProfileValidationRules;
 
-    public function __construct(private CreateTeam $createTeam)
-    {
-        //
-    }
+    public function __construct(
+        private CreateTeam $createTeam,
+        private SetupNewUser $setupNewUser,
+    ) {}
 
     /**
      * Validate and create a newly registered user.
@@ -39,6 +40,8 @@ class CreateNewUser implements CreatesNewUsers
             ]);
 
             $this->createTeam->handle($user, $user->name."'s Team", isPersonal: true);
+
+            $this->setupNewUser->handle($user);
 
             return $user;
         });
