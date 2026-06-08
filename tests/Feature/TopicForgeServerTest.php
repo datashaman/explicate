@@ -40,6 +40,7 @@ use App\Mcp\Tools\UpdatePostTool;
 use App\Mcp\Tools\WhoAmITool;
 use App\Mcp\Tools\WriteFileTool;
 use App\Mcp\TopicForgeContext;
+use App\Mcp\TopicForgeTools;
 use App\Models\Agent;
 use App\Models\AgentTask;
 use App\Models\AgentVersion;
@@ -285,6 +286,17 @@ test('topic forge tools expose switch workspace instead of workspace slug parame
     ] as $toolName) {
         expect($tools[$toolName]['inputSchema']['properties'] ?? [])->not->toHaveKey('workspace_slug');
     }
+});
+
+test('agent tools exclude create-agent and update-agent', function () {
+    $agentTools = collect(TopicForgeTools::AgentTools)
+        ->map(fn (string $tool): string => app($tool)->name())
+        ->all();
+
+    expect($agentTools)->not->toContain('create-agent')
+        ->and($agentTools)->not->toContain('update-agent')
+        ->and($agentTools)->toContain('create-post')
+        ->and($agentTools)->toContain('list-agents');
 });
 
 test('workspace file tools let agents manage the current workspace filesystem', function () {

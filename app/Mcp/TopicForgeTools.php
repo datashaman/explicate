@@ -69,8 +69,6 @@ final class TopicForgeTools
         ListPostsTool::class,
         GetPostTool::class,
         CreateTopicTool::class,
-        CreateAgentTool::class,
-        UpdateAgentTool::class,
         CreatePostTool::class,
         UpdatePostTool::class,
         DeletePostTool::class,
