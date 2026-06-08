@@ -36,6 +36,7 @@ use App\Mcp\Tools\ListWorkspacesTool;
 use App\Mcp\Tools\RunGitCommandTool;
 use App\Mcp\Tools\SwitchWorkspaceTool;
 use App\Mcp\Tools\UpdateAgentTool;
+use App\Mcp\Tools\UpdatePostTool;
 use App\Mcp\Tools\WhoAmITool;
 use App\Mcp\Tools\WriteFileTool;
 use App\Mcp\TopicForgeContext;
@@ -273,6 +274,7 @@ test('topic forge tools expose switch workspace instead of workspace slug parame
         'create-agent',
         'update-agent',
         'create-post',
+        'update-post',
         'delete-post',
         'list-files',
         'get-file',
@@ -934,6 +936,73 @@ test('delete post denies posts sent by another user', function () {
 
     expect($post->fresh())->not->toBeNull()
         ->and($member->exists)->toBeTrue();
+});
+
+test('update post changes body and status of an own post', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->for($user->currentTeam)->create([
+        'slug' => 'strategy',
+    ]);
+    $user->switchWorkspace($workspace);
+
+    $topic = Topic::factory()->for($workspace)->create([
+        'slug' => 'alpha-topic',
+    ]);
+    $post = Post::factory()->for($topic)->create([
+        'body' => 'Original body.',
+        'status' => PostStatus::Draft,
+        'sender_principal_id' => $workspace->principalForUser($user)->id,
+    ]);
+
+    $response = TopicForgeServer::actingAs($user)->tool(UpdatePostTool::class, [
+        'topic_slug' => 'alpha-topic',
+        'post_ulid' => $post->ulid,
+        'body' => 'Updated body.',
+        'status' => PostStatus::Published->value,
+    ]);
+
+    $response
+        ->assertOk()
+        ->assertStructuredContent(fn ($json) => $json
+            ->where('workspace.slug', 'strategy')
+            ->where('topic.slug', 'alpha-topic')
+            ->where('post.ulid', $post->ulid)
+            ->where('post.body', 'Updated body.')
+            ->where('post.status', 'published')
+            ->etc()
+        );
+
+    expect($post->fresh()->body)->toBe('Updated body.')
+        ->and($post->fresh()->status)->toBe(PostStatus::Published);
+});
+
+test('update post denies editing a post sent by another user', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->for($user->currentTeam)->create([
+        'slug' => 'strategy',
+    ]);
+    $user->switchWorkspace($workspace);
+    [, $memberPrincipal] = teamMemberPrincipal($user, $workspace);
+
+    $topic = Topic::factory()->for($workspace)->create([
+        'slug' => 'alpha-topic',
+    ]);
+    $post = Post::factory()->for($topic)->create([
+        'body' => 'Someone else wrote this.',
+        'sender_principal_id' => $memberPrincipal->id,
+    ]);
+
+    $response = TopicForgeServer::actingAs($user)->tool(UpdatePostTool::class, [
+        'topic_slug' => 'alpha-topic',
+        'post_ulid' => $post->ulid,
+        'body' => 'Overwritten.',
+    ]);
+
+    $response->assertHasErrors([
+        'Only the original sender can edit this post.',
+    ]);
+
+    expect($post->fresh()->body)->toBe('Someone else wrote this.');
 });
 
 test('topic resource returns topic context by uri template', function () {

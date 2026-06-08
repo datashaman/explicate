@@ -22,6 +22,7 @@ use App\Mcp\Tools\ListWorkspacesTool;
 use App\Mcp\Tools\RunGitCommandTool;
 use App\Mcp\Tools\SwitchWorkspaceTool;
 use App\Mcp\Tools\UpdateAgentTool;
+use App\Mcp\Tools\UpdatePostTool;
 use App\Mcp\Tools\WhoAmITool;
 use App\Mcp\Tools\WriteFileTool;
 use Laravel\Mcp\Server\Tool;
@@ -45,6 +46,7 @@ final class TopicForgeTools
         CreateAgentTool::class,
         UpdateAgentTool::class,
         CreatePostTool::class,
+        UpdatePostTool::class,
         DeletePostTool::class,
         ListFilesTool::class,
         GetFileTool::class,
@@ -70,6 +72,7 @@ final class TopicForgeTools
         CreateAgentTool::class,
         UpdateAgentTool::class,
         CreatePostTool::class,
+        UpdatePostTool::class,
         DeletePostTool::class,
         ListFilesTool::class,
         GetFileTool::class,
