@@ -11,12 +11,14 @@ use App\Models\Post;
 use App\Models\Topic;
 use App\Models\User;
 use App\Models\Workspace;
+use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class DatabaseSeeder extends Seeder
 {
+    use WithoutModelEvents;
+
     /**
      * Seed the application's database.
      */
@@ -157,7 +159,7 @@ class DatabaseSeeder extends Seeder
     {
         $path = "attachments/seed/{$post->ulid}/{$filename}";
 
-        Storage::disk('public')->put($path, $contents);
+        $post->topic->workspace->filesystem()->write($path, $contents);
 
         return $post->attachments()->create([
             'filename' => $filename,
