@@ -1,6 +1,6 @@
 @php
     /** @var \App\Models\Post $post */
-    $canManageAttachments = $post->status === \App\Enums\PostStatus::Draft;
+    $canManageAttachments = isset($canManage) ? $canManage : $post->status === \App\Enums\PostStatus::Draft;
 @endphp
 
 @if ($post->attachments->isNotEmpty() || $canManageAttachments)

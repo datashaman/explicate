@@ -13,12 +13,14 @@ use App\Enums\ReasoningEffort;
 use App\Models\Agent;
 use App\Models\Post;
 use App\Models\Principal;
+use App\Models\Thread;
+use App\Models\Topic;
+use App\Models\Workspace;
 use App\Models\WorkspaceRepository;
 use App\Services\GitRepositoryService;
 use App\Services\WorkspaceFilesystemService;
-use App\Models\Thread;
-use App\Models\Topic;
 use Flux\Flux;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
@@ -27,9 +29,11 @@ use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Attributes\Url;
 use Livewire\Component;
+use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 use Livewire\WithFileUploads;
 
-new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component {
+new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
+{
     use WithFileUploads;
 
     #[Url(as: 'topic')]
@@ -52,8 +56,6 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
     #[Url(as: 'panel')]
     public string $mobilePanel = 'topics';
-
-    public bool $creatingPostFromRoute = false;
 
     public string $topicName = '';
 
@@ -83,6 +85,9 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
     public string $editingPostBody = '';
 
+    /** @var array<int, TemporaryUploadedFile> */
+    public array $editingPostUploads = [];
+
     public string $newPostBody = '';
 
     public string $quickPostBody = '';
@@ -111,27 +116,22 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
     public string $repositoryAccessToken = '';
 
-    /** @var array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile> */
+    /** @var array<int, TemporaryUploadedFile> */
     public array $newPostUploads = [];
 
-    /** @var array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile> */
+    /** @var array<int, TemporaryUploadedFile> */
     public array $postUploads = [];
 
-    /** @var array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile> */
+    /** @var array<int, TemporaryUploadedFile> */
     public array $quickPostUploads = [];
 
-    /** @var array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile> */
+    /** @var array<int, TemporaryUploadedFile> */
     public array $threadReplyUploads = [];
 
     public function mount(?string $folder = null): void
     {
         if (! $this->selectedSystemFolderSlug && $folder && PostFolder::tryFrom($folder)) {
             $this->selectedSystemFolderSlug = $folder;
-            $this->mobilePanel = 'posts';
-        }
-
-        if ($this->isCreateRoute()) {
-            $this->creatingPostFromRoute = true;
             $this->mobilePanel = 'posts';
         }
 
@@ -165,11 +165,9 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         ];
     }
 
-    public function refreshWorkspacePosts(): void
-    {
-    }
+    public function refreshWorkspacePosts(): void {}
 
-    public function workspace(): ?\App\Models\Workspace
+    public function workspace(): ?Workspace
     {
         return Auth::user()->currentWorkspace;
     }
@@ -253,11 +251,13 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
      */
     public function systemFolderRoute(PostFolder $folder, array $parameters = []): string
     {
-        return match ($folder) {
-            PostFolder::Feed => route('dashboard', $parameters),
-            PostFolder::Drafts => route('posts.drafts', $parameters),
-            PostFolder::Bin => route('posts.bin', $parameters),
+        $folderParam = match ($folder) {
+            PostFolder::Feed => [],
+            PostFolder::Drafts => ['folder' => 'drafts'],
+            PostFolder::Bin => ['folder' => 'bin'],
         };
+
+        return route('dashboard', array_merge($folderParam, $parameters));
     }
 
     public function selectedAgent(): ?Agent
@@ -311,7 +311,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
     public function isCreatingPost(): bool
     {
-        return $this->creatingPostFromRoute || $this->panelAction === 'new-post';
+        return $this->panelAction === 'new-post';
     }
 
     /** @return list<array{name: string, path: string, type: string, depth: int, href: string}> */
@@ -375,8 +375,8 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         return $count;
     }
 
-    /** @return \Illuminate\Database\Eloquent\Collection<int, WorkspaceRepository> */
-    public function repositories(): \Illuminate\Database\Eloquent\Collection
+    /** @return Collection<int, WorkspaceRepository> */
+    public function repositories(): Collection
     {
         $workspace = $this->workspace();
 
@@ -440,7 +440,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
         try {
             $service->validate();
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             $this->addError('repositoryUrl', __('Could not connect to repository: ').$e->getMessage());
 
             return;
@@ -486,7 +486,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
         try {
             $service->validate();
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             $this->addError('repositoryUrl', __('Could not connect to repository: ').$e->getMessage());
 
             return;
@@ -555,9 +555,9 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
     }
 
     /**
-     * @return \Illuminate\Database\Eloquent\Collection<int, Agent>
+     * @return Collection<int, Agent>
      */
-    public function agents(): \Illuminate\Database\Eloquent\Collection
+    public function agents(): Collection
     {
         $workspace = $this->workspace();
 
@@ -569,9 +569,9 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
     }
 
     /**
-     * @return \Illuminate\Database\Eloquent\Collection<int, Topic>
+     * @return Collection<int, Topic>
      */
-    public function topics(): \Illuminate\Database\Eloquent\Collection
+    public function topics(): Collection
     {
         $workspace = $this->workspace();
 
@@ -713,15 +713,15 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
     }
 
     /**
-     * @return \Illuminate\Database\Eloquent\Collection<int, Topic>
+     * @return Collection<int, Topic>
      */
     #[Computed]
-    public function availableTopics(): \Illuminate\Database\Eloquent\Collection
+    public function availableTopics(): Collection
     {
         $workspace = $this->workspace();
 
         if (! $workspace) {
-            return new \Illuminate\Database\Eloquent\Collection();
+            return new Collection;
         }
 
         return $workspace->topics()->get();
@@ -871,7 +871,6 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         $this->selectedPostUlid = $postUlid;
         $this->selectedAgentSlug = null;
         $this->panelAction = null;
-        $this->creatingPostFromRoute = false;
         $this->dispatch('thread-opened');
         $this->mobilePanel = 'posts';
         $this->syncSelectedPostFields();
@@ -1068,7 +1067,6 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         $this->selectedTopicSlug = $topic->slug;
         $this->selectedPostUlid = $post->ulid;
         $this->panelAction = null;
-        $this->creatingPostFromRoute = false;
         $this->mobilePanel = 'posts';
         $this->reset('newPostBody', 'newPostUploads');
         $this->newPostTopicId = $topic->id;
@@ -1092,8 +1090,8 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
     }
 
     /**
-     * @param  array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile>  $uploads
-     * @return array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile>
+     * @param  array<int, TemporaryUploadedFile>  $uploads
+     * @return array<int, TemporaryUploadedFile>
      */
     private function withoutUploadAt(array $uploads, int $index): array
     {
@@ -1356,7 +1354,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
 
     public function cancelEditingPost(): void
     {
-        $this->reset('editingPostId', 'editingPostBody');
+        $this->reset('editingPostId', 'editingPostBody', 'editingPostUploads');
     }
 
     public function saveEditingPost(): void
@@ -1364,8 +1362,9 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         abort_unless($this->editingPostId, 404);
 
         $post = $this->workspacePost($this->editingPostId);
+        $workspace = $this->workspace();
 
-        abort_unless($post, 404);
+        abort_unless($post && $workspace, 404);
         abort_unless($this->canModifyPost($post), 403);
 
         $validated = $this->validate([
@@ -1374,11 +1373,40 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
             'editingPostBody' => __('post'),
         ]);
 
-        $post->update(['body' => $validated['editingPostBody']]);
+        Validator::make(['editingPostUploads' => $this->editingPostUploads], [
+            'editingPostUploads.*' => ['file', 'max:51200'],
+        ], [], [
+            'editingPostUploads.*' => __('attachment'),
+        ])->validate();
+
+        app(UpdateDraftPost::class)->handle(
+            post: $post,
+            workspace: $workspace,
+            user: Auth::user(),
+            body: $validated['editingPostBody'],
+            uploads: $this->editingPostUploads,
+        );
 
         $this->cancelEditingPost();
 
         Flux::toast(variant: 'success', text: __('Post updated.'));
+    }
+
+    public function deleteEditingPostAttachment(int $attachmentId): void
+    {
+        abort_unless($this->editingPostId, 403);
+
+        $post = $this->workspacePost($this->editingPostId);
+
+        abort_unless($post, 404);
+        abort_unless($this->canModifyPost($post), 403);
+
+        app(DeletePostAttachment::class)->handle($post, $attachmentId);
+    }
+
+    public function removeEditingPostUpload(int $index): void
+    {
+        $this->editingPostUploads = $this->withoutUploadAt($this->editingPostUploads, $index);
     }
 
     public function deletePost(int $postId): void
@@ -1503,11 +1531,6 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
         }
 
         $this->syncNewPostTopic();
-    }
-
-    private function isCreateRoute(): bool
-    {
-        return request()->routeIs('posts.create');
     }
 
     private function syncSelectedAgentFields(): void
@@ -1862,9 +1885,6 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                                 'icon' => 'document-text',
                                 'iconClass' => 'size-12 text-neutral-400 group-hover:text-neutral-300',
                                 'emptyText' => __('No posts'),
-                                'createHref' => $selectedDashboardTopic ? route('posts.create', ['topic' => $selectedDashboardTopic->slug]) : route('posts.create'),
-                                'createLabel' => __('New post'),
-                                'createTest' => 'dashboard-new-post-button',
                                 'listColumns' => $this->selectedPostListColumns(),
                                 'listDefaultSort' => $selectedDashboardFolder?->dateKey() ?? PostListColumn::Sent->value,
                                 'listDefaultSortDirection' => 'desc',
@@ -1873,6 +1893,9 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                                 'editPostAction' => 'beginEditingPost',
                                 'saveEditingPostAction' => 'saveEditingPost',
                                 'cancelEditingPostAction' => 'cancelEditingPost',
+                                'deleteEditingPostAttachmentAction' => 'deleteEditingPostAttachment',
+                                'editingPostUploadsModel' => 'editingPostUploads',
+                                'editingPostUploadsError' => 'editingPostUploads.*',
                                 'deletePostAction' => 'deletePost',
                                 'restorePostAction' => 'restorePost',
                                 'permanentlyDeletePostAction' => 'permanentlyDeletePost',
@@ -1910,9 +1933,6 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                 >
                     <div class="flex items-center justify-between gap-3 border-b border-neutral-300 bg-emerald-50 px-4 py-3 dark:border-white/10 dark:bg-emerald-500/10">
                         <flux:heading size="sm">{{ __('Feed') }}</flux:heading>
-                        <flux:button :href="route('posts.create')" wire:navigate size="xs" icon="plus" data-test="dashboard-new-post-button">
-                            {{ __('New post') }}
-                        </flux:button>
                     </div>
 
                     <div class="flex flex-1 items-center justify-center px-6 py-10 text-center">
@@ -1966,6 +1986,14 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component 
                                 @if ($editingPostId === $threadPost->id)
                                     <form wire:submit="saveEditingPost" class="ml-13 space-y-3" data-test="post-inline-edit-form">
                                         <flux:textarea wire:model="editingPostBody" rows="6" required data-test="post-inline-edit-body" />
+
+                                        @include('partials.post-attachments', [
+                                            'post' => $threadPost,
+                                            'canManage' => true,
+                                            'deleteAction' => 'deleteEditingPostAttachment',
+                                            'uploadModel' => 'editingPostUploads',
+                                            'uploadError' => 'editingPostUploads.*',
+                                        ])
 
                                         <div class="flex justify-end gap-2">
                                             <flux:button type="button" variant="filled" size="sm" wire:click="cancelEditingPost">{{ __('Cancel') }}</flux:button>

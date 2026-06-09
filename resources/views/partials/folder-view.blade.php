@@ -82,13 +82,6 @@
                         data-test="folder-controls-toggle"
                     />
 
-                    @isset($createHref)
-                        <flux:button :href="$createHref" wire:navigate icon="plus" size="xs" data-test="{{ isset($createTest) ? $createTest.'-mobile' : 'folder-create-button-mobile' }}">{{ $createLabel }}</flux:button>
-                    @else
-                        <flux:modal.trigger :name="$createModal">
-                            <flux:button icon="plus" size="xs">{{ $createLabel }}</flux:button>
-                        </flux:modal.trigger>
-                    @endisset
                 </div>
 
                 <div class="hidden shrink-0 items-center gap-3 md:flex">
@@ -108,13 +101,6 @@
                     </div>
                     @endunless
 
-                    @isset($createHref)
-                        <flux:button :href="$createHref" wire:navigate icon="plus" size="xs" data-test="{{ isset($createTest) ? $createTest.'-desktop' : 'folder-create-button-desktop' }}">{{ $createLabel }}</flux:button>
-                    @else
-                        <flux:modal.trigger :name="$createModal">
-                            <flux:button icon="plus" size="xs">{{ $createLabel }}</flux:button>
-                        </flux:modal.trigger>
-                    @endisset
                 </div>
             </div>
 
@@ -225,13 +211,6 @@
                     @endisset
                 @endisset
 
-                @isset($createHref)
-                    <flux:button :href="$createHref" wire:navigate icon="plus" size="sm">{{ $createLabel }}</flux:button>
-                @else
-                    <flux:modal.trigger :name="$createModal">
-                        <flux:button icon="plus" size="sm">{{ $createLabel }}</flux:button>
-                    </flux:modal.trigger>
-                @endisset
             </div>
         @endif
     </div>
@@ -265,6 +244,14 @@
                             @if (($editingPostId ?? null) === $post->id)
                                 <form wire:submit="{{ $saveEditingPostAction }}" class="ml-13 space-y-3" data-test="post-inline-edit-form">
                                     <flux:textarea wire:model="{{ $editingPostBodyModel }}" rows="6" required data-test="post-inline-edit-body" />
+
+                                    @include('partials.post-attachments', [
+                                        'post' => $post,
+                                        'canManage' => true,
+                                        'deleteAction' => $deleteEditingPostAttachmentAction ?? null,
+                                        'uploadModel' => $editingPostUploadsModel ?? null,
+                                        'uploadError' => $editingPostUploadsError ?? null,
+                                    ])
 
                                     <div class="flex justify-end gap-2">
                                         <flux:button type="button" variant="filled" size="sm" wire:click="{{ $cancelEditingPostAction }}">{{ __('Cancel') }}</flux:button>
