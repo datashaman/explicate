@@ -10,6 +10,7 @@
             <flux:navlist.item :href="route('security.edit')" icon="lock-closed" wire:navigate>{{ __('Security') }}</flux:navlist.item>
             <flux:navlist.item :href="route('teams.index')" :current="request()->routeIs('teams.*')" icon="users" wire:navigate>{{ __('Teams') }}</flux:navlist.item>
             <flux:navlist.item :href="route('appearance.edit')" icon="swatch" wire:navigate>{{ __('Appearance') }}</flux:navlist.item>
+            <flux:navlist.item :href="route('workspace.edit')" icon="building-office" wire:navigate>{{ __('Workspace') }}</flux:navlist.item>
         </flux:navlist>
     </aside>
 

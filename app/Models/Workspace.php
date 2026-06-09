@@ -72,6 +72,14 @@ class Workspace extends Model
         return $this->hasMany(Principal::class);
     }
 
+    /**
+     * @return HasMany<ProviderKey, $this>
+     */
+    public function providerKeys(): HasMany
+    {
+        return $this->hasMany(ProviderKey::class);
+    }
+
     public function principalForUser(User $user): Principal
     {
         return $this->principals()->firstOrCreate([

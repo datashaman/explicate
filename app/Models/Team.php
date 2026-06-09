@@ -92,6 +92,14 @@ class Team extends Model
     }
 
     /**
+     * @return HasMany<ProviderKey, $this>
+     */
+    public function providerKeys(): HasMany
+    {
+        return $this->hasMany(ProviderKey::class);
+    }
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>

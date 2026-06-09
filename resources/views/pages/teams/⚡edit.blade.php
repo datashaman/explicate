@@ -1,7 +1,9 @@
 <?php
 
 use App\Data\TeamPermissions;
+use App\Enums\Provider;
 use App\Enums\TeamRole;
+use App\Models\ProviderKey;
 use App\Models\Team;
 use App\Rules\TeamName;
 use Flux\Flux;
@@ -29,6 +31,12 @@ new #[Layout('layouts::workspace')] class extends Component
     public array $availableRoles = [];
 
     public bool $isCurrentTeam = false;
+
+    public array $teamProviderKeys = [];
+
+    public string $newTeamKeyProvider = '';
+
+    public string $newTeamKeyValue = '';
 
     public function mount(Team $team): void
     {
@@ -61,6 +69,45 @@ new #[Layout('layouts::workspace')] class extends Component
         Flux::toast(variant: 'success', text: __('Team updated.'));
 
         $this->redirectRoute('teams.edit', ['team' => $this->teamModel->fresh()->slug], navigate: true);
+    }
+
+    public function saveTeamApiKey(): void
+    {
+        Gate::authorize('update', $this->teamModel);
+
+        $this->validate([
+            'newTeamKeyProvider' => ['required', Rule::enum(Provider::class)],
+            'newTeamKeyValue' => ['required', 'string', 'min:10'],
+        ], [], [
+            'newTeamKeyProvider' => __('provider'),
+            'newTeamKeyValue' => __('API key'),
+        ]);
+
+        ProviderKey::updateOrCreate(
+            ['team_id' => $this->teamModel->id, 'provider' => $this->newTeamKeyProvider],
+            ['api_key' => $this->newTeamKeyValue],
+        );
+
+        $this->reset('newTeamKeyProvider', 'newTeamKeyValue');
+        $this->populateTeamData();
+
+        Flux::toast(variant: 'success', text: __('API key saved.'));
+    }
+
+    public function deleteTeamApiKey(int $id): void
+    {
+        Gate::authorize('update', $this->teamModel);
+
+        ProviderKey::query()
+            ->where('id', $id)
+            ->where('team_id', $this->teamModel->id)
+            ->whereNull('workspace_id')
+            ->firstOrFail()
+            ->delete();
+
+        $this->populateTeamData();
+
+        Flux::toast(variant: 'success', text: __('API key removed.'));
     }
 
     public function updateMember(int $userId, string $role): void
@@ -117,6 +164,15 @@ new #[Layout('layouts::workspace')] class extends Component
         $this->availableRoles = TeamRole::assignable();
 
         $this->isCurrentTeam = $user->isCurrentTeam($team);
+
+        $this->teamProviderKeys = $team->providerKeys()
+            ->whereNull('workspace_id')
+            ->get()
+            ->map(fn ($key) => [
+                'id' => $key->id,
+                'provider' => $key->provider->value,
+                'provider_label' => $key->provider->label(),
+            ])->toArray();
     }
 
     public function render()
@@ -286,6 +342,57 @@ new #[Layout('layouts::workspace')] class extends Component
                     </div>
                 </div>
             @endif
+
+            <div class="space-y-6">
+                <div>
+                    <flux:heading>{{ __('API keys') }}</flux:heading>
+                    <flux:subheading>{{ __('Provider keys used by agents in this team\'s workspaces') }}</flux:subheading>
+                </div>
+
+                @if (count($teamProviderKeys) > 0)
+                    <div class="divide-y divide-zinc-200 rounded-lg border border-zinc-200 bg-white dark:divide-zinc-700 dark:border-zinc-700 dark:bg-zinc-900">
+                        @foreach ($teamProviderKeys as $key)
+                            <div class="flex items-center justify-between px-4 py-3" data-test="team-api-key-row">
+                                <div class="flex items-center gap-3">
+                                    <flux:icon name="key" class="size-4 text-zinc-400" />
+                                    <div>
+                                        <div class="text-sm font-medium">{{ $key['provider_label'] }}</div>
+                                        <flux:text class="text-xs text-zinc-400">{{ __('••••••••••••••••') }}</flux:text>
+                                    </div>
+                                </div>
+                                @if ($this->permissions->canUpdateTeam)
+                                    <flux:button
+                                        wire:click="deleteTeamApiKey({{ $key['id'] }})"
+                                        wire:confirm="{{ __('Remove this API key?') }}"
+                                        variant="ghost"
+                                        size="sm"
+                                        icon="trash"
+                                        class="text-zinc-400 hover:text-red-500"
+                                        data-test="team-api-key-delete"
+                                    />
+                                @endif
+                            </div>
+                        @endforeach
+                    </div>
+                @endif
+
+                @if ($this->permissions->canUpdateTeam)
+                    <form wire:submit="saveTeamApiKey" class="flex items-end gap-3" data-test="team-api-key-form">
+                        <flux:select wire:model="newTeamKeyProvider" :label="__('Provider')" class="w-40" data-test="team-api-key-provider">
+                            <flux:select.option value="">{{ __('Select…') }}</flux:select.option>
+                            @foreach (Provider::cases() as $provider)
+                                <flux:select.option value="{{ $provider->value }}">{{ $provider->label() }}</flux:select.option>
+                            @endforeach
+                        </flux:select>
+
+                        <flux:input wire:model="newTeamKeyValue" :label="__('API key')" type="password" class="flex-1" placeholder="sk-..." data-test="team-api-key-value" />
+
+                        <flux:button type="submit" variant="primary" data-test="team-api-key-save">
+                            {{ __('Save key') }}
+                        </flux:button>
+                    </form>
+                @endif
+            </div>
 
             @if ($this->permissions->canDeleteTeam && ! $teamData['is_personal'])
                 <div class="space-y-6">
