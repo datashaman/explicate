@@ -1557,16 +1557,46 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
             $hasThreadPanel = (bool) $selectedDashboardPost;
         @endphp
 
-        <div @class([
-            'grid h-full min-h-0 min-w-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)] items-stretch gap-2 overflow-hidden xl:auto-rows-fr',
-            'xl:grid-cols-[16rem_minmax(0,0.9fr)_minmax(24rem,1.1fr)]' => $hasThreadPanel,
-            'xl:grid-cols-[16rem_minmax(0,1fr)]' => ! $hasThreadPanel,
-        ])>
+        <div
+            x-data="{
+                sidebar: +(localStorage.getItem('explicate:panels:dashboard:sidebar') ?? 256),
+                thread: +(localStorage.getItem('explicate:panels:dashboard:thread') ?? 400),
+                dragging: null,
+                startX: 0,
+                startWidth: 0,
+                startDrag(panel, e) {
+                    this.dragging = panel;
+                    this.startX = e.clientX;
+                    this.startWidth = this[panel];
+                },
+                onDrag(e) {
+                    if (!this.dragging) return;
+                    const delta = this.dragging === 'thread' ? this.startX - e.clientX : e.clientX - this.startX;
+                    this[this.dragging] = Math.max(160, Math.min(520, this.startWidth + delta));
+                },
+                stopDrag() {
+                    if (!this.dragging) return;
+                    localStorage.setItem('explicate:panels:dashboard:' + this.dragging, this[this.dragging]);
+                    this.dragging = null;
+                },
+                get sidebarStyle() {
+                    return window.matchMedia('(min-width: 1280px)').matches ? { width: this.sidebar + 'px' } : {};
+                },
+                get threadStyle() {
+                    return window.matchMedia('(min-width: 1280px)').matches ? { width: this.thread + 'px' } : {};
+                },
+            }"
+            @mousemove.window="onDrag($event)"
+            @mouseup.window="stopDrag()"
+            :class="dragging ? 'cursor-col-resize select-none' : ''"
+            class="flex h-full min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden xl:flex-row xl:gap-0"
+        >
             <div
                 id="topics-panel"
                 data-mobile-panel="topics"
+                :style="sidebarStyle"
                 @class([
-                    'scroll-mt-4 flex h-full min-h-0 min-w-0 flex-col gap-2 overflow-hidden',
+                    'scroll-mt-4 flex h-full min-h-0 min-w-0 shrink-0 flex-col gap-2 overflow-hidden',
                     'hidden xl:flex' => $this->mobilePanel !== 'topics',
                 ])
             >
@@ -1704,12 +1734,17 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
                 </section>
             </div>
 
+            <div @mousedown.prevent="startDrag('sidebar', $event)"
+                 class="hidden xl:flex w-2 shrink-0 cursor-col-resize items-stretch justify-center group">
+                <div class="w-px bg-neutral-200 group-hover:bg-blue-400 transition-colors dark:bg-white/10 dark:group-hover:bg-blue-500"></div>
+            </div>
+
             @if ($this->selectedAgent() || $this->selectedTopic() || $this->selectedSystemFolder() || $this->isCreatingPost() || $this->isFilesPanel() || $this->isReposPanel())
                 <section
                     id="posts-panel"
                     data-mobile-panel="posts"
                     @class([
-                        'scroll-mt-4 flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none',
+                        'scroll-mt-4 flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none',
                         'hidden xl:flex' => $this->mobilePanel !== 'posts',
                     ])
                 >
@@ -1927,7 +1962,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
                     id="posts-panel"
                     data-mobile-panel="posts"
                     @class([
-                        'scroll-mt-4 flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none',
+                        'scroll-mt-4 flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none',
                         'hidden xl:flex' => $this->mobilePanel !== 'posts',
                     ])
                 >
@@ -1947,10 +1982,16 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
             @endif
 
             @if ($selectedDashboardPost)
+                <div @mousedown.prevent="startDrag('thread', $event)"
+                     class="hidden xl:flex w-2 shrink-0 cursor-col-resize items-stretch justify-center group">
+                    <div class="w-px bg-neutral-200 group-hover:bg-blue-400 transition-colors dark:bg-white/10 dark:group-hover:bg-blue-500"></div>
+                </div>
+
                 <section
                     id="thread-panel"
                     data-mobile-panel="posts"
-                    class="scroll-mt-4 flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none"
+                    :style="threadStyle"
+                    class="scroll-mt-4 flex h-full min-h-0 min-w-0 shrink-0 flex-col overflow-hidden rounded-lg border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none"
                 >
                     <div class="flex items-center justify-between gap-3 border-b border-neutral-300 bg-emerald-50 px-4 py-3 dark:border-white/10 dark:bg-emerald-500/10">
                         <flux:heading size="sm" class="min-w-0 flex-1 truncate">{{ __('Thread') }}</flux:heading>

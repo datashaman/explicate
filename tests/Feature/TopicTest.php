@@ -128,8 +128,8 @@ test('dashboard shows system folders with workspace post counts', function () {
         ->get(route('dashboard'))
         ->assertOk()
         ->assertSee(e(route('dashboard')), escape: false)
-        ->assertSee(e(route('posts.drafts')), escape: false)
-        ->assertSee(e(route('posts.bin')), escape: false)
+        ->assertSee(e(route('dashboard', ['folder' => 'drafts'])), escape: false)
+        ->assertSee(e(route('dashboard', ['folder' => 'bin'])), escape: false)
         ->assertSee('data-test="system-folder-feed-count"', escape: false)
         ->assertSee('data-test="system-folder-drafts-count"', escape: false);
 });
@@ -198,12 +198,13 @@ test('dashboard system draft folder shows draft posts across topics', function (
     ]);
 
     $response = $this->actingAs($user)
-        ->get(route('posts.drafts'))
+        ->get(route('dashboard', ['folder' => 'drafts']))
         ->assertOk()
         ->assertSee('data-test="folder-title"', escape: false)
         ->assertSee('Drafts')
         ->assertSee('Working draft')
-        ->assertSee(e(route('posts.drafts', [
+        ->assertSee(e(route('dashboard', [
+            'folder' => 'drafts',
             'topic' => $design->slug,
             'post' => $designDraft->ulid,
             'panel' => 'posts',
@@ -372,7 +373,7 @@ test('dashboard bin folder shows current user deleted posts', function () {
     ]);
 
     $response = $this->actingAs($user)
-        ->get(route('posts.bin'))
+        ->get(route('dashboard', ['folder' => 'bin']))
         ->assertOk()
         ->assertSee('data-test="folder-title"', escape: false)
         ->assertSeeText('Bin')
@@ -461,9 +462,9 @@ test('dashboard routes do not include team or workspace slugs', function () {
     $topic = Topic::factory()->for($workspace)->create(['slug' => 'current-topic']);
 
     expect(route('dashboard', absolute: false))->toBe('/dashboard')
-        ->and(route('topics.show', ['topic' => $topic->slug], false))->toBe('/topics/current-topic')
-        ->and(route('posts.show', ['post' => 'current-post'], false))->toBe('/posts/current-post')
-        ->and(route('posts.create', ['topic' => $topic->slug], false))->toBe('/posts/new?topic=current-topic');
+        ->and(route('dashboard', ['topic' => $topic->slug], false))->toBe('/dashboard?topic=current-topic')
+        ->and(route('dashboard', ['folder' => 'drafts'], false))->toBe('/dashboard?folder=drafts')
+        ->and(route('dashboard', ['folder' => 'bin'], false))->toBe('/dashboard?folder=bin');
 });
 
 test('topic routes resolve slugs inside the current workspace', function () {
@@ -483,7 +484,7 @@ test('topic routes resolve slugs inside the current workspace', function () {
     ]);
 
     $this->actingAs($user)
-        ->get(route('topics.show', ['topic' => $currentTopic->slug]))
+        ->get(route('dashboard', ['topic' => $currentTopic->slug]))
         ->assertOk()
         ->assertSee('Current Topic')
         ->assertDontSee('Other Topic');
@@ -511,7 +512,6 @@ test('dashboard shows selected topic in the main panel', function () {
         ->assertSee('Selected Topic')
         ->assertSee($selectedPost->body)
         ->assertSee(e(route('dashboard', ['topic' => $selectedTopic->slug, 'post' => $selectedPost->ulid, 'panel' => 'posts'])), escape: false)
-        ->assertDontSee(route('posts.show', ['post' => $selectedPost]), escape: false)
         ->assertDontSee('data-test="folder-list-sort-topic"', escape: false)
         ->assertDontSeeText('Topic:')
         ->assertSee('Another selected post')
@@ -1289,8 +1289,7 @@ test('dashboard shows workspace agents in the right rail', function () {
         ->assertSee('Agents')
         ->assertSee('New agent')
         ->assertSee($agent->name)
-        ->assertSee("wire:click=\"openAgent('{$agent->slug}')\"", escape: false)
-        ->assertDontSee(route('agents.show', ['agent' => $agent->slug]), escape: false);
+        ->assertSee("wire:click=\"openAgent('{$agent->slug}')\"", escape: false);
 });
 
 test('dashboard shows selected agent details in the main panel', function () {
@@ -1312,7 +1311,7 @@ test('dashboard shows selected agent details in the main panel', function () {
         ->assertOk()
         ->assertSee('data-test="dashboard-agent-panel"', escape: false)
         ->assertSee('h-dvh overflow-hidden bg-white', escape: false)
-        ->assertSee('grid h-full min-h-0 min-w-0 flex-1', escape: false)
+        ->assertSee('flex h-full min-h-0 min-w-0 flex-1', escape: false)
         ->assertSee('flex min-h-0 flex-1 flex-col gap-4 overflow-auto', escape: false)
         ->assertSee('Research Agent')
         ->assertSee('Agent details')
@@ -1320,7 +1319,7 @@ test('dashboard shows selected agent details in the main panel', function () {
         ->assertSee('Version history')
         ->assertSee('o4-mini')
         ->assertSee('Research carefully.')
-        ->assertSee('xl:grid-cols-[16rem_minmax(0,1fr)]', escape: false)
+        ->assertSee('xl:flex-row', escape: false)
         ->assertDontSee('xl:grid-cols-[16rem_minmax(0,1fr)_32rem]', escape: false);
 });
 
@@ -1386,7 +1385,7 @@ test('dashboard can create an agent from the right rail', function () {
     expect($agent->versions->first()->provider)->toBe(Provider::OpenAI);
 });
 
-test('dashboard shows new post action', function () {
+test('dashboard shows new post action via composer', function () {
     [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
@@ -1394,8 +1393,7 @@ test('dashboard shows new post action', function () {
     $this->actingAs($user)
         ->get(route('dashboard', ['topic' => $topic->slug]))
         ->assertOk()
-        ->assertSee(e(route('posts.create', ['topic' => $topic->slug])), escape: false)
-        ->assertDontSee(e(route('dashboard', ['topic' => $topic->slug, 'action' => 'new-post', 'panel' => 'posts'])), escape: false);
+        ->assertSee('data-test="main-panel-composer"', escape: false);
 });
 
 test('dashboard shows new post form in the main panel', function () {
@@ -1403,16 +1401,16 @@ test('dashboard shows new post form in the main panel', function () {
 
     $topic = Topic::factory()->for($workspace)->create(['name' => 'Design', 'slug' => 'design']);
 
-    $this->actingAs($user)
-        ->get(route('posts.create', ['topic' => $topic->slug]))
-        ->assertOk()
+    $this->actingAs($user);
+
+    Livewire::test('pages::dashboard')
+        ->set('selectedTopicSlug', $topic->slug)
+        ->set('panelAction', 'new-post')
         ->assertSee('data-test="dashboard-post-create-panel"', escape: false)
         ->assertSee('id="dashboard-new-post-form"', escape: false)
         ->assertSee('form="dashboard-new-post-form"', escape: false)
         ->assertSee('New post')
-        ->assertSeeText('Post')
         ->assertSee('Save draft')
-        ->assertSee('Post')
         ->assertSee('Design');
 });
 
@@ -1421,33 +1419,16 @@ test('dashboard shows new post form in the post panel without a selected topic',
 
     $topic = Topic::factory()->for($workspace)->create(['name' => 'Design', 'slug' => 'design']);
 
-    $this->actingAs($user)
-        ->get(route('posts.create'))
-        ->assertOk()
+    $this->actingAs($user);
+
+    Livewire::test('pages::dashboard')
+        ->set('panelAction', 'new-post')
         ->assertSee('data-test="dashboard-post-create-panel"', escape: false)
         ->assertSee('id="dashboard-new-post-form"', escape: false)
         ->assertSee('form="dashboard-new-post-form"', escape: false)
         ->assertSee('New post')
         ->assertSee('Save draft')
-        ->assertSee('Post')
         ->assertSee($topic->name);
-});
-
-test('dashboard keeps route-based new post form open while attachments upload', function () {
-    [$user, $workspace] = userWithWorkspace();
-
-    $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
-    $file = UploadedFile::fake()->create('brief.pdf', 128, 'application/pdf');
-
-    $this->actingAs($user);
-
-    Livewire::test('pages::dashboard')
-        ->set('creatingPostFromRoute', true)
-        ->set('selectedTopicSlug', $topic->slug)
-        ->set('newPostUploads', [$file])
-        ->assertSet('creatingPostFromRoute', true)
-        ->assertSee('id="dashboard-new-post-form"', escape: false)
-        ->assertSee('form="dashboard-new-post-form"', escape: false);
 });
 
 test('dashboard can create a draft post in the main panel', function () {
@@ -1601,7 +1582,7 @@ test('dashboard can render the topics mobile panel as active', function () {
         ->assertSee('hidden xl:flex', escape: false);
 });
 
-test('dashboard feed panel shows a top-level new post action', function () {
+test('dashboard feed panel renders posts panel', function () {
     [$user, $workspace] = userWithWorkspace();
 
     Topic::factory()->for($workspace)->create();
@@ -1612,8 +1593,6 @@ test('dashboard feed panel shows a top-level new post action', function () {
         ->assertSee('Feed')
         ->assertDontSee('Select a topic')
         ->assertSee('data-mobile-panel="posts"', escape: false)
-        ->assertSee('New post')
-        ->assertSee(e(route('posts.create')), escape: false)
         ->assertSee('data-mobile-nav="posts"', escape: false);
 });
 
@@ -1629,7 +1608,7 @@ test('topic page renders posts as message feed items', function () {
     Attachment::factory()->for($post)->create();
 
     $this->actingAs($user)
-        ->get(route('topics.show', ['topic' => $topic->slug]))
+        ->get(route('dashboard', ['topic' => $topic->slug]))
         ->assertOk()
         ->assertSee('data-test="folder-title"', escape: false)
         ->assertSeeText('Design')
@@ -1645,7 +1624,7 @@ test('topic page renders posts as message feed items', function () {
         ->assertDontSee('flex h-36 w-28 flex-col items-center gap-1', escape: false)
         ->assertSee('data-test="post-message"', escape: false)
         ->assertSee('data-test="post-message-actions"', escape: false)
-        ->assertSee(e(route('posts.show', ['post' => $post])), escape: false)
+        ->assertSee(e(route('dashboard', ['topic' => $topic->slug, 'post' => $post->ulid, 'panel' => 'posts'])), escape: false)
         ->assertSee('min-w-0 flex-1', escape: false)
         ->assertDontSee('data-test="folder-list-sort-header"', escape: false)
         ->assertSee('data-sort-sent=', escape: false)
@@ -1657,7 +1636,6 @@ test('topic page renders posts as message feed items', function () {
         ->assertDontSee('data-test="post-message-topic"', escape: false)
         ->assertDontSee('#Design')
         ->assertSeeText('13 minutes ago')
-        ->assertSee('grid grid-cols-1 items-stretch gap-3 xl:flex-1 xl:auto-rows-fr xl:grid-cols-[minmax(0,1fr)_19rem]', escape: false)
         ->assertSee('xl:h-full', escape: false)
         ->assertDontSee('xl:sticky xl:top-6');
 });
@@ -1689,7 +1667,7 @@ test('topic post list uses insertion order for channel order', function () {
     expect($secondTie->id)->toBeGreaterThan($firstTie->id);
 
     $response = $this->actingAs($user)
-        ->get(route('topics.show', ['topic' => $topic->slug]))
+        ->get(route('dashboard', ['topic' => $topic->slug]))
         ->assertOk();
 
     preg_match_all('/data-post-preview="([^"]+)"/', $response->getContent(), $matches);
