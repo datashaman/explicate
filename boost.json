@@ -16,6 +16,7 @@
         "laravel-best-practices",
         "configuring-horizon",
         "passport-development",
+        "socialite-development",
         "fluxui-development",
         "livewire-development",
         "pest-testing",
