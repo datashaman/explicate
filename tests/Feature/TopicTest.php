@@ -1618,7 +1618,7 @@ test('topic post list uses insertion order for channel order', function () {
     [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create();
-    Post::factory()->for(Thread::factory()->forTopic($topic))->create([
+    $olderPost = Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'body' => 'Older post',
         'status' => PostStatus::Published,
     ]);
@@ -1633,12 +1633,22 @@ test('topic post list uses insertion order for channel order', function () {
         'status' => PostStatus::Published,
     ]);
 
-    Post::factory()->for(Thread::factory()->forTopic($topic))->create([
+    $newestPost = Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'body' => 'Newest post',
         'status' => PostStatus::Published,
     ]);
 
     expect($secondTie->id)->toBeGreaterThan($firstTie->id);
+
+    $tiedAt = now();
+    Thread::query()
+        ->whereKey([
+            $olderPost->thread_id,
+            $firstTie->thread_id,
+            $secondTie->thread_id,
+            $newestPost->thread_id,
+        ])
+        ->update(['updated_at' => $tiedAt]);
 
     $response = $this->actingAs($user)
         ->get(route('dashboard', ['topic' => $topic->slug]))

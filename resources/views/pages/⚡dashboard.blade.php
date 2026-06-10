@@ -466,7 +466,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
             'repositoryName' => ['required', 'string', 'max:255'],
             'repositoryUrl' => ['required', 'string', 'max:2048'],
             'repositoryBranch' => ['required', 'string', 'max:255'],
-            'repositoryAuthType' => ['required', 'in:ssh,token'],
+            'repositoryAuthType' => [Rule::requiredIf(fn (): bool => ! $this->canUseConnectedGitHubToken()), 'in:ssh,token'],
             'repositorySshPrivateKey' => ['required_if:repositoryAuthType,ssh', 'nullable', 'string'],
             'repositoryAccessToken' => [Rule::requiredIf(fn (): bool => $this->repositoryAuthType === 'token' && ! $this->canUseConnectedGitHubToken()), 'nullable', 'string'],
         ]);
@@ -484,10 +484,13 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
         $repo->branch = $this->repositoryBranch;
         $repo->auth_type = $this->repositoryAuthType;
 
-        if ($this->repositoryAuthType === 'ssh') {
+        if ($this->canUseConnectedGitHubToken()) {
+            $repo->auth_type = 'token';
+            $repo->access_token = Auth::user()->github_token;
+        } elseif ($this->repositoryAuthType === 'ssh') {
             $repo->ssh_private_key = $this->repositorySshPrivateKey;
         } else {
-            $repo->access_token = $this->repositoryAccessToken ?: Auth::user()?->github_token;
+            $repo->access_token = $this->repositoryAccessToken;
         }
 
         $service = new GitRepositoryService($repo);
@@ -513,7 +516,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
             'repositoryName' => ['required', 'string', 'max:255'],
             'repositoryUrl' => ['required', 'string', 'max:2048'],
             'repositoryBranch' => ['required', 'string', 'max:255'],
-            'repositoryAuthType' => ['required', 'in:ssh,token'],
+            'repositoryAuthType' => [Rule::requiredIf(fn (): bool => ! $this->canUseConnectedGitHubToken()), 'in:ssh,token'],
             'repositorySshPrivateKey' => ['nullable', 'string'],
             'repositoryAccessToken' => [Rule::requiredIf(fn (): bool => $this->repositoryAuthType === 'token' && ! $this->canUseConnectedGitHubToken() && ! $this->editingRepositoryId), 'nullable', 'string'],
         ]);
@@ -527,17 +530,17 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
         $repo->name = $this->repositoryName;
         $repo->url = $this->repositoryUrl;
         $repo->branch = $this->repositoryBranch;
-        $repo->auth_type = $this->repositoryAuthType;
+        $repo->auth_type = $this->canUseConnectedGitHubToken() ? 'token' : $this->repositoryAuthType;
 
-        if ($this->repositoryAuthType === 'ssh' && $this->repositorySshPrivateKey) {
+        if (! $this->canUseConnectedGitHubToken() && $this->repositoryAuthType === 'ssh' && $this->repositorySshPrivateKey) {
             $repo->ssh_private_key = $this->repositorySshPrivateKey;
         }
 
-        if ($this->repositoryAuthType === 'token') {
+        if ($this->canUseConnectedGitHubToken()) {
+            $repo->access_token = Auth::user()->github_token;
+        } elseif ($this->repositoryAuthType === 'token') {
             if ($this->repositoryAccessToken) {
                 $repo->access_token = $this->repositoryAccessToken;
-            } elseif ($this->canUseConnectedGitHubToken()) {
-                $repo->access_token = Auth::user()->github_token;
             }
         }
 
@@ -727,6 +730,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
             ->withCount('posts')
             ->reorder()
             ->orderByDesc('updated_at')
+            ->orderBy('id')
             ->get()
             ->map(function (Thread $thread) use ($topic): array {
                 $post = $thread->firstPost;
@@ -2404,15 +2408,21 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
                 <flux:input wire:model="repositoryUrl" :label="__('URL')" type="text" required placeholder="git@github.com:org/repo.git" />
                 <flux:input wire:model="repositoryBranch" :label="__('Branch')" type="text" required />
 
-                <flux:select wire:model.live="repositoryAuthType" :label="__('Auth type')">
-                    <flux:select.option value="ssh">{{ __('SSH key') }}</flux:select.option>
-                    <flux:select.option value="token">{{ __('Access token') }}</flux:select.option>
-                </flux:select>
-
-                @if ($repositoryAuthType === 'ssh')
-                    <flux:textarea wire:model="repositorySshPrivateKey" :label="__('SSH private key')" rows="6" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----" required />
+                @if ($this->canUseConnectedGitHubToken())
+                    <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-500/10 dark:text-emerald-200" data-test="repository-github-account-auth">
+                        {{ __('Using your connected GitHub account for repository access.') }}
+                    </div>
                 @else
-                    <flux:input wire:model="repositoryAccessToken" :label="__('Access token')" type="password" required />
+                    <flux:select wire:model.live="repositoryAuthType" :label="__('Auth type')">
+                        <flux:select.option value="ssh">{{ __('SSH key') }}</flux:select.option>
+                        <flux:select.option value="token">{{ __('Access token') }}</flux:select.option>
+                    </flux:select>
+
+                    @if ($repositoryAuthType === 'ssh')
+                        <flux:textarea wire:model="repositorySshPrivateKey" :label="__('SSH private key')" rows="6" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----" required />
+                    @else
+                        <flux:input wire:model="repositoryAccessToken" :label="__('Access token')" type="password" required />
+                    @endif
                 @endif
 
                 <div class="flex justify-end gap-2">
@@ -2465,15 +2475,21 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
                 <flux:input wire:model="repositoryUrl" :label="__('URL')" type="text" required />
                 <flux:input wire:model="repositoryBranch" :label="__('Branch')" type="text" required />
 
-                <flux:select wire:model.live="repositoryAuthType" :label="__('Auth type')">
-                    <flux:select.option value="ssh">{{ __('SSH key') }}</flux:select.option>
-                    <flux:select.option value="token">{{ __('Access token') }}</flux:select.option>
-                </flux:select>
-
-                @if ($repositoryAuthType === 'ssh')
-                    <flux:textarea wire:model="repositorySshPrivateKey" :label="__('SSH private key (leave blank to keep existing)')" rows="6" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----" />
+                @if ($this->canUseConnectedGitHubToken())
+                    <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-500/10 dark:text-emerald-200" data-test="repository-github-account-auth">
+                        {{ __('Using your connected GitHub account for repository access.') }}
+                    </div>
                 @else
-                    <flux:input wire:model="repositoryAccessToken" :label="__('Access token (leave blank to keep existing)')" type="password" />
+                    <flux:select wire:model.live="repositoryAuthType" :label="__('Auth type')">
+                        <flux:select.option value="ssh">{{ __('SSH key') }}</flux:select.option>
+                        <flux:select.option value="token">{{ __('Access token') }}</flux:select.option>
+                    </flux:select>
+
+                    @if ($repositoryAuthType === 'ssh')
+                        <flux:textarea wire:model="repositorySshPrivateKey" :label="__('SSH private key (leave blank to keep existing)')" rows="6" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----" />
+                    @else
+                        <flux:input wire:model="repositoryAccessToken" :label="__('Access token (leave blank to keep existing)')" type="password" />
+                    @endif
                 @endif
 
                 <div class="flex justify-between gap-2">
