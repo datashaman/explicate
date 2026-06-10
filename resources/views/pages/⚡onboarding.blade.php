@@ -12,7 +12,7 @@ use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 
-new #[Layout('layouts::auth'), Title('Setup')] class extends Component
+new #[Layout('layouts::auth.wide'), Title('Setup')] class extends Component
 {
     public int $step = 1;
 
