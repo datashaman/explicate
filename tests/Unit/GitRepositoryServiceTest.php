@@ -40,6 +40,16 @@ function makeUnsavedRepo(string $url): WorkspaceRepository
     return $repo;
 }
 
+function makeUnsavedTokenRepo(string $url, string $token = 'gho-secret-token'): WorkspaceRepository
+{
+    $repo = makeUnsavedRepo($url);
+    $repo->auth_type = 'token';
+    $repo->ssh_private_key = null;
+    $repo->access_token = $token;
+
+    return $repo;
+}
+
 afterEach(function () {
     $reposDir = storage_path('app/workspace-repos');
     if (is_dir($reposDir)) {
@@ -113,6 +123,21 @@ test('run executes a command in the repo directory and returns output', function
 
     expect($result['exit_code'])->toBe(0);
     expect($result['stdout'])->toContain('init');
+
+    exec("rm -rf {$bare}");
+});
+
+test('token auth is exposed to git as a basic auth header', function () {
+    $bare = makeBareRepo();
+    $repo = makeUnsavedTokenRepo($bare, 'gho-secret-token');
+
+    $service = new GitRepositoryService($repo);
+    $service->sync();
+
+    $result = $service->run(['git', 'config', '--get', 'http.extraHeader']);
+
+    expect($result['exit_code'])->toBe(0);
+    expect(trim($result['stdout']))->toBe('Authorization: Basic '.base64_encode('x-access-token:gho-secret-token'));
 
     exec("rm -rf {$bare}");
 });
