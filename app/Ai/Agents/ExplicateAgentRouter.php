@@ -52,7 +52,9 @@ INSTRUCTIONS;
      */
     public function messages(): iterable
     {
-        return $this->post
+        $this->post->loadMissing('thread');
+
+        return $this->post->thread
             ->conversationPosts()
             ->filter(fn (Post $post): bool => $post->id < $this->post->id)
             ->map(fn (Post $post): Message => $this->messageFor($post))

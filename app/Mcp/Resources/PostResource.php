@@ -14,7 +14,7 @@ use Laravel\Mcp\Server\Contracts\HasUriTemplate;
 use Laravel\Mcp\Server\Resource;
 use Laravel\Mcp\Support\UriTemplate;
 
-#[Description('Read a post with its attachments from an accessible workspace topic.')]
+#[Description('Read a post with its attachments from an accessible workspace.')]
 class PostResource extends Resource implements HasUriTemplate
 {
     use FormatsMcpPayloads;
@@ -34,18 +34,14 @@ class PostResource extends Resource implements HasUriTemplate
             $user = $this->context->requireUser($request->user());
             $post = $this->context->postFor(
                 $user,
-                (string) $request->get('topic'),
                 (string) $request->get('post'),
                 (string) $request->get('workspace'),
             );
-            $post->load(['topic.workspace', 'attachments', 'sender.user', 'sender.agent']);
+            $post->load(['thread.workspace', 'thread.topic', 'attachments', 'sender.user', 'sender.agent']);
 
             return Response::json([
-                'workspace' => $post->topic->workspace->only(['id', 'name', 'slug']),
-                'topic' => [
-                    ...$post->topic->only(['id', 'name', 'slug']),
-                    'resource_uri' => ExplicateUris::topic($post->topic),
-                ],
+                'workspace' => $post->thread->workspace->only(['id', 'name', 'slug']),
+                'thread' => $this->threadSummaryPayload($post->thread),
                 'post' => $this->postPayload($post),
                 'attachments' => $post->attachments
                     ->map(fn ($attachment) => [

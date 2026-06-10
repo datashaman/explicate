@@ -5,6 +5,7 @@ namespace App\Mcp\Concerns;
 use App\Mcp\ExplicateUris;
 use App\Models\AgentTask;
 use App\Models\Post;
+use App\Models\Thread;
 use App\Models\Workspace;
 
 trait FormatsMcpPayloads
@@ -14,7 +15,7 @@ trait FormatsMcpPayloads
      */
     protected function postSummaryPayload(Post $post): array
     {
-        $post->loadMissing(['topic.workspace', 'sender.user', 'sender.agent']);
+        $post->loadMissing(['thread.topic', 'thread.workspace', 'sender.user', 'sender.agent']);
 
         return [
             'id' => $post->id,
@@ -27,7 +28,38 @@ trait FormatsMcpPayloads
                 'type' => $post->sender->type,
                 'name' => $post->sender->label(),
             ] : null,
+            'thread' => $this->threadSummaryPayload($post->thread),
             'resource_uri' => $this->postResourceUri($post),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function threadSummaryPayload(Thread $thread): array
+    {
+        $thread->loadMissing(['workspace', 'topic', 'latestPost.sender.user', 'latestPost.sender.agent']);
+        $postsCount = (int) ($thread->posts_count ?? $thread->posts()->count());
+
+        return [
+            'id' => $thread->id,
+            'title' => $thread->title,
+            'slug' => $thread->slug,
+            'summary' => $thread->summary,
+            'posts_count' => $postsCount,
+            'updated_at' => $thread->updated_at?->toIso8601String(),
+            'topic' => $thread->topic ? [
+                ...$thread->topic->only(['id', 'name', 'slug']),
+                'resource_uri' => ExplicateUris::topic($thread->topic),
+            ] : null,
+            'latest_post' => $thread->latestPost ? [
+                'id' => $thread->latestPost->id,
+                'ulid' => $thread->latestPost->ulid,
+                'preview' => $thread->latestPost->preview(),
+                'status' => $thread->latestPost->status->value,
+                'sender_principal_id' => $thread->latestPost->sender_principal_id,
+            ] : null,
+            'resource_uri' => ExplicateUris::thread($thread),
         ];
     }
 
@@ -47,7 +79,7 @@ trait FormatsMcpPayloads
      */
     protected function agentTaskPayload(AgentTask $task): array
     {
-        $task->loadMissing(['agent.workspace', 'post.topic.workspace', 'post.sender.user', 'post.sender.agent']);
+        $task->loadMissing(['agent.workspace', 'post.thread.workspace', 'post.sender.user', 'post.sender.agent']);
 
         return [
             'id' => $task->id,
@@ -101,7 +133,7 @@ trait FormatsMcpPayloads
 
     protected function postResourceUri(Post $post): string
     {
-        $post->loadMissing('topic.workspace');
+        $post->loadMissing('thread.workspace');
 
         return ExplicateUris::post($post);
     }

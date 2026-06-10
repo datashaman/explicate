@@ -19,14 +19,13 @@ new #[Layout('layouts::auth.wide'), Title('Setup')] class extends Component
     // Step 1 — Workspace
     public string $workspaceName = 'My Workspace';
 
-    // Step 2 — Topic
-    public string $topicName = 'General';
-
-    // Step 3 — API Key
+    // Step 2 — API Key
     public string $keyProvider = '';
     public string $keyValue = '';
 
-    // Step 4 — Agent
+    public string $topicName = '';
+
+    // Step 3 — Agent
     public string $agentName = 'Analyst';
     public string $agentProvider = '';
     public string $agentModel = '';
@@ -76,7 +75,7 @@ new #[Layout('layouts::auth.wide'), Title('Setup')] class extends Component
     {
         $this->validateStep();
 
-        if ($this->step === 3) {
+        if ($this->step === 2) {
             $this->saveApiKey();
             unset($this->availableProviders);
             $this->refreshAgentProviderDefaults();
@@ -105,8 +104,6 @@ new #[Layout('layouts::auth.wide'), Title('Setup')] class extends Component
 
         $workspace = $createWorkspace->handle($team, $this->workspaceName);
         $user->switchWorkspace($workspace);
-
-        $workspace->topics()->create(['name' => $this->topicName]);
 
         $createAgent->handle(
             workspace: $workspace,
@@ -144,15 +141,14 @@ new #[Layout('layouts::auth.wide'), Title('Setup')] class extends Component
     {
         match ($this->step) {
             1 => $this->validate(['workspaceName' => 'required|string|max:255']),
-            2 => $this->validate(['topicName' => 'required|string|max:255']),
-            3 => $this->validate([
+            2 => $this->validate([
                 'keyProvider' => ['required', Rule::enum(Provider::class)],
                 'keyValue' => 'required|string|min:10',
             ], [], [
                 'keyProvider' => __('provider'),
                 'keyValue' => __('API key'),
             ]),
-            4 => $this->validate([
+            3 => $this->validate([
                 'agentName' => 'required|string|max:255',
                 'agentProvider' => ['required', Rule::enum(Provider::class)],
                 'agentModel' => 'required|string|max:255',
@@ -168,8 +164,8 @@ new #[Layout('layouts::auth.wide'), Title('Setup')] class extends Component
 
     {{-- Progress --}}
     <div class="flex items-center gap-2">
-        @foreach ([1 => 'Workspace', 2 => 'Topic', 3 => 'API Key', 4 => 'Agent'] as $n => $label)
-            <div class="flex items-center gap-2 {{ $n < 4 ? 'flex-1' : '' }}">
+        @foreach ([1 => 'Workspace', 2 => 'API Key', 3 => 'Agent'] as $n => $label)
+            <div class="flex items-center gap-2 {{ $n < 3 ? 'flex-1' : '' }}">
                 <div @class([
                     'flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold',
                     'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900' => $step >= $n,
@@ -180,7 +176,7 @@ new #[Layout('layouts::auth.wide'), Title('Setup')] class extends Component
                     'text-zinc-900 dark:text-white' => $step >= $n,
                     'text-zinc-400 dark:text-zinc-500' => $step < $n,
                 ])>{{ $label }}</span>
-                @if ($n < 4)
+                @if ($n < 3)
                     <div class="h-px flex-1 bg-zinc-200 dark:bg-zinc-700 mx-1"></div>
                 @endif
             </div>
@@ -191,7 +187,7 @@ new #[Layout('layouts::auth.wide'), Title('Setup')] class extends Component
     @if ($step === 1)
         <div class="flex flex-col gap-1">
             <flux:heading size="lg">{{ __('Name your workspace') }}</flux:heading>
-            <flux:subheading>{{ __('A workspace holds your topics, posts, and agents. You can rename it later.') }}</flux:subheading>
+            <flux:subheading>{{ __('A workspace holds your threads, posts, topic labels, and agents. You can rename it later.') }}</flux:subheading>
         </div>
 
         <flux:input
@@ -207,31 +203,8 @@ new #[Layout('layouts::auth.wide'), Title('Setup')] class extends Component
         </div>
     @endif
 
-    {{-- Step 2: Topic --}}
+    {{-- Step 2: API Key --}}
     @if ($step === 2)
-        <div class="flex flex-col gap-1">
-            <flux:heading size="lg">{{ __('Create your first topic') }}</flux:heading>
-            <flux:subheading>{{ __('Topics organise your posts. Think of them as channels or categories.') }}</flux:subheading>
-        </div>
-
-        <flux:input
-            wire:model="topicName"
-            :label="__('Topic name')"
-            autofocus
-            required
-        />
-
-        <div class="flex items-center justify-between">
-            <flux:button wire:click="back" variant="ghost">{{ __('Back') }}</flux:button>
-            <div class="flex gap-2">
-                <flux:button wire:click="skip" variant="ghost">{{ __('Skip setup') }}</flux:button>
-                <flux:button wire:click="next" variant="primary">{{ __('Next') }}</flux:button>
-            </div>
-        </div>
-    @endif
-
-    {{-- Step 3: API Key --}}
-    @if ($step === 3)
         <div class="flex flex-col gap-1">
             <flux:heading size="lg">{{ __('Add an API key') }}</flux:heading>
             <flux:subheading>{{ __('Your agents need a provider API key to generate content. Keys are stored encrypted and never shared.') }}</flux:subheading>
@@ -262,8 +235,8 @@ new #[Layout('layouts::auth.wide'), Title('Setup')] class extends Component
         </div>
     @endif
 
-    {{-- Step 4: Agent --}}
-    @if ($step === 4)
+    {{-- Step 3: Agent --}}
+    @if ($step === 3)
         <div class="flex flex-col gap-1">
             <flux:heading size="lg">{{ __('Set up your AI agent') }}</flux:heading>
             <flux:subheading>{{ __('Agents help you write and organise content. You can add more later.') }}</flux:subheading>

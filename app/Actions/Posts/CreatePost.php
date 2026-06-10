@@ -6,7 +6,6 @@ use App\Enums\PostStatus;
 use App\Models\Post;
 use App\Models\Principal;
 use App\Models\Thread;
-use App\Models\Topic;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 
 class CreatePost
@@ -17,17 +16,15 @@ class CreatePost
      * @param  array<int, TemporaryUploadedFile>  $uploads
      */
     public function handle(
-        Topic $topic,
+        Thread $thread,
         Principal $sender,
         string $body,
         PostStatus $status,
-        ?Thread $thread = null,
         array $uploads = [],
     ): Post {
-        $post = $topic->posts()->create([
+        $post = $thread->posts()->create([
             'body' => $body,
             'status' => $status,
-            'thread_id' => $thread?->id,
             'sender_principal_id' => $sender->id,
         ]);
 

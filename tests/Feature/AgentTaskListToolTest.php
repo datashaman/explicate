@@ -7,6 +7,7 @@ use App\Models\Agent;
 use App\Models\AgentTask;
 use App\Models\AgentVersion;
 use App\Models\Post;
+use App\Models\Thread;
 use App\Models\ThreadAgentState;
 use App\Models\Topic;
 use Illuminate\Support\Facades\Queue;
@@ -30,7 +31,7 @@ test('the agent task list tool persists across thread turns', function () {
         'model' => 'gemini-2.5-flash',
     ]);
 
-    $firstPost = Post::factory()->for($topic)->create([
+    $firstPost = Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'sender_principal_id' => $senderPrincipal->id,
         'body' => '@planner Map the work.',
         'status' => PostStatus::Published,
@@ -56,9 +57,9 @@ test('the agent task list tool persists across thread turns', function () {
         ->and($added['items'][0]['text'])->toBe('Draft the spec.')
         ->and($added['items'][0]['completed'])->toBeFalse();
 
-    $replyThread = $firstPost->fresh()->startedThread;
+    $replyThread = $firstPost->fresh()->thread;
 
-    $secondPost = Post::factory()->for($topic)->for($replyThread)->create([
+    $secondPost = Post::factory()->for($replyThread)->create([
         'sender_principal_id' => $senderPrincipal->id,
         'body' => '@planner Check the spec against the brief.',
         'status' => PostStatus::Published,
@@ -90,7 +91,7 @@ test('the agent task list tool can add, check, uncheck, move, update, and remove
         'model' => 'gemini-2.5-flash',
     ]);
 
-    $post = Post::factory()->for($topic)->create([
+    $post = Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'sender_principal_id' => $senderPrincipal->id,
         'body' => '@planner Track these steps.',
         'status' => PostStatus::Published,

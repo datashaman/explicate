@@ -43,7 +43,7 @@ class GetTopicTool extends Tool
                 'id' => $topic->id,
                 'name' => $topic->name,
                 'slug' => $topic->slug,
-                'posts_count' => $topic->posts()->topLevel()->count(),
+                'threads_count' => $topic->threads()->count(),
                 'resource_uri' => ExplicateUris::topic($topic),
             ],
         ]);

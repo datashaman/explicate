@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Collection;
 use LogicException;
@@ -46,6 +47,22 @@ class Workspace extends Model
     public function topics(): HasMany
     {
         return $this->hasMany(Topic::class)->orderBy('name');
+    }
+
+    /**
+     * @return HasMany<Thread, $this>
+     */
+    public function threads(): HasMany
+    {
+        return $this->hasMany(Thread::class)->orderByDesc('updated_at');
+    }
+
+    /**
+     * @return HasManyThrough<Post, Thread, $this>
+     */
+    public function posts(): HasManyThrough
+    {
+        return $this->hasManyThrough(Post::class, Thread::class);
     }
 
     /**

@@ -42,15 +42,15 @@ test('a topic belongs to a workspace', function () {
 
 test('a topic has many threads', function () {
     $topic = Topic::factory()->create();
-    Thread::factory()->count(2)->for($topic)->create();
+    Thread::factory()->count(2)->forTopic($topic)->create();
 
     expect($topic->threads()->count())->toBe(2);
 });
 
 test('a thread belongs to a topic and holds posts', function () {
     $topic = Topic::factory()->create();
-    $thread = Thread::factory()->for($topic)->create(['title' => 'Review artifact']);
-    $post = Post::factory()->for($topic)->for($thread)->create(['body' => 'Review note']);
+    $thread = Thread::factory()->forTopic($topic)->create(['title' => 'Review artifact']);
+    $post = Post::factory()->for(Thread::factory()->forTopic($topic))->for($thread)->create(['body' => 'Review note']);
 
     expect($thread->topic)->toBeInstanceOf(Topic::class)
         ->and($thread->posts()->pluck('posts.id')->all())->toBe([$post->id])
@@ -86,8 +86,8 @@ test('dashboard shows topics as folders for current workspace', function () {
     [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['name' => 'Design']);
-    $post = Post::factory()->for($topic)->create(['body' => 'Dashboard draft']);
-    $publishedPost = Post::factory()->for($topic)->create([
+    $post = Post::factory()->for(Thread::factory()->forTopic($topic))->create(['body' => 'Dashboard draft']);
+    $publishedPost = Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'body' => 'Dashboard published',
         'status' => PostStatus::Published,
         'sender_principal_id' => $workspace->principalForUser($user)->id,
@@ -114,12 +114,12 @@ test('dashboard shows system folders with workspace post counts', function () {
 
     $topic = Topic::factory()->for($workspace)->create(['name' => 'Design', 'slug' => 'design']);
     $userPrincipal = $workspace->principalForUser($user);
-    Post::factory()->for($topic)->create(['status' => PostStatus::Draft]);
-    Post::factory()->for($topic)->create([
+    Post::factory()->for(Thread::factory()->forTopic($topic))->create(['status' => PostStatus::Draft]);
+    Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'status' => PostStatus::Published,
         'sender_principal_id' => $userPrincipal->id,
     ]);
-    Post::factory()->for($topic)->create([
+    Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'status' => PostStatus::Published,
         'sender_principal_id' => $userPrincipal->id,
     ]);
@@ -140,7 +140,7 @@ test('post changes broadcast to the post workspace', function () {
     [$user, $workspace] = userWithWorkspace();
     $topic = Topic::factory()->for($workspace)->create();
 
-    $post = Post::factory()->for($topic)->create([
+    $post = Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'status' => PostStatus::Published,
         'sender_principal_id' => $workspace->principalForUser($user)->id,
     ]);
@@ -185,13 +185,13 @@ test('dashboard system draft folder shows draft posts across topics', function (
     $engineering = Topic::factory()->for($workspace)->create(['slug' => 'engineering']);
     $userPrincipal = $workspace->principalForUser($user);
 
-    $designDraft = Post::factory()->for($design)->create([
+    $designDraft = Post::factory()->for(Thread::factory()->forTopic($design))->create([
         'body' => 'Working draft',
         'updated_at' => now()->subMinutes(7),
         'status' => PostStatus::Draft,
     ]);
 
-    Post::factory()->for($engineering)->create([
+    Post::factory()->for(Thread::factory()->forTopic($engineering))->create([
         'body' => 'Engineering sent',
         'status' => PostStatus::Published,
         'sender_principal_id' => $userPrincipal->id,
@@ -206,7 +206,7 @@ test('dashboard system draft folder shows draft posts across topics', function (
         ->assertSee(e(route('dashboard', [
             'folder' => 'drafts',
             'topic' => $design->slug,
-            'post' => $designDraft->ulid,
+            'thread' => $designDraft->thread->slug,
             'panel' => 'posts',
         ])), escape: false)
         ->assertSee('data-test="post-message"', escape: false)
@@ -233,12 +233,12 @@ test('dashboard feed folder does not show draft posts', function () {
     $topic = Topic::factory()->for($workspace)->create(['name' => 'Design', 'slug' => 'design']);
     $userPrincipal = $workspace->principalForUser($user);
 
-    Post::factory()->for($topic)->create([
+    Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'body' => 'Hidden draft',
         'status' => PostStatus::Draft,
     ]);
 
-    Post::factory()->for($topic)->create([
+    Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'body' => 'Visible post',
         'status' => PostStatus::Published,
         'sender_principal_id' => $userPrincipal->id,
@@ -257,7 +257,7 @@ test('dashboard feed folder shows all published topic posts', function () {
     $topic = Topic::factory()->for($workspace)->create(['name' => 'Design', 'slug' => 'design']);
     $userPrincipal = $workspace->principalForUser($user);
 
-    $firstPost = Post::factory()->for($topic)->create([
+    $firstPost = Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'body' => 'First topic post',
         'status' => PostStatus::Published,
         'sender_principal_id' => $userPrincipal->id,
@@ -265,13 +265,13 @@ test('dashboard feed folder shows all published topic posts', function () {
     $firstPost->timestamps = false;
     $firstPost->forceFill(['created_at' => now()->subMinutes(9)])->save();
 
-    Post::factory()->for($topic)->create([
+    Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'body' => 'Second topic post',
         'status' => PostStatus::Published,
         'sender_principal_id' => $userPrincipal->id,
     ]);
 
-    Post::factory()->for($topic)->create([
+    Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'body' => 'Third topic post',
         'status' => PostStatus::Published,
         'sender_principal_id' => $userPrincipal->id,
@@ -300,7 +300,7 @@ test('dashboard post panel returns to the selected folder before the post topic'
     [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['name' => 'Design', 'slug' => 'design']);
-    $post = Post::factory()->for($topic)->create([
+    $post = Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'body' => 'Feed post',
         'status' => PostStatus::Published,
         'sender_principal_id' => $workspace->principalForUser($user)->id,
@@ -323,7 +323,7 @@ test('dashboard post panel return label matches selected topic context', functio
     [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['name' => 'Design', 'slug' => 'design']);
-    $post = Post::factory()->for($topic)->create([
+    $post = Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'body' => 'Design draft',
         'status' => PostStatus::Draft,
     ]);
@@ -344,7 +344,7 @@ test('dashboard bin folder shows current user deleted posts', function () {
     $topic = Topic::factory()->for($workspace)->create(['name' => 'Design', 'slug' => 'design']);
     $userPrincipal = $workspace->principalForUser($user);
 
-    $deletedPost = Post::factory()->trashed()->for($topic)->create([
+    $deletedPost = Post::factory()->trashed()->for(Thread::factory()->forTopic($topic))->create([
         'body' => 'Deleted post',
         'status' => PostStatus::Published,
         'sender_principal_id' => $userPrincipal->id,
@@ -353,19 +353,16 @@ test('dashboard bin folder shows current user deleted posts', function () {
     $deletedPost->timestamps = false;
     $deletedPost->forceFill(['updated_at' => now()->subMinutes(11)])->save();
 
-    $thread = Thread::factory()->for($topic)->create([
-        'parent_post_id' => $deletedPost->id,
-        'title' => $deletedPost->body,
-    ]);
+    $thread = $deletedPost->thread;
 
-    Post::factory()->trashed()->for($topic)->for($thread)->create([
+    Post::factory()->trashed()->for($thread)->create([
         'body' => 'Deleted reply',
         'status' => PostStatus::Published,
         'sender_principal_id' => $userPrincipal->id,
         'deleted_by_user_id' => $user->id,
     ]);
 
-    Post::factory()->trashed()->for($topic)->create([
+    Post::factory()->trashed()->for(Thread::factory()->forTopic($topic))->create([
         'body' => 'Member deleted post',
         'status' => PostStatus::Published,
         'sender_principal_id' => $memberPrincipal->id,
@@ -396,7 +393,7 @@ test('dashboard restores posts from the bin', function () {
     [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
-    $post = Post::factory()->trashed()->for($topic)->create([
+    $post = Post::factory()->trashed()->for(Thread::factory()->forTopic($topic))->create([
         'body' => 'Deleted post',
         'status' => PostStatus::Published,
         'sender_principal_id' => $workspace->principalForUser($user)->id,
@@ -417,7 +414,7 @@ test('dashboard permanently deletes posts from the bin', function () {
     [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
-    $post = Post::factory()->trashed()->for($topic)->create([
+    $post = Post::factory()->trashed()->for(Thread::factory()->forTopic($topic))->create([
         'body' => 'Delete forever',
         'status' => PostStatus::Published,
         'sender_principal_id' => $workspace->principalForUser($user)->id,
@@ -440,7 +437,7 @@ test('dashboard only lets the deleting user permanently delete a bin post', func
     [$member, $memberPrincipal] = teamMemberPrincipal($user, $workspace);
 
     $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
-    $post = Post::factory()->trashed()->for($topic)->create([
+    $post = Post::factory()->trashed()->for(Thread::factory()->forTopic($topic))->create([
         'body' => 'Member deleted post',
         'status' => PostStatus::Published,
         'sender_principal_id' => $memberPrincipal->id,
@@ -496,12 +493,12 @@ test('dashboard shows selected topic in the main panel', function () {
     $selectedTopic = Topic::factory()->for($workspace)->create(['name' => 'Selected Topic', 'slug' => 'selected-topic']);
     $otherTopic = Topic::factory()->for($workspace)->create(['name' => 'Other Topic', 'slug' => 'other-topic']);
 
-    $selectedPost = Post::factory()->for($selectedTopic)->create([
+    $selectedPost = Post::factory()->for(Thread::factory()->forTopic($selectedTopic))->create([
         'body' => 'Selected post',
         'status' => PostStatus::Published,
     ]);
-    Post::factory()->for($otherTopic)->create(['body' => 'Other post']);
-    Post::factory()->for($selectedTopic)->create([
+    Post::factory()->for(Thread::factory()->forTopic($otherTopic))->create(['body' => 'Other post']);
+    Post::factory()->for(Thread::factory()->forTopic($selectedTopic))->create([
         'body' => 'Another selected post',
         'status' => PostStatus::Published,
     ]);
@@ -511,7 +508,7 @@ test('dashboard shows selected topic in the main panel', function () {
         ->assertOk()
         ->assertSee('Selected Topic')
         ->assertSee($selectedPost->body)
-        ->assertSee(e(route('dashboard', ['topic' => $selectedTopic->slug, 'post' => $selectedPost->ulid, 'panel' => 'posts'])), escape: false)
+        ->assertSee(e(route('dashboard', ['topic' => $selectedTopic->slug, 'thread' => $selectedPost->thread->slug, 'panel' => 'posts'])), escape: false)
         ->assertDontSee('data-test="folder-list-sort-topic"', escape: false)
         ->assertDontSeeText('Topic:')
         ->assertSee('Another selected post')
@@ -552,9 +549,9 @@ test('dashboard main composer creates a published top level post', function () {
     $post = Post::query()->where('body', 'A smoother post from the composer.')->sole();
 
     expect($post->topic->is($topic))->toBeTrue()
+        ->and($post->thread)->not->toBeNull()
         ->and($post->sender->is($workspace->principalForUser($user)))->toBeTrue()
-        ->and($post->status)->toBe(PostStatus::Published)
-        ->and($post->thread_id)->toBeNull();
+        ->and($post->status)->toBe(PostStatus::Published);
 });
 
 test('dashboard main composer stores attachments with the published post', function () {
@@ -614,15 +611,12 @@ test('dashboard keeps thread replies out of top-level topic lists', function () 
     [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['name' => 'Selected Topic', 'slug' => 'selected-topic']);
-    $sourcePost = Post::factory()->for($topic)->create([
+    $sourcePost = Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'body' => 'Top-level request',
         'status' => PostStatus::Published,
     ]);
-    $thread = Thread::factory()->for($topic)->create([
-        'parent_post_id' => $sourcePost->id,
-        'title' => 'Top-level request',
-    ]);
-    Post::factory()->for($topic)->for($thread)->create([
+    $thread = $sourcePost->thread;
+    Post::factory()->for($thread)->create([
         'body' => 'Threaded agent reply',
         'status' => PostStatus::Published,
     ]);
@@ -653,20 +647,17 @@ test('dashboard post messages open from the replies affordance instead of the wh
     [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['name' => 'Selected Topic', 'slug' => 'selected-topic']);
-    $post = Post::factory()->for($topic)->create([
+    $post = Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'body' => 'Open the thread panel from this row.',
         'status' => PostStatus::Published,
     ]);
-    $thread = Thread::factory()->for($topic)->create([
-        'parent_post_id' => $post->id,
-        'title' => 'Open the thread panel from this row.',
-    ]);
-    Post::factory()->for($topic)->for($thread)->create([
+    $thread = $post->thread;
+    Post::factory()->for($thread)->create([
         'body' => 'Thread reply',
         'status' => PostStatus::Published,
     ]);
 
-    $postHref = route('dashboard', ['topic' => $topic->slug, 'post' => $post->ulid, 'panel' => 'posts']);
+    $postHref = route('dashboard', ['topic' => $topic->slug, 'thread' => $post->thread->slug, 'panel' => 'posts']);
 
     $this->actingAs($user)
         ->get(route('dashboard', ['topic' => $topic->slug]))
@@ -687,11 +678,11 @@ test('dashboard top level post without replies still has a thread button', funct
     [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['name' => 'Selected Topic', 'slug' => 'selected-topic']);
-    $post = Post::factory()->for($topic)->create([
+    $post = Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'body' => 'Start a thread from this post.',
         'status' => PostStatus::Published,
     ]);
-    $postHref = route('dashboard', ['topic' => $topic->slug, 'post' => $post->ulid, 'panel' => 'posts']);
+    $postHref = route('dashboard', ['topic' => $topic->slug, 'thread' => $post->thread->slug, 'panel' => 'posts']);
 
     $this->actingAs($user)
         ->get(route('dashboard', ['topic' => $topic->slug]))
@@ -707,7 +698,7 @@ test('post messages collapse bodies that are longer than ten lines', function ()
     [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
-    Post::factory()->for($topic)->create([
+    Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'body' => collect(range(1, 11))->map(fn (int $line): string => "Line {$line}")->implode("\n"),
         'status' => PostStatus::Published,
     ]);
@@ -726,7 +717,7 @@ test('post messages do not render a collapse control for short bodies', function
     [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
-    Post::factory()->for($topic)->create([
+    Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'body' => collect(range(1, 10))->map(fn (int $line): string => "Line {$line}")->implode("\n"),
         'status' => PostStatus::Published,
     ]);
@@ -742,15 +733,12 @@ test('dashboard opens a post thread panel from the feed', function () {
     [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['name' => 'Selected Topic', 'slug' => 'selected-topic']);
-    $sourcePost = Post::factory()->for($topic)->create([
+    $sourcePost = Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'body' => 'Top-level request',
         'status' => PostStatus::Published,
     ]);
-    $thread = Thread::factory()->for($topic)->create([
-        'parent_post_id' => $sourcePost->id,
-        'title' => 'Top-level request',
-    ]);
-    Post::factory()->for($topic)->for($thread)->create([
+    $thread = $sourcePost->thread;
+    Post::factory()->for($thread)->create([
         'body' => 'Threaded agent reply',
         'status' => PostStatus::Published,
     ]);
@@ -773,7 +761,7 @@ test('dashboard thread panel shows an inline reply composer', function () {
     [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['name' => 'Selected Topic', 'slug' => 'selected-topic']);
-    $sourcePost = Post::factory()->for($topic)->create([
+    $sourcePost = Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'body' => 'Top-level request',
         'status' => PostStatus::Published,
         'sender_principal_id' => $workspace->principalForUser($user)->id,
@@ -800,16 +788,13 @@ test('dashboard thread composer replies in the selected post thread', function (
     [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['name' => 'Selected Topic', 'slug' => 'selected-topic']);
-    $sourcePost = Post::factory()->for($topic)->create([
+    $sourcePost = Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'body' => 'Top-level request',
         'status' => PostStatus::Published,
         'sender_principal_id' => $workspace->principalForUser($user)->id,
     ]);
-    $thread = Thread::factory()->for($topic)->create([
-        'parent_post_id' => $sourcePost->id,
-        'title' => 'Top-level request',
-    ]);
-    $firstReply = Post::factory()->for($topic)->for($thread)->create([
+    $thread = $sourcePost->thread;
+    $firstReply = Post::factory()->for($thread)->create([
         'body' => 'Existing reply',
         'status' => PostStatus::Published,
     ]);
@@ -828,23 +813,19 @@ test('dashboard thread composer replies in the selected post thread', function (
     expect($reply->topic->is($topic))->toBeTrue()
         ->and($reply->sender->is($workspace->principalForUser($user)))->toBeTrue()
         ->and($reply->status)->toBe(PostStatus::Published)
-        ->and($reply->thread_id)->toBe($thread->id)
-        ->and($reply->startedThread()->exists())->toBeFalse();
+        ->and($reply->thread_id)->toBe($thread->id);
 });
 
 test('dashboard thread composer stores attachments with the reply', function () {
     [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['name' => 'Selected Topic', 'slug' => 'selected-topic']);
-    $sourcePost = Post::factory()->for($topic)->create([
+    $sourcePost = Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'body' => 'Top-level request',
         'status' => PostStatus::Published,
         'sender_principal_id' => $workspace->principalForUser($user)->id,
     ]);
-    $thread = Thread::factory()->for($topic)->create([
-        'parent_post_id' => $sourcePost->id,
-        'title' => 'Top-level request',
-    ]);
+    $thread = $sourcePost->thread;
     $file = UploadedFile::fake()->create('reply-brief.pdf', 128, 'application/pdf');
 
     $this->actingAs($user);
@@ -875,14 +856,10 @@ test('dashboard thread composer can remove a pending attachment before replying'
     [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['name' => 'Selected Topic', 'slug' => 'selected-topic']);
-    $sourcePost = Post::factory()->for($topic)->create([
+    $sourcePost = Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'body' => 'Top-level request',
         'status' => PostStatus::Published,
         'sender_principal_id' => $workspace->principalForUser($user)->id,
-    ]);
-    Thread::factory()->for($topic)->create([
-        'parent_post_id' => $sourcePost->id,
-        'title' => 'Top-level request',
     ]);
     $removedFile = UploadedFile::fake()->create('remove-reply.pdf', 128, 'application/pdf');
     $keptFile = UploadedFile::fake()->create('keep-reply.pdf', 128, 'application/pdf');
@@ -904,11 +881,11 @@ test('dashboard thread composer can remove a pending attachment before replying'
     expect($reply->attachments()->pluck('filename')->all())->toBe(['keep-reply.pdf']);
 });
 
-test('dashboard thread composer starts a thread from the selected top level post', function () {
+test('dashboard thread composer appends a reply to the selected thread', function () {
     [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['name' => 'Selected Topic', 'slug' => 'selected-topic']);
-    $sourcePost = Post::factory()->for($topic)->create([
+    $sourcePost = Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'body' => 'Top-level request without replies',
         'status' => PostStatus::Published,
         'sender_principal_id' => $workspace->principalForUser($user)->id,
@@ -924,19 +901,16 @@ test('dashboard thread composer starts a thread from the selected top level post
         ->assertSet('threadReplyBody', '');
 
     $reply = Post::query()->where('body', 'Starting the thread inline.')->sole();
-    $thread = $sourcePost->fresh()->startedThread;
 
-    expect($thread)->not->toBeNull()
-        ->and($thread->parentPost->is($sourcePost))->toBeTrue()
-        ->and($reply->thread_id)->toBe($thread->id)
-        ->and($reply->thread->parentPost->is($sourcePost))->toBeTrue();
+    expect($reply->thread_id)->toBe($sourcePost->thread_id)
+        ->and($sourcePost->thread->posts()->count())->toBe(2);
 });
 
 test('dashboard shows selected draft post in the main panel', function () {
     [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['name' => 'Design', 'slug' => 'design']);
-    $post = Post::factory()->for($topic)->create([
+    $post = Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'body' => 'Working body',
         'status' => PostStatus::Draft,
     ]);
@@ -959,7 +933,7 @@ test('dashboard can save selected draft post', function () {
     [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['name' => 'Design', 'slug' => 'design']);
-    $post = Post::factory()->for($topic)->create([
+    $post = Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'body' => 'Draft body',
         'status' => PostStatus::Draft,
     ]);
@@ -980,7 +954,7 @@ test('dashboard creator can edit a published post inline', function () {
     [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['name' => 'Design', 'slug' => 'design']);
-    $post = Post::factory()->for($topic)->create([
+    $post = Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'body' => 'Original note',
         'status' => PostStatus::Published,
         'sender_principal_id' => $workspace->principalForUser($user)->id,
@@ -1005,7 +979,7 @@ test('dashboard creator can delete a published post into the bin', function () {
     [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['name' => 'Design', 'slug' => 'design']);
-    $post = Post::factory()->for($topic)->create([
+    $post = Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'body' => 'Delete me',
         'status' => PostStatus::Published,
         'sender_principal_id' => $workspace->principalForUser($user)->id,
@@ -1031,7 +1005,7 @@ test('dashboard only lets the post creator edit or delete a post', function () {
     [, $memberPrincipal] = teamMemberPrincipal($user, $workspace);
 
     $topic = Topic::factory()->for($workspace)->create(['name' => 'Design', 'slug' => 'design']);
-    $post = Post::factory()->for($topic)->create([
+    $post = Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'body' => 'Member note',
         'status' => PostStatus::Published,
         'sender_principal_id' => $memberPrincipal->id,
@@ -1056,7 +1030,7 @@ test('dashboard published post panel shows sender and topic', function () {
     [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['name' => 'Design', 'slug' => 'design']);
-    $post = Post::factory()->for($topic)->create([
+    $post = Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'body' => 'Published note',
         'status' => PostStatus::Published,
         'sender_principal_id' => $workspace->principalForUser($user)->id,
@@ -1080,7 +1054,7 @@ test('dashboard post panel shows attachments', function () {
     [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
-    $post = Post::factory()->for($topic)->create([
+    $post = Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'body' => 'Published note',
         'status' => PostStatus::Published,
     ]);
@@ -1102,7 +1076,7 @@ test('dashboard feed post messages show attachments', function () {
     [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
-    $post = Post::factory()->for($topic)->create([
+    $post = Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'body' => 'Published note',
         'status' => PostStatus::Published,
     ]);
@@ -1123,7 +1097,7 @@ test('dashboard feed post messages show image attachments as thumbnails', functi
     [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
-    $post = Post::factory()->for($topic)->create([
+    $post = Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'body' => 'Published note',
         'status' => PostStatus::Published,
     ]);
@@ -1153,7 +1127,7 @@ test('dashboard feed post messages link agent mentions to agent panel', function
         'name' => 'Reviewer',
         'slug' => 'reviewer',
     ]);
-    Post::factory()->for($topic)->create([
+    Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'body' => '@reviewer Please review this.',
         'status' => PostStatus::Published,
     ]);
@@ -1177,7 +1151,7 @@ test('dashboard feed post messages render markdown safely', function () {
         'slug' => 'reviewer',
     ]);
 
-    Post::factory()->for($topic)->create([
+    Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'body' => implode("\n", [
             '## Specification',
             '',
@@ -1207,7 +1181,7 @@ test('attachment route serves image files inline', function () {
     [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create();
-    $post = Post::factory()->for($topic)->create();
+    $post = Post::factory()->for(Thread::factory()->forTopic($topic))->create();
     $workspace->filesystem()->write('attachments/screenshot.png', 'image-content');
 
     $attachment = Attachment::factory()->for($post)->create([
@@ -1231,7 +1205,7 @@ test('dashboard saves pending attachments with selected draft post', function ()
     [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
-    $post = Post::factory()->for($topic)->create([
+    $post = Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'body' => 'Draft brief',
         'status' => PostStatus::Draft,
     ]);
@@ -1256,7 +1230,7 @@ test('dashboard can delete attachments from selected draft post', function () {
     [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
-    $post = Post::factory()->for($topic)->create([
+    $post = Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'body' => 'Draft brief',
         'status' => PostStatus::Draft,
     ]);
@@ -1447,7 +1421,7 @@ test('dashboard can create a draft post in the main panel', function () {
         ->assertHasNoErrors()
         ->assertSet('panelAction', null)
         ->assertSet('selectedTopicSlug', $topic->slug)
-        ->assertSet('selectedPostUlid', fn (?string $ulid): bool => filled($ulid));
+        ->assertSet('selectedThreadSlug', fn (?string $slug): bool => filled($slug));
 
     $post = $topic->posts()->where('body', 'Draft body')->first();
 
@@ -1471,7 +1445,7 @@ test('dashboard can make a new post actionable in the main panel', function () {
         ->assertHasNoErrors()
         ->assertSet('panelAction', null)
         ->assertSet('selectedTopicSlug', $topic->slug)
-        ->assertSet('selectedPostUlid', fn (?string $ulid): bool => filled($ulid));
+        ->assertSet('selectedThreadSlug', fn (?string $slug): bool => filled($slug));
 
     $post = $topic->posts()->where('body', 'Actionable body')->first();
     $senderPrincipal = $workspace->principalForUser($user);
@@ -1600,7 +1574,7 @@ test('topic page renders posts as message feed items', function () {
     [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['name' => 'Design']);
-    $post = Post::factory()->for($topic)->create([
+    $post = Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'created_at' => now()->subMinutes(13),
         'status' => PostStatus::Published,
         'sender_principal_id' => $workspace->principalForUser($user)->id,
@@ -1624,7 +1598,7 @@ test('topic page renders posts as message feed items', function () {
         ->assertDontSee('flex h-36 w-28 flex-col items-center gap-1', escape: false)
         ->assertSee('data-test="post-message"', escape: false)
         ->assertSee('data-test="post-message-actions"', escape: false)
-        ->assertSee(e(route('dashboard', ['topic' => $topic->slug, 'post' => $post->ulid, 'panel' => 'posts'])), escape: false)
+        ->assertSee(e(route('dashboard', ['topic' => $topic->slug, 'thread' => $post->thread->slug, 'panel' => 'posts'])), escape: false)
         ->assertSee('min-w-0 flex-1', escape: false)
         ->assertDontSee('data-test="folder-list-sort-header"', escape: false)
         ->assertSee('data-sort-sent=', escape: false)
@@ -1644,22 +1618,22 @@ test('topic post list uses insertion order for channel order', function () {
     [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create();
-    Post::factory()->for($topic)->create([
+    Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'body' => 'Older post',
         'status' => PostStatus::Published,
     ]);
 
-    $firstTie = Post::factory()->for($topic)->create([
+    $firstTie = Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'body' => 'First tied post',
         'status' => PostStatus::Published,
     ]);
 
-    $secondTie = Post::factory()->for($topic)->create([
+    $secondTie = Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'body' => 'Second tied post',
         'status' => PostStatus::Published,
     ]);
 
-    Post::factory()->for($topic)->create([
+    Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'body' => 'Newest post',
         'status' => PostStatus::Published,
     ]);

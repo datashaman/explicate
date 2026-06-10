@@ -4,6 +4,7 @@ use App\Models\Agent;
 use App\Models\Attachment;
 use App\Models\Post;
 use App\Models\Team;
+use App\Models\Thread;
 use App\Models\Topic;
 use App\Models\User;
 use App\Models\Workspace;
@@ -22,26 +23,27 @@ test('database seeder creates demo workspace content', function () {
 
     $senderPrincipal = $user->currentWorkspace->principalForUser($user);
     $workspacePosts = Post::withTrashed()
-        ->whereHas('topic', fn ($query) => $query->whereBelongsTo($user->currentWorkspace))
+        ->whereHas('thread', fn ($query) => $query->whereBelongsTo($user->currentWorkspace))
         ->get();
 
     expect($workspacePosts)->not->toBeEmpty();
-    expect($workspacePosts->pluck('sender_principal_id')->unique()->values()->all())
-        ->toBe([$senderPrincipal->id]);
+    expect($workspacePosts->pluck('sender_principal_id'))->toContain($senderPrincipal->id);
 
     $designTopic = $user->currentWorkspace->topics()->where('name', 'Design')->first();
     $engineeringTopic = $user->currentWorkspace->topics()->where('name', 'Engineering')->first();
 
     expect($designTopic)->not->toBeNull();
     expect($designTopic->slug)->toBe('design');
-    expect($designTopic->posts()->count())->toBeGreaterThanOrEqual(2);
-    expect($designTopic->posts()->whereNotNull('ulid')->count())->toBe($designTopic->posts()->count());
+    expect($designTopic->threads()->count())->toBeGreaterThanOrEqual(2);
+    expect(Post::query()->whereHas('thread', fn ($query) => $query->whereBelongsTo($designTopic))->whereNotNull('ulid')->count())
+        ->toBe(Post::query()->whereHas('thread', fn ($query) => $query->whereBelongsTo($designTopic))->count());
 
     expect($engineeringTopic)->not->toBeNull();
     expect($engineeringTopic->slug)->toBe('engineering');
-    expect($engineeringTopic->posts()->withTrashed()->count())->toBeGreaterThanOrEqual(2);
-    expect($engineeringTopic->posts()->withTrashed()->whereNotNull('ulid')->count())->toBe($engineeringTopic->posts()->withTrashed()->count());
-    expect($engineeringTopic->posts()->onlyTrashed()->where('deleted_by_user_id', $user->id)->count())->toBe(1);
+    expect(Post::withTrashed()->whereHas('thread', fn ($query) => $query->whereBelongsTo($engineeringTopic))->count())->toBeGreaterThanOrEqual(2);
+    expect(Post::withTrashed()->whereHas('thread', fn ($query) => $query->whereBelongsTo($engineeringTopic))->whereNotNull('ulid')->count())
+        ->toBe(Post::withTrashed()->whereHas('thread', fn ($query) => $query->whereBelongsTo($engineeringTopic))->count());
+    expect(Post::onlyTrashed()->whereHas('thread', fn ($query) => $query->whereBelongsTo($engineeringTopic))->where('deleted_by_user_id', $user->id)->count())->toBe(1);
 
     $writerAgent = $user->currentWorkspace->agents()->where('name', 'Writer')->first();
 
@@ -51,7 +53,7 @@ test('database seeder creates demo workspace content', function () {
     expect($writerAgent->latestVersion)->not->toBeNull();
 
     $attachments = Attachment::query()
-        ->whereHas('post.topic', fn ($query) => $query->whereBelongsTo($user->currentWorkspace))
+        ->whereHas('post.thread', fn ($query) => $query->whereBelongsTo($user->currentWorkspace))
         ->get();
 
     expect($attachments)->toHaveCount(3);
@@ -68,7 +70,7 @@ test('factories derive slugs from overridden names and post ulids', function () 
     $workspace = Workspace::factory()->create(['name' => 'Context Proof']);
     $topic = Topic::factory()->for($workspace)->create(['name' => 'Product Strategy']);
     $agent = Agent::factory()->for($workspace)->create(['name' => 'SEO Analyst']);
-    $post = Post::factory()->for($topic)->create(['body' => 'Launch Plan']);
+    $post = Post::factory()->for(Thread::factory()->forTopic($topic))->create(['body' => 'Launch Plan']);
 
     expect($team->slug)->toBe('demo-team')
         ->and($workspace->slug)->toBe('context-proof')

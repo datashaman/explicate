@@ -13,7 +13,7 @@ use Laravel\Mcp\Server\Contracts\HasUriTemplate;
 use Laravel\Mcp\Server\Resource;
 use Laravel\Mcp\Support\UriTemplate;
 
-#[Description('List topics for an accessible workspace.')]
+#[Description('List optional topic labels for an accessible workspace.')]
 class WorkspaceTopicsResource extends Resource implements HasUriTemplate
 {
     use HandlesResourceExceptions;
@@ -33,13 +33,13 @@ class WorkspaceTopicsResource extends Resource implements HasUriTemplate
             $workspace = $this->context->workspaceFor($user, (string) $request->get('workspace'));
 
             $topics = $workspace->topics()
-                ->withCount(['posts' => fn ($query) => $query->topLevel()])
+                ->withCount('threads')
                 ->get()
                 ->map(fn ($topic) => [
                     'id' => $topic->id,
                     'name' => $topic->name,
                     'slug' => $topic->slug,
-                    'posts_count' => $topic->posts_count,
+                    'threads_count' => $topic->threads_count,
                     'resource_uri' => ExplicateUris::topic($topic),
                 ])
                 ->values()

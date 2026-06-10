@@ -14,8 +14,8 @@ use Laravel\Mcp\Server\Contracts\HasUriTemplate;
 use Laravel\Mcp\Server\Resource;
 use Laravel\Mcp\Support\UriTemplate;
 
-#[Description('List posts for a topic inside an accessible workspace.')]
-class TopicPostsResource extends Resource implements HasUriTemplate
+#[Description('List threads for an accessible workspace.')]
+class WorkspaceThreadsResource extends Resource implements HasUriTemplate
 {
     use FormatsMcpPayloads;
     use HandlesResourceExceptions;
@@ -24,7 +24,7 @@ class TopicPostsResource extends Resource implements HasUriTemplate
 
     public function uriTemplate(): UriTemplate
     {
-        return new UriTemplate(ExplicateUris::TopicPostsTemplate);
+        return new UriTemplate(ExplicateUris::WorkspaceThreadsTemplate);
     }
 
     public function handle(Request $request): Response
@@ -32,27 +32,20 @@ class TopicPostsResource extends Resource implements HasUriTemplate
         return $this->guardResource(function () use ($request): Response {
             /** @var User $user */
             $user = $this->context->requireUser($request->user());
-            $topic = $this->context->topicFor(
-                $user,
-                (string) $request->get('topic'),
-                (string) $request->get('workspace'),
-            );
+            $workspace = $this->context->workspaceFor($user, (string) $request->get('workspace'));
 
-            $posts = $topic->posts()
-                ->topLevel()
-                ->with(['topic.workspace', 'sender.user', 'sender.agent'])
+            $threads = $workspace->threads()
+                ->whereHas('posts')
+                ->with(['workspace', 'topic', 'latestPost.sender.user', 'latestPost.sender.agent'])
+                ->withCount('posts')
                 ->get()
-                ->map(fn ($post) => $this->postSummaryPayload($post))
+                ->map(fn ($thread) => $this->threadSummaryPayload($thread))
                 ->values()
                 ->all();
 
             return Response::json([
-                'workspace' => $topic->workspace->only(['id', 'name', 'slug']),
-                'topic' => [
-                    ...$topic->only(['id', 'name', 'slug']),
-                    'resource_uri' => ExplicateUris::topic($topic),
-                ],
-                'posts' => $posts,
+                'workspace' => $workspace->only(['id', 'name', 'slug']),
+                'threads' => $threads,
             ]);
         });
     }

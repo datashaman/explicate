@@ -29,15 +29,16 @@ test('dismissCoachMarks stamps seen_at and hides marks', function () {
     expect($user->fresh()->hasSeenCoachMarks())->toBeTrue();
 });
 
-test('finishCoachMarks selects first topic and prefills composer', function () {
+test('finishCoachMarks opens the feed and prefills composer', function () {
     [$user, $workspace] = userWithWorkspace(['coach_marks_seen_at' => null]);
-    $topic = $workspace->topics()->create(['name' => 'General']);
+    $workspace->topics()->create(['name' => 'General']);
 
     $component = Livewire::actingAs($user)
         ->test('pages::dashboard')
         ->call('finishCoachMarks', 'My suggestion here.');
 
-    $component->assertSet('selectedTopicSlug', $topic->slug)
+    $component->assertSet('selectedTopicSlug', null)
+        ->assertSet('selectedSystemFolderSlug', 'feed')
         ->assertSet('quickPostBody', 'My suggestion here.');
 
     expect($user->fresh()->hasSeenCoachMarks())->toBeTrue();

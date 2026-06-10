@@ -16,11 +16,11 @@ use Laravel\Mcp\Server\Tool;
 use Laravel\Mcp\Server\Tools\Annotations\IsIdempotent;
 use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 
-#[Name('list-agent-tasks')]
-#[Description('List post-derived work queued for an agent inside the current workspace.')]
+#[Name('list-threads')]
+#[Description('List threads for the current workspace, optionally filtered by topic label.')]
 #[IsReadOnly]
 #[IsIdempotent]
-class ListAgentTasksTool extends Tool
+class ListThreadsTool extends Tool
 {
     use FormatsMcpPayloads;
 
@@ -32,33 +32,33 @@ class ListAgentTasksTool extends Tool
     public function handle(Request $request): Response|ResponseFactory
     {
         $validated = $request->validate([
-            'agent_slug' => ['required', 'string'],
+            'topic_slug' => ['nullable', 'string'],
         ]);
 
         /** @var User $user */
         $user = $this->context->requireUser($request->user());
-        $agent = $this->context->agentFor($user, $validated['agent_slug']);
+        $workspace = $this->context->workspaceFor($user);
+        $topic = filled($validated['topic_slug'] ?? null)
+            ? $this->context->topicFor($user, $validated['topic_slug'])
+            : null;
 
-        $tasks = $agent->tasks()
-            ->with(['agent.workspace', 'post.thread.workspace', 'post.sender.user', 'post.sender.agent'])
-            ->orderByDesc('priority')
-            ->orderBy('available_at')
-            ->orderBy('id')
+        $threads = $workspace->threads()
+            ->when($topic, fn ($query) => $query->whereBelongsTo($topic))
+            ->whereHas('posts')
+            ->with(['workspace', 'topic', 'latestPost.sender.user', 'latestPost.sender.agent'])
+            ->withCount('posts')
             ->get()
-            ->map(fn ($task) => $this->agentTaskPayload($task))
+            ->map(fn ($thread) => $this->threadSummaryPayload($thread))
             ->values()
             ->all();
 
         return Response::structured([
-            'workspace' => $agent->workspace->only(['id', 'name', 'slug']),
-            'agent' => [
-                'id' => $agent->id,
-                'name' => $agent->name,
-                'slug' => $agent->slug,
-                'resource_uri' => ExplicateUris::agent($agent),
-                'tasks_resource_uri' => ExplicateUris::agentTasks($agent),
-            ],
-            'tasks' => $tasks,
+            'workspace' => $workspace->only(['id', 'name', 'slug']),
+            'topic' => $topic ? [
+                ...$topic->only(['id', 'name', 'slug']),
+                'resource_uri' => ExplicateUris::topic($topic),
+            ] : null,
+            'threads' => $threads,
         ]);
     }
 
@@ -70,9 +70,9 @@ class ListAgentTasksTool extends Tool
     public function schema(JsonSchema $schema): array
     {
         return [
-            'agent_slug' => $schema->string()
-                ->description('The agent slug whose queued work should be listed.')
-                ->required(),
+            'topic_slug' => $schema->string()
+                ->description('Optional topic slug to filter threads.')
+                ->nullable(),
         ];
     }
 }

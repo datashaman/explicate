@@ -6,6 +6,7 @@ use App\Actions\Posts\CreatePost;
 use App\Actions\Posts\DeletePostAttachment;
 use App\Actions\Posts\UpdateDraftPost;
 use App\Actions\Repositories\ListGitHubRepositories;
+use App\Actions\Threads\StartConversation;
 use App\Enums\PostFolder;
 use App\Enums\PostListColumn;
 use App\Enums\PostStatus;
@@ -45,6 +46,9 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
 
     #[Url(as: 'post')]
     public ?string $selectedPostUlid = null;
+
+    #[Url(as: 'thread')]
+    public ?string $selectedThreadSlug = null;
 
     #[Url(as: 'action')]
     public ?string $panelAction = null;
@@ -144,6 +148,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
             $this->selectedTopicSlug = null;
             $this->selectedSystemFolderSlug = null;
             $this->selectedPostUlid = null;
+            $this->selectedThreadSlug = null;
             $this->selectedWorkspaceFilePath = null;
             $this->panelAction = null;
             $this->mobilePanel = 'posts';
@@ -205,24 +210,65 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
         return PostFolder::Feed;
     }
 
-    public function selectedPost(): ?Post
+    public function selectedThread(): ?Thread
     {
         $workspace = $this->workspace();
 
-        if (! $workspace || ! $this->selectedPostUlid) {
+        if (! $workspace) {
             return null;
         }
 
-        $query = Post::query()
-            ->with(['agentTasks.agent', 'attachments', 'sender.user', 'sender.agent', 'topic'])
-            ->whereHas('topic', fn ($query) => $query->where('workspace_id', $workspace->id))
-            ->where('ulid', $this->selectedPostUlid);
+        if ($this->selectedThreadSlug) {
+            return $workspace->threads()
+                ->with(['workspace', 'topic', 'posts.agentTasks.agent', 'posts.attachments', 'posts.sender.user', 'posts.sender.agent'])
+                ->where('slug', $this->selectedThreadSlug)
+                ->first();
+        }
+
+        if (! $this->selectedPostUlid) {
+            return null;
+        }
+
+        $post = Post::query()
+            ->with(['thread.workspace', 'thread.topic'])
+            ->whereHas('thread', fn ($query) => $query->whereBelongsTo($workspace))
+            ->where('ulid', $this->selectedPostUlid)
+            ->first();
+
+        if (! $post) {
+            return null;
+        }
+
+        $this->selectedThreadSlug = $post->thread->slug;
+
+        return $post->thread;
+    }
+
+    public function selectedPost(): ?Post
+    {
+        $workspace = $this->workspace();
+        $thread = $this->selectedThread();
+
+        if (! $workspace || ! $thread) {
+            return null;
+        }
+
+        $query = $thread->posts()
+            ->with(['agentTasks.agent', 'attachments', 'sender.user', 'sender.agent', 'thread.topic', 'thread.workspace']);
 
         if ($this->selectedSystemFolder() === PostFolder::Bin) {
             $query->onlyTrashed()->where('deleted_by_user_id', Auth::id());
         }
 
-        return $query->first();
+        if ($this->selectedPostUlid) {
+            $selectedPost = (clone $query)->where('ulid', $this->selectedPostUlid)->first();
+
+            if ($selectedPost) {
+                return $selectedPost;
+            }
+        }
+
+        return $query->orderBy('id')->first();
     }
 
     public function postsPanelReturnRoute(): string
@@ -608,15 +654,14 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
         }
 
         $statusCounts = Post::query()
-            ->topLevel()
-            ->whereHas('topic', fn ($query) => $query->where('workspace_id', $workspace->id))
+            ->whereHas('thread', fn ($query) => $query->whereBelongsTo($workspace))
             ->selectRaw('status, count(*) as total')
             ->groupBy('status')
             ->pluck('total', 'status');
 
         $binCount = Post::onlyTrashed()
             ->where('deleted_by_user_id', Auth::id())
-            ->whereHas('topic', fn ($query) => $query->where('workspace_id', $workspace->id))
+            ->whereHas('thread', fn ($query) => $query->whereBelongsTo($workspace))
             ->count();
 
         return collect(PostFolder::cases())
@@ -659,8 +704,8 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
 
         return $workspace->topics()
             ->withCount([
-                'posts as draft_count' => fn ($q) => $q->topLevel()->where('status', PostStatus::Draft),
-                'posts as published_count' => fn ($q) => $q->topLevel()->where('status', PostStatus::Published),
+                'threads as draft_count' => fn ($q) => $q->whereHas('posts', fn ($postQuery) => $postQuery->where('status', PostStatus::Draft)),
+                'threads as published_count' => fn ($q) => $q->whereHas('posts', fn ($postQuery) => $postQuery->where('status', PostStatus::Published)),
             ])
             ->get();
     }
@@ -676,28 +721,31 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
             return [];
         }
 
-        return $topic->posts()
-            ->topLevel()
-            ->with(['agentTasks.agent', 'attachments', 'sender.user', 'sender.agent', 'topic'])
-            ->withCount('attachments')
+        return $topic->threads()
+            ->whereHas('posts', fn ($query) => $query->where('status', '!=', PostStatus::Draft))
+            ->with(['firstPost.agentTasks.agent', 'firstPost.attachments', 'firstPost.sender.user', 'firstPost.sender.agent', 'firstPost.thread.topic'])
+            ->withCount('posts')
             ->reorder()
-            ->where('status', '!=', PostStatus::Draft)
-            ->orderBy('id')
+            ->orderByDesc('updated_at')
             ->get()
-            ->map(fn (Post $post) => [
-                'href' => route('dashboard', ['topic' => $topic->slug, 'post' => $post->ulid, 'panel' => 'posts']),
-                'post' => $post,
-                'name' => $post->preview(),
-                'meta' => $post->listMeta(showSender: true, timezone: Auth::user()->displayTimezone()),
-                'attachments_count' => $post->attachments_count,
-                'sort' => $post->listSortValues(dateKey: PostListColumn::Sent->value),
-                'can_modify' => $this->canModifyPost($post),
-                'can_restore' => false,
-                'badge' => $post->status === PostStatus::Published ? null : [
-                    'label' => $post->status->label(),
-                    'color' => $post->status->color(),
-                ],
-            ])
+            ->map(function (Thread $thread) use ($topic): array {
+                $post = $thread->firstPost;
+
+                return [
+                    'href' => route('dashboard', ['topic' => $topic->slug, 'thread' => $thread->slug, 'panel' => 'posts']),
+                    'post' => $post,
+                    'name' => $thread->title,
+                    'meta' => $post->listMeta(showSender: true, timezone: Auth::user()->displayTimezone()),
+                    'attachments_count' => $post->attachments()->count(),
+                    'sort' => $post->listSortValues(dateKey: PostListColumn::Sent->value),
+                    'can_modify' => $this->canModifyPost($post),
+                    'can_restore' => false,
+                    'badge' => $post->status === PostStatus::Published ? null : [
+                        'label' => $post->status->label(),
+                        'color' => $post->status->color(),
+                    ],
+                ];
+            })
             ->all();
     }
 
@@ -716,9 +764,9 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
         $query = $folder === PostFolder::Bin ? Post::onlyTrashed() : Post::query();
 
         return $query
-            ->with(['agentTasks.agent', 'attachments', 'topic', 'sender.user', 'sender.agent'])
+            ->with(['agentTasks.agent', 'attachments', 'thread.topic', 'thread.workspace', 'sender.user', 'sender.agent'])
             ->withCount('attachments')
-            ->whereHas('topic', fn ($query) => $query->where('workspace_id', $workspace->id))
+            ->whereHas('thread', fn ($query) => $query->whereBelongsTo($workspace))
             ->when(
                 $folder === PostFolder::Bin,
                 fn ($query) => $query->where('deleted_by_user_id', Auth::id()),
@@ -734,19 +782,19 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
                 $sort = $isDraftsFolder
                     ? [
                         ...$post->listSortValues(dateKey: PostListColumn::Saved->value),
-                        PostListColumn::Topic->value => Str::lower($post->topic->name),
+                        PostListColumn::Topic->value => Str::lower($post->thread->topic?->name ?? __('No topic')),
                     ]
                     : $post->listSortValues(dateKey: PostListColumn::Sent->value);
 
                 return [
                     'href' => $this->systemFolderRoute($folder, [
-                        'topic' => $post->topic->slug,
-                        'post' => $post->ulid,
+                        ...($post->thread->topic ? ['topic' => $post->thread->topic->slug] : []),
+                        'thread' => $post->thread->slug,
                         'panel' => 'posts',
                     ]),
                     'post' => $post,
                     'name' => $post->preview(),
-                    'meta' => $post->listTopicMeta(showSender: ! $isDraftsFolder, timezone: $timezone),
+                    'meta' => $post->listMeta(showSender: ! $isDraftsFolder, timezone: $timezone),
                     'attachments_count' => $post->attachments_count,
                     'sort' => $sort,
                     'can_modify' => $this->canModifyPost($post),
@@ -882,6 +930,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
         }
 
         $this->selectedPostUlid = null;
+        $this->selectedThreadSlug = null;
         $this->postBody = '';
         $this->syncNewPostTopic();
         $this->normalizeMobilePanel();
@@ -893,6 +942,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
             $this->selectedTopicSlug = null;
             $this->selectedAgentSlug = null;
             $this->selectedPostUlid = null;
+            $this->selectedThreadSlug = null;
             $this->selectedWorkspaceFilePath = null;
             $this->panelAction = null;
             $this->mobilePanel = 'posts';
@@ -904,6 +954,16 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
     public function updatedSelectedPostUlid(): void
     {
         if ($this->selectedPostUlid) {
+            $this->panelAction = null;
+        }
+
+        $this->syncSelectedPostFields();
+    }
+
+    public function updatedSelectedThreadSlug(): void
+    {
+        if ($this->selectedThreadSlug) {
+            $this->selectedPostUlid = null;
             $this->panelAction = null;
         }
 
@@ -928,6 +988,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
             $this->selectedSystemFolderSlug = null;
             $this->selectedAgentSlug = null;
             $this->selectedPostUlid = null;
+            $this->selectedThreadSlug = null;
             $this->panelAction = 'files';
             $this->mobilePanel = 'posts';
         }
@@ -943,10 +1004,11 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
 
         Post::query()
             ->where('ulid', $postUlid)
-            ->whereHas('topic', fn ($query) => $query->where('workspace_id', $workspace->id))
+            ->whereHas('thread', fn ($query) => $query->whereBelongsTo($workspace))
             ->firstOrFail();
 
         $this->selectedPostUlid = $postUlid;
+        $this->selectedThreadSlug = null;
         $this->selectedAgentSlug = null;
         $this->panelAction = null;
         $this->dispatch('thread-opened');
@@ -958,6 +1020,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
     {
         if ($this->isCreatingPost()) {
             $this->selectedPostUlid = null;
+            $this->selectedThreadSlug = null;
             $this->syncNewPostTopic();
         }
     }
@@ -1059,7 +1122,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
         $workspace = $this->workspace();
         $topic = $this->selectedTopic();
 
-        abort_unless($workspace && $topic, 403);
+        abort_unless($workspace, 403);
 
         $uploads = $this->quickPostUploads;
 
@@ -1074,7 +1137,8 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
             'quickPostUploads.*' => __('attachment'),
         ])->validate();
 
-        app(CreatePost::class)->handle(
+        $post = app(StartConversation::class)->handle(
+            workspace: $workspace,
             topic: $topic,
             sender: $workspace->principalForUser(Auth::user()),
             body: $validated['quickPostBody'],
@@ -1082,15 +1146,18 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
             uploads: $uploads,
         );
 
+        $this->selectedThreadSlug = $post->thread->slug;
+        $this->selectedPostUlid = null;
         $this->reset('quickPostBody', 'quickPostUploads');
     }
 
     public function sendThreadReply(): void
     {
         $workspace = $this->workspace();
+        $thread = $this->selectedThread();
         $post = $this->selectedPost();
 
-        abort_unless($workspace && $post && $post->status === PostStatus::Published, 403);
+        abort_unless($workspace && $thread && $post && $post->status === PostStatus::Published, 403);
 
         $uploads = $this->threadReplyUploads;
 
@@ -1106,11 +1173,10 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
         ])->validate();
 
         app(CreatePost::class)->handle(
-            topic: $post->topic,
+            thread: $thread,
             sender: $workspace->principalForUser(Auth::user()),
             body: $validated['threadReplyBody'],
             status: PostStatus::Published,
-            thread: $this->threadForReply($post),
             uploads: $uploads,
         );
 
@@ -1138,7 +1204,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
 
         $validated = $this->validate([
             'newPostBody' => ['required', 'string'],
-            'newPostTopicId' => ['required', 'integer'],
+            'newPostTopicId' => ['nullable', 'integer'],
         ], [], [
             'newPostBody' => __('post'),
             'newPostTopicId' => __('topic'),
@@ -1149,8 +1215,11 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
             'newPostUploads.*' => __('attachment'),
         ])->validate();
 
-        $topic = $workspace->topics()->findOrFail($validated['newPostTopicId']);
-        $post = app(CreatePost::class)->handle(
+        $topic = isset($validated['newPostTopicId']) && $validated['newPostTopicId']
+            ? $workspace->topics()->findOrFail($validated['newPostTopicId'])
+            : null;
+        $post = app(StartConversation::class)->handle(
+            workspace: $workspace,
             topic: $topic,
             sender: $workspace->principalForUser(Auth::user()),
             body: $validated['newPostBody'],
@@ -1158,29 +1227,16 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
             uploads: $uploads,
         );
 
-        $this->selectedTopicSlug = $topic->slug;
-        $this->selectedPostUlid = $post->ulid;
+        $this->selectedTopicSlug = $topic?->slug;
+        $this->selectedThreadSlug = $post->thread->slug;
+        $this->selectedPostUlid = null;
         $this->panelAction = null;
         $this->mobilePanel = 'posts';
         $this->reset('newPostBody', 'newPostUploads');
-        $this->newPostTopicId = $topic->id;
+        $this->newPostTopicId = $topic?->id;
         $this->syncSelectedPostFields();
 
         Flux::toast(variant: 'success', text: $status === PostStatus::Draft ? __('Draft created.') : __('Post published.'));
-    }
-
-    private function threadForReply(Post $post): Thread
-    {
-        $post->loadMissing(['thread', 'startedThread']);
-
-        if ($post->thread) {
-            return $post->thread;
-        }
-
-        return $post->startedThread()->firstOrCreate([], [
-            'topic_id' => $post->topic_id,
-            'title' => $post->preview(),
-        ]);
     }
 
     /**
@@ -1206,6 +1262,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
         $this->selectedTopicSlug = null;
         $this->selectedSystemFolderSlug = null;
         $this->selectedPostUlid = null;
+        $this->selectedThreadSlug = null;
         $this->panelAction = null;
         $this->mobilePanel = 'posts';
         $this->syncSelectedAgentFields();
@@ -1217,6 +1274,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
         $this->selectedSystemFolderSlug = null;
         $this->selectedAgentSlug = null;
         $this->selectedPostUlid = null;
+        $this->selectedThreadSlug = null;
         $this->panelAction = 'files';
         $this->mobilePanel = 'posts';
     }
@@ -1233,6 +1291,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
         $this->selectedSystemFolderSlug = null;
         $this->selectedAgentSlug = null;
         $this->selectedPostUlid = null;
+        $this->selectedThreadSlug = null;
         $this->panelAction = 'files';
         $this->mobilePanel = 'posts';
         $this->syncSelectedWorkspaceFileFields();
@@ -1585,7 +1644,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
 
         return $query
             ->whereKey($postId)
-            ->whereHas('topic', fn ($query) => $query->where('workspace_id', $workspace->id))
+            ->whereHas('thread', fn ($query) => $query->whereBelongsTo($workspace))
             ->first();
     }
 
@@ -1613,9 +1672,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
             return;
         }
 
-        if ($this->isCreatingPost() && ! $this->newPostTopicId) {
-            $this->newPostTopicId = $this->workspace()?->topics()->value('id');
-        }
+        $this->newPostTopicId = null;
     }
 
     private function normalizeNewPostTopic(): void
@@ -1641,13 +1698,9 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
     public function finishCoachMarks(string $suggestion): void
     {
         $workspace = $this->workspace();
-        $firstTopic = $workspace?->topics()->orderBy('id')->first();
-
-        if ($firstTopic) {
-            $this->selectedTopicSlug = $firstTopic->slug;
-            $this->updatedSelectedTopicSlug();
-            $this->quickPostBody = $suggestion;
-        }
+        $this->selectedTopicSlug = null;
+        $this->selectedSystemFolderSlug = PostFolder::Feed->value;
+        $this->quickPostBody = $suggestion;
 
         Auth::user()->update(['coach_marks_seen_at' => now()]);
     }
@@ -2115,7 +2168,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
                     <div class="flex items-center justify-between gap-3 border-b border-neutral-300 bg-emerald-50 px-4 py-3 dark:border-white/10 dark:bg-emerald-500/10">
                         <flux:heading size="sm" class="min-w-0 flex-1 truncate">{{ __('Thread') }}</flux:heading>
 
-                        <flux:button wire:click="$set('selectedPostUlid', null)" size="xs" variant="filled" icon="x-mark" data-test="thread-panel-close">
+                        <flux:button wire:click="$set('selectedThreadSlug', null); $set('selectedPostUlid', null)" size="xs" variant="filled" icon="x-mark" data-test="thread-panel-close">
                             {{ __('Close') }}
                         </flux:button>
                     </div>
@@ -2125,7 +2178,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
                             'formId' => 'dashboard-selected-post-form',
                             'submitAction' => 'saveSelectedPost',
                             'bodyModel' => 'postBody',
-                            'topicName' => $selectedDashboardPost->topic->name,
+                            'topicName' => $selectedDashboardPost->thread->topic?->name ?? __('No topic'),
                             'canChangeTopic' => false,
                             'testPrefix' => 'post',
                             'post' => $selectedDashboardPost,
@@ -2139,7 +2192,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
                     @else
                         <div class="flex min-h-0 flex-1 flex-col gap-6 overflow-auto px-4 pb-20 pt-4 xl:py-4" data-test="dashboard-post-panel">
                             @php
-                                $selectedDashboardThreadPosts = $selectedDashboardPost->conversationPosts();
+                                $selectedDashboardThreadPosts = $selectedDashboardPost->thread->conversationPosts();
                             @endphp
 
                             @foreach ($selectedDashboardThreadPosts as $threadPost)
