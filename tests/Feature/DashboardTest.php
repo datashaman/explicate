@@ -26,8 +26,7 @@ test('guests are redirected to the login page', function () {
 });
 
 test('authenticated users can visit the dashboard', function () {
-    $user = User::factory()->create();
-    $team = $user->currentTeam;
+    [$user] = userWithWorkspace();
 
     $response = $this
         ->actingAs($user)
@@ -37,7 +36,7 @@ test('authenticated users can visit the dashboard', function () {
 });
 
 test('workspace layout renders the workspace switcher', function () {
-    $user = User::factory()->create();
+    [$user] = userWithWorkspace();
 
     $response = $this
         ->actingAs($user)
@@ -49,7 +48,7 @@ test('workspace layout renders the workspace switcher', function () {
 });
 
 test('workspace layout renders the user settings menu', function () {
-    $user = User::factory()->create();
+    [$user] = userWithWorkspace();
 
     $response = $this
         ->actingAs($user)

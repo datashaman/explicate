@@ -43,13 +43,13 @@ test('callback creates new user when github id not found', function () {
 
     $this->assertAuthenticated();
 
-    $user = \App\Models\User::where('github_id', 'gh-99')->first();
+    $user = User::where('github_id', 'gh-99')->first();
 
     expect($user)->not->toBeNull()
         ->and($user->github_nickname)->toBe('newuser')
         ->and($user->email)->toBe('newuser@example.com')
         ->and($user->currentTeam)->not->toBeNull()
-        ->and($user->currentWorkspace)->not->toBeNull();
+        ->and($user->needsOnboarding())->toBeTrue();
 });
 
 test('callback connects github to authenticated user', function () {

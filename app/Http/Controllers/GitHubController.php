@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\Onboarding\SetupNewUser;
 use App\Actions\Teams\CreateTeam;
 use App\Models\User;
 use Illuminate\Http\Client\Factory as Http;
@@ -16,7 +15,6 @@ class GitHubController extends Controller
 {
     public function __construct(
         private CreateTeam $createTeam,
-        private SetupNewUser $setupNewUser,
         private Http $http,
     ) {}
 
@@ -75,7 +73,6 @@ class GitHubController extends Controller
             ]);
 
             $this->createTeam->handle($user, $user->name."'s Team", isPersonal: true);
-            $this->setupNewUser->handle($user);
 
             return $user;
         });

@@ -58,6 +58,11 @@ class User extends Authenticatable implements OAuthenticatable, PasskeyUser
         return $this->timezone ?: config('app.timezone');
     }
 
+    public function needsOnboarding(): bool
+    {
+        return $this->current_workspace_id === null;
+    }
+
     /**
      * @return HasMany<Principal, $this>
      */
