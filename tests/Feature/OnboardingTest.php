@@ -1,5 +1,7 @@
 <?php
 
+use App\Enums\Provider;
+use App\Models\ProviderKey;
 use App\Models\User;
 use Livewire\Livewire;
 
@@ -51,7 +53,7 @@ test('skipping wizard creates workspace topic and agent with defaults', function
         ->and($user->currentWorkspace->agents()->count())->toBe(1);
 });
 
-test('completing wizard creates workspace topic and agent with custom values', function () {
+test('completing wizard saves api key and creates workspace topic and agent', function () {
     $user = userNeedingOnboarding();
 
     Livewire::actingAs($user)
@@ -59,6 +61,9 @@ test('completing wizard creates workspace topic and agent with custom values', f
         ->set('workspaceName', 'Acme HQ')
         ->call('next')
         ->set('topicName', 'Engineering')
+        ->call('next')
+        ->set('keyProvider', Provider::Anthropic->value)
+        ->set('keyValue', 'sk-ant-test-key-1234567890')
         ->call('next')
         ->set('agentName', 'Scribe')
         ->set('agentPrompt', 'Write clearly.')
@@ -71,6 +76,13 @@ test('completing wizard creates workspace topic and agent with custom values', f
     expect($workspace->name)->toBe('Acme HQ')
         ->and($workspace->topics()->where('name', 'Engineering')->exists())->toBeTrue()
         ->and($workspace->agents()->where('name', 'Scribe')->exists())->toBeTrue();
+
+    expect(
+        ProviderKey::where('team_id', $user->currentTeam->id)
+            ->where('provider', Provider::Anthropic)
+            ->whereNull('workspace_id')
+            ->exists()
+    )->toBeTrue();
 });
 
 test('next validates workspace name before advancing', function () {
@@ -82,4 +94,48 @@ test('next validates workspace name before advancing', function () {
         ->call('next')
         ->assertHasErrors(['workspaceName'])
         ->assertSet('step', 1);
+});
+
+test('next validates api key before advancing from step 3', function () {
+    $user = userNeedingOnboarding();
+
+    Livewire::actingAs($user)
+        ->test('pages::onboarding')
+        ->set('workspaceName', 'Acme HQ')
+        ->call('next')
+        ->set('topicName', 'Engineering')
+        ->call('next')
+        ->set('keyValue', '')
+        ->call('next')
+        ->assertHasErrors(['keyValue'])
+        ->assertSet('step', 3);
+});
+
+test('agent step only shows providers with configured keys', function () {
+    $user = userNeedingOnboarding();
+
+    ProviderKey::create([
+        'team_id' => $user->currentTeam->id,
+        'workspace_id' => null,
+        'provider' => Provider::Anthropic,
+        'api_key' => 'sk-ant-test-key-1234567890',
+    ]);
+
+    $component = Livewire::actingAs($user)
+        ->test('pages::onboarding')
+        ->set('workspaceName', 'Acme HQ')
+        ->call('next')
+        ->set('topicName', 'Engineering')
+        ->call('next')
+        ->set('keyProvider', Provider::OpenAI->value)
+        ->set('keyValue', 'sk-openai-test-key-1234567890')
+        ->call('next');
+
+    $available = collect($component->get('availableProviders'))
+        ->pluck('value')
+        ->all();
+
+    expect($available)->toContain(Provider::Anthropic->value)
+        ->and($available)->toContain(Provider::OpenAI->value)
+        ->and($available)->not->toContain(Provider::Gemini->value);
 });
