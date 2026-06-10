@@ -138,10 +138,12 @@ class GitRepositoryService
      */
     private function buildTokenEnv(): array
     {
+        $basicAuth = base64_encode('x-access-token:'.$this->repository->access_token);
+
         return [
             'GIT_CONFIG_COUNT' => '1',
             'GIT_CONFIG_KEY_0' => 'http.extraHeader',
-            'GIT_CONFIG_VALUE_0' => 'Authorization: Bearer '.$this->repository->access_token,
+            'GIT_CONFIG_VALUE_0' => 'Authorization: Basic '.$basicAuth,
         ];
     }
 
