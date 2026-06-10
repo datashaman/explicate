@@ -730,6 +730,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
             ->withCount('posts')
             ->reorder()
             ->orderByDesc('updated_at')
+            ->orderBy('id')
             ->get()
             ->map(function (Thread $thread) use ($topic): array {
                 $post = $thread->firstPost;
