@@ -10,6 +10,7 @@ use App\Models\Agent;
 use App\Models\AgentTask;
 use App\Models\AgentVersion;
 use App\Models\Post;
+use App\Models\ProviderKey;
 use App\Models\Thread;
 use App\Models\Topic;
 use App\Models\Workspace;
@@ -106,6 +107,40 @@ test('it executes a pending agent task through the topic forge mention agent', f
     $post->update(['body' => '@researcher Add one more detail.']);
 
     expect($reply->fresh()->body)->toBe('The agent response.');
+});
+
+test('it injects the decrypted team provider key before prompting the agent', function () {
+    config(['ai.providers.openai.key' => '']);
+
+    ProviderKey::create([
+        'team_id' => $this->user->currentTeam->id,
+        'provider' => Provider::OpenAI,
+        'api_key' => 'sk-team-openai-key',
+    ]);
+
+    Ai::fakeAgent(ExplicateMentionAgent::class, function (string $prompt, $attachments, $provider, string $model): string {
+        expect($provider->name())->toBe('openai')
+            ->and($provider->providerCredentials()['key'])->toBe('sk-team-openai-key')
+            ->and($model)->toBe('gpt-4o-mini');
+
+        return 'OpenAI response.';
+    })->preventStrayPrompts();
+
+    $agent = Agent::factory()->for($this->workspace)->create(['name' => 'Researcher']);
+    AgentVersion::factory()->for($agent)->create([
+        'provider' => Provider::OpenAI,
+        'model' => 'gpt-4o-mini',
+    ]);
+
+    $post = Post::factory()->for(Thread::factory()->forTopic($this->topic))->create([
+        'sender_principal_id' => $this->senderPrincipal->id,
+        'body' => '@researcher Use the configured OpenAI key.',
+        'status' => PostStatus::Published,
+    ]);
+
+    $task = AgentTask::query()->whereBelongsTo($post)->sole();
+
+    app(ExecuteAgentTask::class)->handle($task);
 });
 
 test('it marks a task failed when the agent has no executable version', function () {

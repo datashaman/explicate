@@ -6,11 +6,10 @@ use App\Ai\Agents\ExplicateMentionAgent;
 use App\Enums\AgentTaskStatus;
 use App\Models\AgentTask;
 use App\Models\Post;
-use App\Models\ProviderKey;
 use App\Models\User;
+use App\Services\AiProviderKeyService;
 use App\Services\GitRepositoryService;
 use Illuminate\Support\Facades\Log;
-use Laravel\Ai\Ai;
 use Laravel\Ai\Enums\Lab;
 use RuntimeException;
 use Stringable;
@@ -18,6 +17,8 @@ use Throwable;
 
 class ExecuteAgentTask
 {
+    public function __construct(private readonly AiProviderKeyService $providerKeys) {}
+
     public function handle(AgentTask $task): ?Post
     {
         $task->loadMissing([
@@ -49,18 +50,18 @@ class ExecuteAgentTask
             }
 
             $providerName = $version->provider->value;
-            $this->injectProviderKey($task, $providerName);
-
-            $response = ExplicateMentionAgent::make(
-                task: $task,
-                toolUser: $this->toolUserFor($task),
-            )->prompt(
-                $this->promptFor($task->post),
-                provider: Lab::from($providerName),
-                model: $version->model,
+            $response = $this->providerKeys->withWorkspaceKey(
+                $task->agent->workspace,
+                $providerName,
+                fn () => ExplicateMentionAgent::make(
+                    task: $task,
+                    toolUser: $this->toolUserFor($task),
+                )->prompt(
+                    $this->promptFor($task->post),
+                    provider: Lab::from($providerName),
+                    model: $version->model,
+                ),
             );
-
-            $this->restoreProviderKey($providerName);
 
             $task->forceFill([
                 'status' => AgentTaskStatus::Completed,
@@ -112,35 +113,6 @@ class ExecuteAgentTask
             $reply,
             1,
         ));
-    }
-
-    private function injectProviderKey(AgentTask $task, string $providerName): void
-    {
-        $workspace = $task->agent->workspace;
-        $team = $workspace->team;
-
-        $key = ProviderKey::query()
-            ->where('provider', $providerName)
-            ->where(fn ($q) => $q
-                ->where('workspace_id', $workspace->id)
-                ->orWhere(fn ($q2) => $q2
-                    ->where('team_id', $team->id)
-                    ->whereNull('workspace_id')
-                )
-            )
-            ->orderByRaw('workspace_id IS NULL')
-            ->value('api_key');
-
-        if ($key) {
-            config(["ai.providers.{$providerName}.key" => $key]);
-            Ai::forgetInstance($providerName);
-        }
-    }
-
-    private function restoreProviderKey(string $providerName): void
-    {
-        config(["ai.providers.{$providerName}.key" => env(strtoupper($providerName).'_API_KEY')]);
-        Ai::forgetInstance($providerName);
     }
 
     private function toolUserFor(AgentTask $task): User
