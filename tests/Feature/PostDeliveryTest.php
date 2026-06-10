@@ -4,11 +4,14 @@ use App\Actions\Agents\SyncAgentChatReplies;
 use App\Ai\Agents\ExplicateAgentRouter;
 use App\Enums\AgentTaskStatus;
 use App\Enums\PostStatus;
+use App\Enums\Provider;
 use App\Jobs\ProcessAgentTask;
 use App\Jobs\RouteThreadAgentReplies;
 use App\Models\Agent;
 use App\Models\AgentTask;
+use App\Models\AgentVersion;
 use App\Models\Post;
+use App\Models\ProviderKey;
 use App\Models\Thread;
 use App\Models\Topic;
 use Illuminate\Support\Facades\Notification;
@@ -199,6 +202,48 @@ test('an unmentioned thread reply asks the router which participating agent shou
             && str_contains($prompt->prompt, 'Researcher (@researcher)')
             && $messages->contains(fn ($message): bool => $message->content === 'Researcher (@researcher): Should I include acceptance criteria?');
     });
+});
+
+test('the thread router uses the configured team provider key', function () {
+    config(['ai.providers.openai.key' => '']);
+
+    ProviderKey::create([
+        'team_id' => $this->user->currentTeam->id,
+        'provider' => Provider::OpenAI,
+        'api_key' => 'sk-team-router-openai-key',
+    ]);
+
+    Ai::fakeAgent(ExplicateAgentRouter::class, function (string $prompt, $attachments, $provider): array {
+        expect($provider->name())->toBe('openai')
+            ->and($provider->providerCredentials()['key'])->toBe('sk-team-router-openai-key');
+
+        return [
+            'responses' => [
+                ['agent_slug' => 'researcher', 'reason' => 'The user answered the agent question.'],
+            ],
+        ];
+    })->preventStrayPrompts();
+
+    $agent = Agent::factory()->for($this->workspace)->create(['name' => 'Researcher']);
+    AgentVersion::factory()->for($agent)->create([
+        'provider' => Provider::OpenAI,
+        'model' => 'gpt-4o-mini',
+    ]);
+
+    $thread = Thread::factory()->forTopic($this->topic)->create();
+    Post::factory()->for($thread)->create([
+        'sender_principal_id' => $this->workspace->principalForAgent($agent)->id,
+        'body' => 'Should I include acceptance criteria?',
+        'status' => PostStatus::Published,
+    ]);
+
+    $reply = Post::factory()->for($thread)->create([
+        'sender_principal_id' => $this->senderPrincipal->id,
+        'body' => 'Yes, add them.',
+        'status' => PostStatus::Published,
+    ]);
+
+    app(SyncAgentChatReplies::class)->route($reply);
 });
 
 test('the thread router may decide no participating agent should respond', function () {

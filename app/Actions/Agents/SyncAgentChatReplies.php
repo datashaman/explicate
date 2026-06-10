@@ -11,11 +11,14 @@ use App\Models\Agent;
 use App\Models\AgentTask;
 use App\Models\Post;
 use App\Models\Principal;
+use App\Services\AiProviderKeyService;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Collection;
 
 class SyncAgentChatReplies
 {
+    public function __construct(private readonly AiProviderKeyService $providerKeys) {}
+
     public function handle(Post $post): void
     {
         $post->loadMissing(['sender.agent', 'thread.workspace']);
@@ -140,10 +143,19 @@ class SyncAgentChatReplies
             return Collection::make();
         }
 
-        $response = ExplicateAgentRouter::make(
-            post: $post,
-            candidateAgents: $candidateAgents,
-        )->prompt($this->routerPrompt($post, $candidateAgents));
+        $providerName = $this->routerProviderName($candidateAgents);
+
+        $response = $this->providerKeys->withWorkspaceKey(
+            $post->thread->workspace,
+            $providerName,
+            fn () => ExplicateAgentRouter::make(
+                post: $post,
+                candidateAgents: $candidateAgents,
+            )->prompt(
+                $this->routerPrompt($post, $candidateAgents),
+                provider: $providerName,
+            ),
+        );
 
         $agentsBySlug = $candidateAgents->keyBy('slug');
 
@@ -153,6 +165,19 @@ class SyncAgentChatReplies
             ->unique()
             ->map(fn (string $slug): Agent => $agentsBySlug->get($slug))
             ->values();
+    }
+
+    /**
+     * @param  EloquentCollection<int, Agent>  $candidateAgents
+     */
+    private function routerProviderName(EloquentCollection $candidateAgents): string
+    {
+        return $candidateAgents
+            ->first(fn (Agent $agent): bool => $agent->latestVersion !== null)
+            ?->latestVersion
+            ?->provider
+            ?->value
+            ?? config('ai.default');
     }
 
     private function hasRoutingCandidates(Post $post): bool
