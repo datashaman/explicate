@@ -14,8 +14,8 @@ use Laravel\Mcp\Server\Contracts\HasUriTemplate;
 use Laravel\Mcp\Server\Resource;
 use Laravel\Mcp\Support\UriTemplate;
 
-#[Description('List post-derived work queued for an agent inside an accessible workspace.')]
-class AgentTasksResource extends Resource implements HasUriTemplate
+#[Description('List threads labeled with a topic inside an accessible workspace.')]
+class TopicThreadsResource extends Resource implements HasUriTemplate
 {
     use FormatsMcpPayloads;
     use HandlesResourceExceptions;
@@ -24,7 +24,7 @@ class AgentTasksResource extends Resource implements HasUriTemplate
 
     public function uriTemplate(): UriTemplate
     {
-        return new UriTemplate(ExplicateUris::AgentTasksTemplate);
+        return new UriTemplate(ExplicateUris::TopicPostsTemplate);
     }
 
     public function handle(Request $request): Response
@@ -32,32 +32,28 @@ class AgentTasksResource extends Resource implements HasUriTemplate
         return $this->guardResource(function () use ($request): Response {
             /** @var User $user */
             $user = $this->context->requireUser($request->user());
-            $agent = $this->context->agentFor(
+            $topic = $this->context->topicFor(
                 $user,
-                (string) $request->get('agent'),
+                (string) $request->get('topic'),
                 (string) $request->get('workspace'),
             );
 
-            $tasks = $agent->tasks()
-                ->with(['agent.workspace', 'post.thread.workspace', 'post.sender.user', 'post.sender.agent'])
-                ->orderByDesc('priority')
-                ->orderBy('available_at')
-                ->orderBy('id')
+            $threads = $topic->threads()
+                ->whereHas('posts')
+                ->with(['workspace', 'topic', 'latestPost.sender.user', 'latestPost.sender.agent'])
+                ->withCount('posts')
                 ->get()
-                ->map(fn ($task) => $this->agentTaskPayload($task))
+                ->map(fn ($thread) => $this->threadSummaryPayload($thread))
                 ->values()
                 ->all();
 
             return Response::json([
-                'workspace' => $agent->workspace->only(['id', 'name', 'slug']),
-                'agent' => [
-                    'id' => $agent->id,
-                    'name' => $agent->name,
-                    'slug' => $agent->slug,
-                    'resource_uri' => ExplicateUris::agent($agent),
-                    'tasks_resource_uri' => ExplicateUris::agentTasks($agent),
+                'workspace' => $topic->workspace->only(['id', 'name', 'slug']),
+                'topic' => [
+                    ...$topic->only(['id', 'name', 'slug']),
+                    'resource_uri' => ExplicateUris::topic($topic),
                 ],
-                'tasks' => $tasks,
+                'threads' => $threads,
             ]);
         });
     }

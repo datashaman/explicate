@@ -65,21 +65,14 @@ class AgentTask extends Model
 
     public function thread(): Thread
     {
-        $this->loadMissing(['post.thread', 'post.startedThread']);
+        $this->loadMissing('post.thread');
 
-        if ($this->post->thread) {
-            return $this->post->thread;
-        }
-
-        return $this->post->startedThread()->firstOrCreate([], [
-            'topic_id' => $this->post->topic_id,
-            'title' => $this->post->preview(),
-        ]);
+        return $this->post->thread;
     }
 
     public function syncStatusPost(?string $body = null): Post
     {
-        $this->loadMissing(['agent.workspace', 'post.topic', 'statusPost']);
+        $this->loadMissing(['agent.workspace', 'post.thread', 'statusPost']);
 
         $thread = $this->thread();
         $sender = $this->agent->workspace->principalForAgent($this->agent);
@@ -89,7 +82,6 @@ class AgentTask extends Model
 
         if (! $post) {
             $post = $thread->posts()->create([
-                'topic_id' => $this->post->topic_id,
                 'sender_principal_id' => $sender->id,
                 'body' => $postBody,
                 'status' => PostStatus::Published,
@@ -102,7 +94,6 @@ class AgentTask extends Model
         }
 
         $post->forceFill([
-            'topic_id' => $this->post->topic_id,
             'thread_id' => $thread->id,
             'sender_principal_id' => $sender->id,
             'body' => $postBody,

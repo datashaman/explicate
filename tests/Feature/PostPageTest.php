@@ -3,6 +3,7 @@
 use App\Enums\PostStatus;
 use App\Models\Attachment;
 use App\Models\Post;
+use App\Models\Thread;
 use App\Models\Topic;
 use App\Models\Workspace;
 use Illuminate\Http\UploadedFile;
@@ -12,7 +13,7 @@ use Livewire\Livewire;
 beforeEach(function () {
     [$this->user, $this->workspace] = userWithWorkspace();
     $this->topic = Topic::factory()->for($this->workspace)->create();
-    $this->post = Post::factory()->for($this->topic)->create();
+    $this->post = Post::factory()->for(Thread::factory()->forTopic($this->topic))->create();
 });
 
 test('post page loads', function () {
@@ -52,7 +53,7 @@ test('post create route uses the selected topic query as the form default', func
 test('post page does not resolve topics outside the current workspace', function () {
     $other = Workspace::factory()->for($this->user->currentTeam)->create();
     $otherTopic = Topic::factory()->for($other)->create();
-    $otherPost = Post::factory()->for($otherTopic)->create();
+    $otherPost = Post::factory()->for(Thread::factory()->forTopic($otherTopic))->create();
 
     $this->actingAs($this->user)
         ->get(route('dashboard', ['post' => $otherPost->ulid]))
@@ -255,7 +256,7 @@ test('draft post publishes as a topic post', function () {
 });
 
 test('a topic has many posts', function () {
-    Post::factory()->count(2)->for($this->topic)->create();
+    Post::factory()->count(2)->for(Thread::factory()->forTopic($this->topic))->create();
 
     expect($this->topic->posts()->count())->toBe(3); // 1 from beforeEach + 2
 });

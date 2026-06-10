@@ -2,18 +2,20 @@
 
 namespace App\Mcp\Servers;
 
+use App\Mcp\ExplicateTools;
 use App\Mcp\Resources\AgentResource;
 use App\Mcp\Resources\AgentTaskResource;
 use App\Mcp\Resources\AgentTasksResource;
 use App\Mcp\Resources\PlaybookResource;
 use App\Mcp\Resources\PostResource;
-use App\Mcp\Resources\TopicPostsResource;
+use App\Mcp\Resources\ThreadResource;
 use App\Mcp\Resources\TopicResource;
+use App\Mcp\Resources\TopicThreadsResource;
 use App\Mcp\Resources\WhoamiResource;
 use App\Mcp\Resources\WorkspaceAgentsResource;
 use App\Mcp\Resources\WorkspacesResource;
+use App\Mcp\Resources\WorkspaceThreadsResource;
 use App\Mcp\Resources\WorkspaceTopicsResource;
-use App\Mcp\ExplicateTools;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use Laravel\Mcp\Server;
@@ -25,7 +27,7 @@ use Throwable;
 
 #[Name('Explicate Server')]
 #[Version('0.0.1')]
-#[Instructions('Use this server to inspect the authenticated user\'s current team, browse workspaces, topics, agents, and posts, read topic and post state, and create topics, agents, or draft and published posts inside accessible topics.')]
+#[Instructions('Use this server to inspect the authenticated user\'s current team, browse workspaces, optional topic labels, agents, threads, and posts, read thread and post state, and create topics, agents, threads, or replies inside accessible workspaces.')]
 class ExplicateServer extends Server
 {
     public int $maxPaginationLength = 250;
@@ -41,11 +43,13 @@ class ExplicateServer extends Server
         WorkspacesResource::class,
         PlaybookResource::class,
         WorkspaceTopicsResource::class,
+        WorkspaceThreadsResource::class,
         WorkspaceAgentsResource::class,
         AgentTasksResource::class,
         AgentTaskResource::class,
-        TopicPostsResource::class,
+        TopicThreadsResource::class,
         TopicResource::class,
+        ThreadResource::class,
         PostResource::class,
         AgentResource::class,
     ];

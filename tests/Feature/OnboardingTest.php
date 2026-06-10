@@ -37,7 +37,7 @@ test('already onboarded user visiting onboarding is redirected to dashboard', fu
         ->assertRedirect(route('dashboard'));
 });
 
-test('skipping wizard creates workspace topic and agent with defaults', function () {
+test('skipping wizard creates workspace and agent with defaults', function () {
     $user = userNeedingOnboarding();
 
     Livewire::actingAs($user)
@@ -49,18 +49,16 @@ test('skipping wizard creates workspace topic and agent with defaults', function
 
     expect($user->currentWorkspace)->not->toBeNull()
         ->and($user->currentWorkspace->name)->toBe('My Workspace')
-        ->and($user->currentWorkspace->topics()->count())->toBe(1)
+        ->and($user->currentWorkspace->topics()->count())->toBe(0)
         ->and($user->currentWorkspace->agents()->count())->toBe(1);
 });
 
-test('completing wizard saves api key and creates workspace topic and agent', function () {
+test('completing wizard saves api key and creates workspace and agent', function () {
     $user = userNeedingOnboarding();
 
     Livewire::actingAs($user)
         ->test('pages::onboarding')
         ->set('workspaceName', 'Acme HQ')
-        ->call('next')
-        ->set('topicName', 'Engineering')
         ->call('next')
         ->set('keyProvider', Provider::Anthropic->value)
         ->set('keyValue', 'sk-ant-test-key-1234567890')
@@ -74,7 +72,7 @@ test('completing wizard saves api key and creates workspace topic and agent', fu
     $workspace = $user->currentWorkspace;
 
     expect($workspace->name)->toBe('Acme HQ')
-        ->and($workspace->topics()->where('name', 'Engineering')->exists())->toBeTrue()
+        ->and($workspace->topics()->exists())->toBeFalse()
         ->and($workspace->agents()->where('name', 'Scribe')->exists())->toBeTrue();
 
     expect(
@@ -96,19 +94,17 @@ test('next validates workspace name before advancing', function () {
         ->assertSet('step', 1);
 });
 
-test('next validates api key before advancing from step 3', function () {
+test('next validates api key before advancing from step 2', function () {
     $user = userNeedingOnboarding();
 
     Livewire::actingAs($user)
         ->test('pages::onboarding')
         ->set('workspaceName', 'Acme HQ')
         ->call('next')
-        ->set('topicName', 'Engineering')
-        ->call('next')
         ->set('keyValue', '')
         ->call('next')
         ->assertHasErrors(['keyValue'])
-        ->assertSet('step', 3);
+        ->assertSet('step', 2);
 });
 
 test('agent step only shows providers with configured keys', function () {
@@ -124,8 +120,6 @@ test('agent step only shows providers with configured keys', function () {
     $component = Livewire::actingAs($user)
         ->test('pages::onboarding')
         ->set('workspaceName', 'Acme HQ')
-        ->call('next')
-        ->set('topicName', 'Engineering')
         ->call('next')
         ->set('keyProvider', Provider::OpenAI->value)
         ->set('keyValue', 'sk-openai-test-key-1234567890')

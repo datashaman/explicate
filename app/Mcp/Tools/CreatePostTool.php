@@ -8,7 +8,6 @@ use App\Mcp\ExplicateContext;
 use App\Mcp\ExplicateUris;
 use App\Models\User;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
-use Illuminate\Validation\Rule;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\ResponseFactory;
@@ -17,7 +16,7 @@ use Laravel\Mcp\Server\Attributes\Name;
 use Laravel\Mcp\Server\Tool;
 
 #[Name('create-post')]
-#[Description('Create a post inside a topic in the current workspace.')]
+#[Description('Reply to an existing thread in the current workspace.')]
 class CreatePostTool extends Tool
 {
     public function __construct(protected ExplicateContext $context) {}
@@ -28,26 +27,27 @@ class CreatePostTool extends Tool
     public function handle(Request $request): Response|ResponseFactory
     {
         $validated = $request->validate([
-            'topic_slug' => ['required', 'string'],
+            'thread' => ['required', 'string'],
             'body' => ['required', 'string'],
-            'status' => ['nullable', 'string', Rule::enum(PostStatus::class)],
         ]);
 
         /** @var User $user */
         $user = $this->context->requireUser($request->user());
-        $topic = $this->context->topicFor($user, $validated['topic_slug']);
+        $thread = $this->context->threadFor($user, $validated['thread']);
         $post = app(CreatePost::class)->handle(
-            topic: $topic,
-            sender: $topic->workspace->principalForUser($user),
+            thread: $thread,
+            sender: $thread->workspace->principalForUser($user),
             body: $validated['body'],
-            status: PostStatus::from($validated['status'] ?? PostStatus::Draft->value),
+            status: PostStatus::Published,
         );
 
         return Response::structured([
-            'workspace' => $topic->workspace->only(['id', 'name', 'slug']),
-            'topic' => [
-                ...$topic->only(['id', 'name', 'slug']),
-                'resource_uri' => ExplicateUris::topic($topic),
+            'workspace' => $thread->workspace->only(['id', 'name', 'slug']),
+            'thread' => [
+                'id' => $thread->id,
+                'title' => $thread->title,
+                'slug' => $thread->slug,
+                'resource_uri' => ExplicateUris::thread($thread),
             ],
             'post' => [
                 'id' => $post->id,
@@ -68,16 +68,12 @@ class CreatePostTool extends Tool
     public function schema(JsonSchema $schema): array
     {
         return [
-            'topic_slug' => $schema->string()
-                ->description('The topic slug the post should be created in.')
+            'thread' => $schema->string()
+                ->description('The thread slug or id to reply to.')
                 ->required(),
             'body' => $schema->string()
-                ->description('The post body.')
+                ->description('The reply body.')
                 ->required(),
-            'status' => $schema->string()
-                ->description('Optional post status.')
-                ->enum(PostStatus::class)
-                ->nullable(),
         ];
     }
 }

@@ -8,7 +8,7 @@
 ])
 
 @php
-    $post->loadMissing(['attachments', 'sender.user', 'sender.agent', 'topic']);
+    $post->loadMissing(['attachments', 'sender.user', 'sender.agent', 'thread.topic']);
 
     $senderName = $post->sender?->label() ?? __('Unknown sender');
     $senderInitials = Str::of($senderName)
@@ -56,13 +56,11 @@
     })();
     $replyPosts = collect();
 
-    if ($showReplyAffordance) {
-        $post->loadMissing([
-            'startedThread.posts.sender.user',
-            'startedThread.posts.sender.agent',
-        ]);
-
-        $replyPosts = $post->startedThread?->posts ?? collect();
+    if ($showReplyAffordance && $post->thread) {
+        $replyPosts = $post->thread->posts()
+            ->where('posts.id', '!=', $post->id)
+            ->with(['sender.user', 'sender.agent'])
+            ->get();
     }
 @endphp
 
@@ -77,13 +75,13 @@
                 <span class="min-w-0 truncate text-sm font-semibold text-neutral-900 dark:text-neutral-100" data-test="post-message-sender">{{ $senderName }}</span>
                 <span class="text-xs text-neutral-400 dark:text-neutral-500" title="{{ $timestampTitle }}" data-test="post-message-timestamp">{{ $timestampLabel }}</span>
 
-                @if ($showTopic)
+                @if ($showTopic && $post->thread->topic)
                     <a
-                        href="{{ route('dashboard', ['topic' => $post->topic->slug, 'panel' => 'posts']) }}"
+                        href="{{ route('dashboard', ['topic' => $post->thread->topic->slug, 'panel' => 'posts']) }}"
                         wire:navigate
                         class="text-xs text-neutral-400 hover:text-neutral-700 hover:underline dark:text-neutral-500 dark:hover:text-neutral-300"
                         data-test="post-message-topic"
-                    >#{{ $post->topic->name }}</a>
+                    >#{{ $post->thread->topic->name }}</a>
                 @endif
             </div>
 

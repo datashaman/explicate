@@ -10,14 +10,14 @@ class AttachmentController extends Controller
 {
     public function __invoke(Attachment $attachment): BinaryFileResponse
     {
-        $attachment->loadMissing('post.topic.workspace');
+        $attachment->loadMissing('post.thread.workspace');
 
         abort_unless(
-            Auth::user()->currentWorkspace?->id === $attachment->post->topic->workspace_id,
+            Auth::user()->currentWorkspace?->id === $attachment->post->thread->workspace_id,
             404
         );
 
-        $filesystem = $attachment->post->topic->workspace->filesystem();
+        $filesystem = $attachment->post->thread->workspace->filesystem();
 
         abort_unless($filesystem->exists($attachment->path), 404);
 

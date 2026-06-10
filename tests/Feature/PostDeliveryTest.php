@@ -29,7 +29,7 @@ test('mentioning an agent in a published post creates agent work instead of a no
 
     $agent = Agent::factory()->for($this->workspace)->create(['name' => 'Researcher']);
 
-    $post = Post::factory()->for($this->topic)->create([
+    $post = Post::factory()->for(Thread::factory()->forTopic($this->topic))->create([
         'sender_principal_id' => $this->senderPrincipal->id,
         'body' => '@researcher Find the latest internal context.',
         'status' => PostStatus::Published,
@@ -48,8 +48,8 @@ test('mentioning an agent in a published post creates agent work instead of a no
         ->and($task->available_at)->not->toBeNull()
         ->and($task->statusPost)->not->toBeNull()
         ->and($task->statusPost->body)->toBe('Researcher queued.')
-        ->and($task->statusPost->thread?->parent_post_id)->toBe($post->id)
-        ->and($post->fresh()->thread_id)->toBeNull();
+        ->and($task->statusPost->thread_id)->toBe($post->thread_id)
+        ->and($post->fresh()->thread_id)->not->toBeNull();
 
     Queue::assertPushed(ProcessAgentTask::class, fn (ProcessAgentTask $job): bool => $job->task->is($task));
 });
@@ -57,7 +57,7 @@ test('mentioning an agent in a published post creates agent work instead of a no
 test('topic posts without assignments do not create notifications or agent tasks', function () {
     Notification::fake();
 
-    Post::factory()->for($this->topic)->create([
+    Post::factory()->for(Thread::factory()->forTopic($this->topic))->create([
         'sender_principal_id' => $this->senderPrincipal->id,
         'status' => PostStatus::Published,
     ]);
@@ -72,7 +72,7 @@ test('publishing a draft with an agent mention creates agent work once', functio
 
     $agent = Agent::factory()->for($this->workspace)->create(['name' => 'Researcher']);
 
-    $post = Post::factory()->for($this->topic)->create([
+    $post = Post::factory()->for(Thread::factory()->forTopic($this->topic))->create([
         'sender_principal_id' => $this->senderPrincipal->id,
         'body' => '@researcher Draft context.',
         'status' => PostStatus::Draft,
@@ -102,7 +102,7 @@ test('removing an agent mention removes the task status reply', function () {
 
     Agent::factory()->for($this->workspace)->create(['name' => 'Researcher']);
 
-    $post = Post::factory()->for($this->topic)->create([
+    $post = Post::factory()->for(Thread::factory()->forTopic($this->topic))->create([
         'sender_principal_id' => $this->senderPrincipal->id,
         'body' => '@researcher Draft context.',
         'status' => PostStatus::Published,
@@ -122,7 +122,7 @@ test('mentioning multiple agents creates one task for each agent', function () {
     Agent::factory()->for($this->workspace)->create(['name' => 'Researcher']);
     Agent::factory()->for($this->workspace)->create(['name' => 'Reviewer']);
 
-    $post = Post::factory()->for($this->topic)->create([
+    $post = Post::factory()->for(Thread::factory()->forTopic($this->topic))->create([
         'body' => '@researcher @reviewer Please collaborate.',
         'sender_principal_id' => $this->senderPrincipal->id,
         'status' => PostStatus::Published,
@@ -137,7 +137,7 @@ test('mentions only create work for agents in the post workspace', function () {
     $mentionedAgent = Agent::factory()->for($this->workspace)->create(['name' => 'Researcher']);
     Agent::factory()->create(['name' => 'Reviewer']);
 
-    $post = Post::factory()->for($this->topic)->create([
+    $post = Post::factory()->for(Thread::factory()->forTopic($this->topic))->create([
         'body' => '@researcher @reviewer Please review.',
         'sender_principal_id' => $this->senderPrincipal->id,
         'status' => PostStatus::Published,
@@ -155,22 +155,21 @@ test('an unmentioned thread reply asks the router which participating agent shou
     ]])->preventStrayPrompts();
 
     $agent = Agent::factory()->for($this->workspace)->create(['name' => 'Researcher']);
-    $parentPost = Post::factory()->for($this->topic)->create([
+    $thread = Thread::factory()->forTopic($this->topic)->create([
+        'title' => 'Brief review',
+    ]);
+    $parentPost = Post::factory()->for($thread)->create([
         'sender_principal_id' => $this->senderPrincipal->id,
         'body' => 'Please inspect the brief.',
         'status' => PostStatus::Published,
     ]);
-    $thread = Thread::factory()->for($this->topic)->create([
-        'parent_post_id' => $parentPost->id,
-        'title' => 'Brief review',
-    ]);
-    Post::factory()->for($this->topic)->for($thread)->create([
+    Post::factory()->for($thread)->create([
         'sender_principal_id' => $this->workspace->principalForAgent($agent)->id,
         'body' => 'Should I include acceptance criteria?',
         'status' => PostStatus::Published,
     ]);
 
-    $reply = Post::factory()->for($this->topic)->for($thread)->create([
+    $reply = Post::factory()->for($thread)->create([
         'sender_principal_id' => $this->senderPrincipal->id,
         'body' => 'Yes, add acceptance criteria and edge cases.',
         'status' => PostStatus::Published,
@@ -208,14 +207,14 @@ test('the thread router may decide no participating agent should respond', funct
     ]])->preventStrayPrompts();
 
     $agent = Agent::factory()->for($this->workspace)->create(['name' => 'Researcher']);
-    $thread = Thread::factory()->for($this->topic)->create();
-    Post::factory()->for($this->topic)->for($thread)->create([
+    $thread = Thread::factory()->forTopic($this->topic)->create();
+    Post::factory()->for(Thread::factory()->forTopic($this->topic))->for($thread)->create([
         'sender_principal_id' => $this->workspace->principalForAgent($agent)->id,
         'body' => 'I updated the brief.',
         'status' => PostStatus::Published,
     ]);
 
-    $reply = Post::factory()->for($this->topic)->for($thread)->create([
+    $reply = Post::factory()->for(Thread::factory()->forTopic($this->topic))->for($thread)->create([
         'sender_principal_id' => $this->senderPrincipal->id,
         'body' => 'Thanks, looks good.',
         'status' => PostStatus::Published,
@@ -235,14 +234,14 @@ test('an explicit agent mention in a thread bypasses the router', function () {
     Ai::fakeAgent(ExplicateAgentRouter::class)->preventStrayPrompts();
 
     $agent = Agent::factory()->for($this->workspace)->create(['name' => 'Researcher']);
-    $thread = Thread::factory()->for($this->topic)->create();
-    Post::factory()->for($this->topic)->for($thread)->create([
+    $thread = Thread::factory()->forTopic($this->topic)->create();
+    Post::factory()->for(Thread::factory()->forTopic($this->topic))->for($thread)->create([
         'sender_principal_id' => $this->workspace->principalForAgent($agent)->id,
         'body' => 'I can revise this if needed.',
         'status' => PostStatus::Published,
     ]);
 
-    $reply = Post::factory()->for($this->topic)->for($thread)->create([
+    $reply = Post::factory()->for(Thread::factory()->forTopic($this->topic))->for($thread)->create([
         'sender_principal_id' => $this->senderPrincipal->id,
         'body' => '@researcher Please revise this.',
         'status' => PostStatus::Published,
@@ -258,9 +257,9 @@ test('agent authored replies do not summon themselves when their body contains t
     Ai::fakeAgent(ExplicateAgentRouter::class)->preventStrayPrompts();
 
     $agent = Agent::factory()->for($this->workspace)->create(['name' => 'Specification Writer']);
-    $thread = Thread::factory()->for($this->topic)->create();
+    $thread = Thread::factory()->forTopic($this->topic)->create();
 
-    $reply = Post::factory()->for($this->topic)->for($thread)->create([
+    $reply = Post::factory()->for(Thread::factory()->forTopic($this->topic))->for($thread)->create([
         'sender_principal_id' => $this->workspace->principalForAgent($agent)->id,
         'body' => 'Specification Writer (@specification-writer): Acknowledged.',
         'status' => PostStatus::Published,
@@ -278,9 +277,9 @@ test('agent authored replies can summon other mentioned agents', function () {
 
     $writer = Agent::factory()->for($this->workspace)->create(['name' => 'Specification Writer']);
     $reviewer = Agent::factory()->for($this->workspace)->create(['name' => 'Reviewer']);
-    $thread = Thread::factory()->for($this->topic)->create();
+    $thread = Thread::factory()->forTopic($this->topic)->create();
 
-    $reply = Post::factory()->for($this->topic)->for($thread)->create([
+    $reply = Post::factory()->for(Thread::factory()->forTopic($this->topic))->for($thread)->create([
         'sender_principal_id' => $this->workspace->principalForAgent($writer)->id,
         'body' => '@reviewer Please check this specification before I continue.',
         'status' => PostStatus::Published,

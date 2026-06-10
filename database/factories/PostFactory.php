@@ -4,7 +4,7 @@ namespace Database\Factories;
 
 use App\Enums\PostStatus;
 use App\Models\Post;
-use App\Models\Topic;
+use App\Models\Thread;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
@@ -19,8 +19,7 @@ class PostFactory extends Factory
     public function definition(): array
     {
         return [
-            'topic_id' => Topic::factory(),
-            'thread_id' => null,
+            'thread_id' => Thread::factory(),
             'sender_principal_id' => null,
             'ulid' => fn (): string => (string) Str::ulid(),
             'body' => fake()->paragraphs(3, true),

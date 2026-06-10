@@ -10,7 +10,7 @@ use Laravel\Mcp\Server\Attributes\MimeType;
 use Laravel\Mcp\Server\Attributes\Uri;
 use Laravel\Mcp\Server\Resource;
 
-#[Description('A top-level guide for navigating Explicate workspaces, topics, agents, and posts.')]
+#[Description('A top-level guide for navigating Explicate workspaces, topic labels, agents, threads, and posts.')]
 #[Uri(ExplicateUris::Playbook)]
 #[MimeType('application/json')]
 class PlaybookResource extends Resource
@@ -23,18 +23,20 @@ class PlaybookResource extends Resource
         return Response::json([
             'name' => 'Explicate Playbook',
             'resource_uri' => ExplicateUris::Playbook,
-            'overview' => 'Use this playbook to discover accessible Explicate context before reading or changing topic posts.',
+            'overview' => 'Use this playbook to discover accessible Explicate context before reading or changing conversation threads.',
             'workflow' => [
                 'List workspaces to find the current team scope.',
-                'List topics or agents within a workspace before reading a specific resource.',
-                'Read topic resources when you need topic state, attached agents, and posts together.',
-                'Read post resources before updating or creating related draft content.',
+                'List threads, optional topic labels, or agents within a workspace before reading a specific resource.',
+                'Read thread resources when you need the ordered conversation.',
+                'Read post resources before updating a specific post.',
             ],
             'resources' => [
                 'workspace_topics' => ExplicateUris::WorkspaceTopicsTemplate,
+                'workspace_threads' => ExplicateUris::WorkspaceThreadsTemplate,
                 'workspace_agents' => ExplicateUris::WorkspaceAgentsTemplate,
                 'topic' => ExplicateUris::TopicTemplate,
-                'topic_posts' => ExplicateUris::TopicPostsTemplate,
+                'topic_threads' => ExplicateUris::TopicPostsTemplate,
+                'thread' => ExplicateUris::ThreadTemplate,
                 'post' => ExplicateUris::PostTemplate,
                 'agent' => ExplicateUris::AgentTemplate,
                 'agent_tasks' => ExplicateUris::AgentTasksTemplate,

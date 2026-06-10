@@ -5,6 +5,7 @@ namespace App\Mcp;
 use App\Models\Agent;
 use App\Models\AgentTask;
 use App\Models\Post;
+use App\Models\Thread;
 use App\Models\Topic;
 use App\Models\User;
 use App\Models\Workspace;
@@ -80,11 +81,32 @@ class ExplicateContext
         return $agent;
     }
 
-    public function postFor(User $user, string $topicSlug, string $postUlid, ?string $workspaceSlug = null): Post
+    public function threadFor(User $user, string $slugOrId, ?string $workspaceSlug = null): Thread
     {
-        $topic = $this->topicFor($user, $topicSlug, $workspaceSlug);
+        $workspace = $this->workspaceFor($user, $workspaceSlug);
 
-        $post = $topic->posts()->where('ulid', $postUlid)->first();
+        $thread = $workspace->threads()
+            ->where(function ($query) use ($slugOrId): void {
+                $query->where('slug', $slugOrId)
+                    ->when(is_numeric($slugOrId), fn ($query) => $query->orWhereKey((int) $slugOrId));
+            })
+            ->first();
+
+        if (! $thread instanceof Thread) {
+            throw new AuthorizationException('The requested thread is not accessible for the authenticated user.');
+        }
+
+        return $thread;
+    }
+
+    public function postFor(User $user, string $postUlid, ?string $workspaceSlug = null): Post
+    {
+        $workspace = $this->workspaceFor($user, $workspaceSlug);
+
+        $post = Post::query()
+            ->where('ulid', $postUlid)
+            ->whereHas('thread', fn ($query) => $query->whereBelongsTo($workspace))
+            ->first();
 
         if (! $post instanceof Post) {
             throw new AuthorizationException('The requested post is not accessible for the authenticated user.');

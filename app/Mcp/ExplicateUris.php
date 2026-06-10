@@ -6,6 +6,7 @@ use App\Data\UserWorkspace;
 use App\Models\Agent;
 use App\Models\AgentTask;
 use App\Models\Post;
+use App\Models\Thread;
 use App\Models\Topic;
 use App\Models\Workspace;
 
@@ -29,7 +30,11 @@ final class ExplicateUris
 
     public const TopicPostsTemplate = 'explicate://workspaces/{workspace}/topics/{topic}/posts';
 
-    public const PostTemplate = 'explicate://workspaces/{workspace}/topics/{topic}/posts/{post}';
+    public const WorkspaceThreadsTemplate = 'explicate://workspaces/{workspace}/threads';
+
+    public const ThreadTemplate = 'explicate://workspaces/{workspace}/threads/{thread}';
+
+    public const PostTemplate = 'explicate://workspaces/{workspace}/posts/{post}';
 
     public const AgentTemplate = 'explicate://workspaces/{workspace}/agents/{agent}';
 
@@ -69,11 +74,23 @@ final class ExplicateUris
         return self::topic($topic).'/posts';
     }
 
+    public static function workspaceThreads(Workspace|UserWorkspace|string $workspace): string
+    {
+        return self::Workspaces.'/'.self::workspaceSlug($workspace).'/threads';
+    }
+
+    public static function thread(Thread $thread): string
+    {
+        $thread->loadMissing('workspace');
+
+        return self::workspaceThreads($thread->workspace)."/{$thread->slug}";
+    }
+
     public static function post(Post $post): string
     {
-        $post->loadMissing('topic.workspace');
+        $post->loadMissing('thread.workspace');
 
-        return self::topic($post->topic)."/posts/{$post->ulid}";
+        return self::Workspaces."/{$post->thread->workspace->slug}/posts/{$post->ulid}";
     }
 
     public static function agent(Agent $agent): string

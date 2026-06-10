@@ -4,6 +4,7 @@ namespace App\Mcp;
 
 use App\Mcp\Tools\CreateAgentTool;
 use App\Mcp\Tools\CreatePostTool;
+use App\Mcp\Tools\CreateThreadTool;
 use App\Mcp\Tools\CreateTopicTool;
 use App\Mcp\Tools\DeleteFileTool;
 use App\Mcp\Tools\DeletePostTool;
@@ -11,12 +12,13 @@ use App\Mcp\Tools\GetAgentTaskTool;
 use App\Mcp\Tools\GetAgentTool;
 use App\Mcp\Tools\GetFileTool;
 use App\Mcp\Tools\GetPostTool;
+use App\Mcp\Tools\GetThreadTool;
 use App\Mcp\Tools\GetTopicTool;
 use App\Mcp\Tools\ListAgentsTool;
 use App\Mcp\Tools\ListAgentTasksTool;
 use App\Mcp\Tools\ListFilesTool;
-use App\Mcp\Tools\ListPostsTool;
 use App\Mcp\Tools\ListReposTool;
+use App\Mcp\Tools\ListThreadsTool;
 use App\Mcp\Tools\ListTopicsTool;
 use App\Mcp\Tools\ListWorkspacesTool;
 use App\Mcp\Tools\RunGitCommandTool;
@@ -40,11 +42,13 @@ final class ExplicateTools
         GetAgentTaskTool::class,
         GetTopicTool::class,
         GetAgentTool::class,
-        ListPostsTool::class,
+        ListThreadsTool::class,
+        GetThreadTool::class,
         GetPostTool::class,
         CreateTopicTool::class,
         CreateAgentTool::class,
         UpdateAgentTool::class,
+        CreateThreadTool::class,
         CreatePostTool::class,
         UpdatePostTool::class,
         DeletePostTool::class,
@@ -66,9 +70,11 @@ final class ExplicateTools
         GetAgentTaskTool::class,
         GetTopicTool::class,
         GetAgentTool::class,
-        ListPostsTool::class,
+        ListThreadsTool::class,
+        GetThreadTool::class,
         GetPostTool::class,
         CreateTopicTool::class,
+        CreateThreadTool::class,
         CreatePostTool::class,
         UpdatePostTool::class,
         DeletePostTool::class,

@@ -17,8 +17,8 @@ class StorePostAttachments
             return;
         }
 
-        $post->loadMissing('topic.workspace');
-        $filesystem = $post->topic->workspace->filesystem();
+        $post->loadMissing('thread.workspace');
+        $filesystem = $post->thread->workspace->filesystem();
         $metadata = $this->metadata($uploads);
 
         foreach ($uploads as $index => $upload) {

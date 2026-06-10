@@ -14,7 +14,7 @@ use Laravel\Mcp\Server\Attributes\Name;
 use Laravel\Mcp\Server\Tool;
 
 #[Name('create-topic')]
-#[Description('Create a topic in the authenticated user\'s current workspace.')]
+#[Description('Create an optional topic label in the authenticated user\'s current workspace.')]
 class CreateTopicTool extends Tool
 {
     public function __construct(protected ExplicateContext $context) {}
@@ -41,7 +41,7 @@ class CreateTopicTool extends Tool
                 'id' => $topic->id,
                 'name' => $topic->name,
                 'slug' => $topic->slug,
-                'posts_count' => 0,
+                'threads_count' => 0,
                 'resource_uri' => ExplicateUris::topic($topic),
             ],
         ]);

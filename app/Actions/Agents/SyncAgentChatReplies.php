@@ -18,7 +18,7 @@ class SyncAgentChatReplies
 {
     public function handle(Post $post): void
     {
-        $post->loadMissing(['sender.agent', 'thread', 'topic.workspace']);
+        $post->loadMissing(['sender.agent', 'thread.workspace']);
 
         if ($post->sender?->type === Principal::TypeAgent) {
             $mentionedAgents = $post->mentionedAgents()
@@ -57,7 +57,7 @@ class SyncAgentChatReplies
 
     public function route(Post $post): void
     {
-        $post->loadMissing(['sender.agent', 'thread', 'topic.workspace']);
+        $post->loadMissing(['sender.agent', 'thread.workspace']);
 
         if ($post->status !== PostStatus::Published || $post->mentionedAgents()->isNotEmpty()) {
             $this->removeStaleRoutedSummons($post, Collection::make());
@@ -185,7 +185,7 @@ class SyncAgentChatReplies
             return new EloquentCollection;
         }
 
-        return $post->topic->workspace
+        return $post->thread->workspace
             ->agents()
             ->with('latestVersion')
             ->whereIn('id', $agentIds)

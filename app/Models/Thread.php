@@ -8,10 +8,12 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
-#[Fillable(['topic_id', 'parent_post_id', 'title', 'slug', 'summary'])]
+#[Fillable(['workspace_id', 'topic_id', 'title', 'slug', 'summary'])]
 class Thread extends Model
 {
     /** @use HasFactory<ThreadFactory> */
@@ -23,23 +25,23 @@ class Thread extends Model
 
         static::creating(function (Thread $thread) {
             if (empty($thread->slug)) {
-                $thread->slug = static::generateUniqueSlug($thread->topic_id, $thread->title);
+                $thread->slug = static::generateUniqueSlug($thread->workspace_id, $thread->title);
             }
         });
 
         static::updating(function (Thread $thread) {
             if ($thread->isDirty('title')) {
-                $thread->slug = static::generateUniqueSlug($thread->topic_id, $thread->title, $thread->id);
+                $thread->slug = static::generateUniqueSlug($thread->workspace_id, $thread->title, $thread->id);
             }
         });
     }
 
-    protected static function generateUniqueSlug(int $topicId, string $title, ?int $excludeId = null): string
+    protected static function generateUniqueSlug(int $workspaceId, string $title, ?int $excludeId = null): string
     {
-        $base = Str::slug($title);
+        $base = Str::slug($title) ?: 'thread';
 
         $query = static::withTrashed()
-            ->where('topic_id', $topicId)
+            ->where('workspace_id', $workspaceId)
             ->where(function ($q) use ($base) {
                 $q->where('slug', $base)->orWhere('slug', 'like', $base.'-%');
             });
@@ -71,7 +73,34 @@ class Thread extends Model
      */
     public function posts(): HasMany
     {
-        return $this->hasMany(Post::class)->orderBy('created_at');
+        return $this->hasMany(Post::class)->orderBy('id');
+    }
+
+    /**
+     * @return Collection<int, Post>
+     */
+    public function conversationPosts(): Collection
+    {
+        return $this->posts()
+            ->with(['agentTasks.agent', 'attachments', 'sender.user', 'sender.agent'])
+            ->orderBy('id')
+            ->get();
+    }
+
+    /**
+     * @return HasOne<Post, $this>
+     */
+    public function firstPost(): HasOne
+    {
+        return $this->hasOne(Post::class)->oldestOfMany();
+    }
+
+    /**
+     * @return HasOne<Post, $this>
+     */
+    public function latestPost(): HasOne
+    {
+        return $this->hasOne(Post::class)->latestOfMany();
     }
 
     /**
@@ -92,18 +121,18 @@ class Thread extends Model
     }
 
     /**
-     * @return BelongsTo<Post, $this>
-     */
-    public function parentPost(): BelongsTo
-    {
-        return $this->belongsTo(Post::class, 'parent_post_id');
-    }
-
-    /**
      * @return BelongsTo<Topic, $this>
      */
     public function topic(): BelongsTo
     {
         return $this->belongsTo(Topic::class);
+    }
+
+    /**
+     * @return BelongsTo<Workspace, $this>
+     */
+    public function workspace(): BelongsTo
+    {
+        return $this->belongsTo(Workspace::class);
     }
 }

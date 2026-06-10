@@ -4,7 +4,6 @@ namespace App\Mcp\Tools;
 
 use App\Mcp\Concerns\FormatsMcpPayloads;
 use App\Mcp\ExplicateContext;
-use App\Mcp\ExplicateUris;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
@@ -18,7 +17,7 @@ use Laravel\Mcp\Server\Tool;
 use Laravel\Mcp\Server\Tools\Annotations\IsDestructive;
 
 #[Name('delete-post')]
-#[Description('Delete one of the authenticated user\'s posts inside a topic in the current workspace.')]
+#[Description('Delete one of the authenticated user\'s posts inside the current workspace.')]
 #[IsDestructive]
 class DeletePostTool extends Tool
 {
@@ -32,25 +31,22 @@ class DeletePostTool extends Tool
     public function handle(Request $request): Response|ResponseFactory
     {
         $validated = $request->validate([
-            'topic_slug' => ['required', 'string'],
             'post_ulid' => ['required', 'string'],
         ]);
 
         /** @var User $user */
         $user = $this->context->requireUser($request->user());
-        $post = $this->context->postFor(
-            $user,
-            $validated['topic_slug'],
-            $validated['post_ulid'],
-        );
-        $sender = $post->topic->workspace->principalForUser($user);
+        $post = $this->context->postFor($user, $validated['post_ulid']);
+        $post->loadMissing('thread.workspace');
+        $sender = $post->thread->workspace->principalForUser($user);
 
         if ($post->sender_principal_id !== $sender->id) {
             throw new AuthorizationException('Only the post sender can delete this post.');
         }
 
-        $post->load(['topic.workspace', 'sender.user', 'sender.agent']);
+        $post->load(['thread.workspace', 'thread.topic', 'sender.user', 'sender.agent']);
         $payload = $this->postSummaryPayload($post);
+        $threadPayload = $this->threadSummaryPayload($post->thread);
 
         DB::transaction(function () use ($post): void {
             $post->attachments()->delete();
@@ -59,11 +55,8 @@ class DeletePostTool extends Tool
         });
 
         return Response::structured([
-            'workspace' => $post->topic->workspace->only(['id', 'name', 'slug']),
-            'topic' => [
-                ...$post->topic->only(['id', 'name', 'slug']),
-                'resource_uri' => ExplicateUris::topic($post->topic),
-            ],
+            'workspace' => $post->thread->workspace->only(['id', 'name', 'slug']),
+            'thread' => $threadPayload,
             'post' => $payload,
             'deleted' => true,
         ]);
@@ -77,9 +70,6 @@ class DeletePostTool extends Tool
     public function schema(JsonSchema $schema): array
     {
         return [
-            'topic_slug' => $schema->string()
-                ->description('The topic slug that owns the post.')
-                ->required(),
             'post_ulid' => $schema->string()
                 ->description('The post ULID to delete.')
                 ->required(),

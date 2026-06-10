@@ -16,7 +16,7 @@ use Laravel\Mcp\Server\Tools\Annotations\IsIdempotent;
 use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 
 #[Name('list-topics')]
-#[Description('List topics for the authenticated user\'s current workspace.')]
+#[Description('List optional topic labels for the authenticated user\'s current workspace.')]
 #[IsReadOnly]
 #[IsIdempotent]
 class ListTopicsTool extends Tool
@@ -33,13 +33,13 @@ class ListTopicsTool extends Tool
         $workspace = $this->context->workspaceFor($user);
 
         $topics = $workspace->topics()
-            ->withCount(['posts' => fn ($query) => $query->topLevel()])
+            ->withCount('threads')
             ->get()
             ->map(fn ($topic) => [
                 'id' => $topic->id,
                 'name' => $topic->name,
                 'slug' => $topic->slug,
-                'posts_count' => $topic->posts_count,
+                'threads_count' => $topic->threads_count,
                 'resource_uri' => ExplicateUris::topic($topic),
             ])
             ->values()
