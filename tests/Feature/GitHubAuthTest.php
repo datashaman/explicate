@@ -72,6 +72,27 @@ test('callback connects github to authenticated user', function () {
         ->github_token->toBe('tok-connect');
 });
 
+test('callback connects github to existing user with matching email', function () {
+    $user = User::factory()->create(['email' => 'existing@example.com']);
+
+    Socialite::fake('github', (new SocialiteUser)->map([
+        'id' => 'gh-11',
+        'name' => $user->name,
+        'email' => 'existing@example.com',
+        'nickname' => 'existinguser',
+    ])->setToken('tok-existing'));
+
+    $this->get(route('auth.github.callback'))
+        ->assertRedirect(route('dashboard'));
+
+    $this->assertAuthenticatedAs($user);
+
+    expect($user->fresh())
+        ->github_id->toBe('gh-11')
+        ->github_nickname->toBe('existinguser')
+        ->and(User::count())->toBe(1);
+});
+
 test('callback creates new user with noreply email when github email is private', function () {
     Socialite::fake('github', (new SocialiteUser)->map([
         'id' => 'gh-55',

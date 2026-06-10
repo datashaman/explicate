@@ -46,24 +46,34 @@ class GitHubController extends Controller
         $email = $githubUser->getEmail()
             ?? $githubUser->getId().'+'.$githubUser->getNickname().'@users.noreply.github.com';
 
-        $isNew = ! User::where('github_id', $githubUser->getId())->exists();
+        $existing = User::where('github_id', $githubUser->getId())
+            ->orWhere('email', $email)
+            ->first();
 
-        $user = DB::transaction(function () use ($githubUser, $email, $isNew) {
-            $user = User::updateOrCreate(
-                ['github_id' => $githubUser->getId()],
-                [
-                    'name' => $githubUser->getName() ?? $githubUser->getNickname(),
-                    'email' => $email,
+        $isNew = $existing === null;
+
+        $user = DB::transaction(function () use ($githubUser, $email, $existing) {
+            if ($existing) {
+                $existing->update([
+                    'github_id' => $githubUser->getId(),
                     'github_nickname' => $githubUser->getNickname(),
                     'github_token' => $githubUser->token,
-                    'password' => Str::password(32),
-                ]
-            );
+                ]);
 
-            if ($isNew) {
-                $this->createTeam->handle($user, $user->name."'s Team", isPersonal: true);
-                $this->setupNewUser->handle($user);
+                return $existing;
             }
+
+            $user = User::create([
+                'name' => $githubUser->getName() ?? $githubUser->getNickname(),
+                'email' => $email,
+                'github_id' => $githubUser->getId(),
+                'github_nickname' => $githubUser->getNickname(),
+                'github_token' => $githubUser->token,
+                'password' => Str::password(32),
+            ]);
+
+            $this->createTeam->handle($user, $user->name."'s Team", isPersonal: true);
+            $this->setupNewUser->handle($user);
 
             return $user;
         });
