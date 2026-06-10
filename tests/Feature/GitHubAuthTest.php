@@ -70,6 +70,26 @@ test('callback connects github to authenticated user', function () {
         ->github_token->toBe('tok-connect');
 });
 
+test('callback creates new user with noreply email when github email is private', function () {
+    Socialite::fake('github', (new SocialiteUser)->map([
+        'id' => 'gh-55',
+        'name' => 'Private Email User',
+        'email' => null,
+        'nickname' => 'privateuser',
+    ])->setToken('tok-private'));
+
+    $this->get(route('auth.github.callback'))
+        ->assertRedirect(route('dashboard'));
+
+    $this->assertAuthenticated();
+
+    $this->assertDatabaseHas('users', [
+        'github_id' => 'gh-55',
+        'github_nickname' => 'privateuser',
+        'email' => 'gh-55+privateuser@users.noreply.github.com',
+    ]);
+});
+
 test('callback redirects with error on denied authorization', function () {
     Socialite::shouldReceive('driver')->with('github')->andReturnSelf();
     Socialite::shouldReceive('user')->andThrow(new Exception('Access denied'));
