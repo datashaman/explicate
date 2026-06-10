@@ -41,7 +41,8 @@ GitHub OAuth enables **Sign in with GitHub** on the login page and **Connect Git
 
 1. Create a GitHub OAuth app at <https://github.com/settings/developers>
 2. Set the **Authorization callback URL** to `{APP_URL}/auth/github/callback`
-3. Add the credentials to `.env`:
+3. Under **Permissions → Account permissions**, set **Email addresses** to **Read-only** (required to read private email addresses)
+4. Add the credentials to `.env`:
 
 ```env
 GITHUB_CLIENT_ID=your_client_id
