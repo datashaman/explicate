@@ -19,7 +19,7 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
 use Laravel\Passport\Contracts\OAuthenticatable;
 use Laravel\Passport\HasApiTokens;
 
-#[Fillable(['name', 'email', 'timezone', 'password', 'current_team_id', 'current_workspace_id', 'github_id', 'github_nickname', 'github_token'])]
+#[Fillable(['name', 'email', 'timezone', 'password', 'current_team_id', 'current_workspace_id', 'coach_marks_seen_at', 'github_id', 'github_nickname', 'github_token'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token', 'github_token'])]
 class User extends Authenticatable implements OAuthenticatable, PasskeyUser
 {
@@ -37,6 +37,7 @@ class User extends Authenticatable implements OAuthenticatable, PasskeyUser
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'two_factor_confirmed_at' => 'datetime',
+            'coach_marks_seen_at' => 'datetime',
             'github_token' => 'encrypted',
         ];
     }
@@ -61,6 +62,11 @@ class User extends Authenticatable implements OAuthenticatable, PasskeyUser
     public function needsOnboarding(): bool
     {
         return $this->current_workspace_id === null;
+    }
+
+    public function hasSeenCoachMarks(): bool
+    {
+        return $this->coach_marks_seen_at !== null;
     }
 
     /**

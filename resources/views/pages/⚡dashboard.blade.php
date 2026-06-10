@@ -1549,6 +1549,31 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
         $this->syncNewPostTopic();
     }
 
+    #[Computed]
+    public function showCoachMarks(): bool
+    {
+        return ! Auth::user()->hasSeenCoachMarks();
+    }
+
+    public function dismissCoachMarks(): void
+    {
+        Auth::user()->update(['coach_marks_seen_at' => now()]);
+    }
+
+    public function finishCoachMarks(string $suggestion): void
+    {
+        $workspace = $this->workspace();
+        $firstTopic = $workspace?->topics()->orderBy('id')->first();
+
+        if ($firstTopic) {
+            $this->selectedTopicSlug = $firstTopic->slug;
+            $this->updatedSelectedTopicSlug();
+            $this->quickPostBody = $suggestion;
+        }
+
+        Auth::user()->update(['coach_marks_seen_at' => now()]);
+    }
+
     private function syncSelectedAgentFields(): void
     {
         $agent = $this->selectedAgent();
@@ -1616,7 +1641,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
                     'hidden xl:flex' => $this->mobilePanel !== 'topics',
                 ])
             >
-                <section class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none">
+                <section data-coach="topics" class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none">
                 <div class="flex items-center justify-between gap-3 border-b border-neutral-300 bg-blue-50 px-4 py-3 dark:border-white/10 dark:bg-blue-500/10">
                     <flux:heading size="sm">{{ __('Topics') }}</flux:heading>
                     <flux:modal.trigger name="new-topic">
@@ -1674,7 +1699,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
                 @endif
                 </section>
 
-                <section class="shrink-0 overflow-hidden rounded-lg border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none">
+                <section data-coach="files" class="shrink-0 overflow-hidden rounded-lg border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none">
                     <a href="{{ route('dashboard', ['action' => 'files', 'panel' => 'posts']) }}" wire:navigate
                        @class([
                            'flex items-center gap-3 px-4 py-3 hover:bg-neutral-100 dark:hover:bg-white/5',
@@ -1710,7 +1735,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
                     </a>
                 </section>
 
-                <section class="flex max-h-[45%] min-h-0 shrink-0 flex-col overflow-hidden rounded-lg border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none">
+                <section data-coach="agents" class="flex max-h-[45%] min-h-0 shrink-0 flex-col overflow-hidden rounded-lg border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none">
                     <div class="border-b border-neutral-300 bg-amber-50 px-4 py-3 dark:border-white/10 dark:bg-amber-500/10">
                         <div class="flex items-center justify-between gap-3">
                             <flux:heading size="sm">{{ __('Agents') }}</flux:heading>
@@ -2274,4 +2299,6 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
             </flux:modal.trigger>
         </div>
     @endif
+
+    @include('partials.coach-marks', ['showCoachMarks' => $this->showCoachMarks])
 </div>
