@@ -51,7 +51,7 @@ test('it executes a pending agent task through the topic forge mention agent', f
         'prompt' => 'Answer as a concise researcher.',
     ]);
 
-    $post = Post::factory()->for($this->topic)->create([
+    $post = Post::factory()->for(Thread::factory()->forTopic($this->topic))->create([
         'sender_principal_id' => $this->senderPrincipal->id,
         'body' => '@researcher Find the latest internal context.',
         'status' => PostStatus::Published,
@@ -93,11 +93,10 @@ test('it executes a pending agent task through the topic forge mention agent', f
         ->and($reply->body)->toBe('The agent response.')
         ->and($reply->status)->toBe(PostStatus::Published)
         ->and($reply->sender_principal_id)->toBe($this->workspace->principalForAgent($agent)->id)
-        ->and($reply->thread_id)->not->toBeNull()
-        ->and($post->fresh()->thread_id)->toBeNull()
-        ->and($reply->thread?->parent_post_id)->toBe($post->id)
+        ->and($reply->thread_id)->toBe($post->thread_id)
+        ->and($post->fresh()->thread_id)->not->toBeNull()
         ->and($reply->thread?->topic->is($this->topic))->toBeTrue()
-        ->and($reply->thread?->posts()->count())->toBe(1)
+        ->and($reply->thread?->posts()->count())->toBe(2)
         ->and($task->fresh()->status)->toBe(AgentTaskStatus::Completed)
         ->and($task->fresh()->status_post_id)->toBe($statusPost->id)
         ->and($task->fresh()->attempts)->toBe(1)
@@ -113,7 +112,7 @@ test('it marks a task failed when the agent has no executable version', function
     Ai::fakeAgent(ExplicateMentionAgent::class)->preventStrayPrompts();
 
     $agent = Agent::factory()->for($this->workspace)->create(['name' => 'Researcher']);
-    $post = Post::factory()->for($this->topic)->create([
+    $post = Post::factory()->for(Thread::factory()->forTopic($this->topic))->create([
         'sender_principal_id' => $this->senderPrincipal->id,
         'body' => '@researcher Please handle this.',
         'status' => PostStatus::Published,
@@ -149,9 +148,9 @@ test('it replies in the existing thread when the mentioned post is already threa
         'provider' => Provider::Gemini,
         'model' => 'gemini-2.5-flash',
     ]);
-    $thread = Thread::factory()->for($this->topic)->create();
+    $thread = Thread::factory()->forTopic($this->topic)->create();
 
-    $post = Post::factory()->for($this->topic)->for($thread)->create([
+    $post = Post::factory()->for(Thread::factory()->forTopic($this->topic))->for($thread)->create([
         'sender_principal_id' => $this->senderPrincipal->id,
         'body' => '@researcher Continue in this thread.',
         'status' => PostStatus::Published,
@@ -174,7 +173,7 @@ test('it does not execute mentioned draft posts until they are published', funct
 
     $agent = Agent::factory()->for($this->workspace)->create(['name' => 'Researcher']);
     AgentVersion::factory()->for($agent)->create();
-    $post = Post::factory()->for($this->topic)->create([
+    $post = Post::factory()->for(Thread::factory()->forTopic($this->topic))->create([
         'sender_principal_id' => $this->senderPrincipal->id,
         'body' => '@researcher Draft request.',
         'status' => PostStatus::Draft,
@@ -198,23 +197,22 @@ test('it sends previous thread posts as conversation messages with sender identi
         'prompt' => 'Write precise specifications.',
     ]);
 
-    $parentPost = Post::factory()->for($this->topic)->create([
+    $thread = Thread::factory()->forTopic($this->topic)->create([
+        'title' => 'TodoMVC specification',
+    ]);
+    $parentPost = Post::factory()->for($thread)->create([
         'sender_principal_id' => $this->senderPrincipal->id,
         'body' => 'Please draft the TodoMVC specification.',
         'status' => PostStatus::Published,
     ]);
-    $thread = Thread::factory()->for($this->topic)->create([
-        'parent_post_id' => $parentPost->id,
-        'title' => 'TodoMVC specification',
-    ]);
 
-    Post::factory()->for($this->topic)->for($thread)->create([
+    Post::factory()->for($thread)->create([
         'sender_principal_id' => $this->workspace->principalForAgent($agent)->id,
         'body' => 'I created an initial outline.',
         'status' => PostStatus::Published,
     ]);
 
-    $mentionPost = Post::factory()->for($this->topic)->for($thread)->create([
+    $mentionPost = Post::factory()->for($thread)->create([
         'sender_principal_id' => $this->senderPrincipal->id,
         'body' => '@specification-writer Please revise it for acceptance criteria.',
         'status' => PostStatus::Published,

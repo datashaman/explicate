@@ -22,8 +22,6 @@ class SetupNewUser
 
         $user->switchWorkspace($workspace);
 
-        $workspace->topics()->create(['name' => 'General']);
-
         $this->createAgent->handle(
             workspace: $workspace,
             name: 'Analyst',

@@ -8,6 +8,7 @@ use App\Enums\ReasoningEffort;
 use App\Models\Agent;
 use App\Models\Attachment;
 use App\Models\Post;
+use App\Models\Thread;
 use App\Models\Topic;
 use App\Models\User;
 use App\Models\Workspace;
@@ -91,7 +92,11 @@ class DatabaseSeeder extends Seeder
 
         $topicsByName = $topics->keyBy('name');
 
-        $designDraft = Post::factory()->for($topicsByName['Design'])->create([
+        $designDraftThread = Thread::factory()->forTopic($topicsByName['Design'])->create([
+            'title' => 'Homepage hero directions',
+        ]);
+
+        $designDraft = Post::factory()->for($designDraftThread)->create([
             'body' => "Homepage hero directions\n\nExplore three tonal directions for the homepage hero.\n\n1. Product-led\n2. Proof-led\n3. Narrative-led",
             'status' => PostStatus::Draft,
             'sender_principal_id' => $senderPrincipal->id,
@@ -110,11 +115,22 @@ class DatabaseSeeder extends Seeder
             mimeType: 'text/plain',
         );
 
-        $designPublishedPost = Post::factory()->for($topicsByName['Design'])->create([
+        $designPublishedThread = Thread::factory()->forTopic($topicsByName['Design'])->create([
+            'title' => 'Reviewer brief: Brand voice notes',
+        ]);
+
+        $designPublishedPost = Post::factory()->for($designPublishedThread)->create([
             'body' => "Reviewer brief: Brand voice notes\n\nCapture phrases to avoid and preferred tone examples.",
             'status' => PostStatus::Published,
             'sender_principal_id' => $senderPrincipal->id,
         ]);
+
+        Post::factory()->for($designPublishedThread)->create([
+            'body' => "I'll compare this against the homepage draft and propose a tighter phrasing list.",
+            'status' => PostStatus::Published,
+            'sender_principal_id' => $workspace->principalForAgent($agents->firstWhere('name', 'Reviewer'))->id,
+        ]);
+
         $this->createSeedAttachment(
             post: $designPublishedPost,
             filename: 'brand-snapshot.svg',
@@ -122,13 +138,21 @@ class DatabaseSeeder extends Seeder
             mimeType: 'image/svg+xml',
         );
 
-        Post::factory()->for($topicsByName['Engineering'])->create([
+        $engineeringDraftThread = Thread::factory()->forTopic($topicsByName['Engineering'])->create([
+            'title' => 'Agent orchestration outline',
+        ]);
+
+        Post::factory()->for($engineeringDraftThread)->create([
             'body' => "Agent orchestration outline\n\nDocument the post lifecycle and queue boundaries.\n\nInclude failure handling and retry policy.",
             'status' => PostStatus::Draft,
             'sender_principal_id' => $senderPrincipal->id,
         ]);
 
-        Post::factory()->for($topicsByName['Engineering'])->create([
+        $deletedThread = Thread::factory()->forTopic($topicsByName['Engineering'])->create([
+            'title' => 'Model fallback strategy',
+        ]);
+
+        Post::factory()->for($deletedThread)->create([
             'body' => "Model fallback strategy\n\nCompare provider fallback order and expected quality tradeoffs.",
             'status' => PostStatus::Published,
             'sender_principal_id' => $senderPrincipal->id,
@@ -136,21 +160,50 @@ class DatabaseSeeder extends Seeder
             'deleted_at' => now()->subMinutes(20),
         ]);
 
-        Post::factory()->for($topicsByName['Marketing'])->create([
+        $marketingThread = Thread::factory()->forTopic($topicsByName['Marketing'])->create([
+            'title' => 'SEO analyst brief: Q3 campaign angles',
+        ]);
+
+        Post::factory()->for($marketingThread)->create([
             'body' => "SEO analyst brief: Q3 campaign angles\n\nList campaign themes tied to the strongest product outcomes.",
             'status' => PostStatus::Published,
             'sender_principal_id' => $senderPrincipal->id,
         ]);
 
-        Post::factory()->for($topicsByName['Marketing'])->create([
+        Post::factory()->for($marketingThread)->create([
+            'body' => 'Prioritize themes with clear activation or retention proof.',
+            'status' => PostStatus::Published,
+            'sender_principal_id' => $senderPrincipal->id,
+        ]);
+
+        $marketingDraftThread = Thread::factory()->forTopic($topicsByName['Marketing'])->create([
+            'title' => 'Landing page test ideas',
+        ]);
+
+        Post::factory()->for($marketingDraftThread)->create([
             'body' => "Landing page test ideas\n\nPropose headline, CTA, and proof-module experiments.",
             'status' => PostStatus::Draft,
             'sender_principal_id' => $senderPrincipal->id,
         ]);
 
-        Post::factory()->for($topicsByName['Research'])->create([
+        $researchThread = Thread::factory()->forTopic($topicsByName['Research'])->create([
+            'title' => 'Competitor workflow notes',
+        ]);
+
+        Post::factory()->for($researchThread)->create([
             'body' => "Competitor workflow notes\n\nTrack workflow patterns from adjacent tools and notable gaps.",
             'status' => PostStatus::Draft,
+            'sender_principal_id' => $senderPrincipal->id,
+        ]);
+
+        $topiclessThread = Thread::factory()->for($workspace)->create([
+            'title' => 'Inbox triage notes',
+            'topic_id' => null,
+        ]);
+
+        Post::factory()->for($topiclessThread)->create([
+            'body' => "Inbox triage notes\n\nSort these into topics once the next planning pass is complete.",
+            'status' => PostStatus::Published,
             'sender_principal_id' => $senderPrincipal->id,
         ]);
     }
@@ -159,7 +212,7 @@ class DatabaseSeeder extends Seeder
     {
         $path = "attachments/seed/{$post->ulid}/{$filename}";
 
-        $post->topic->workspace->filesystem()->write($path, $contents);
+        $post->thread->workspace->filesystem()->write($path, $contents);
 
         return $post->attachments()->create([
             'filename' => $filename,

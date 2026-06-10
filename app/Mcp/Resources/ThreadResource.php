@@ -2,6 +2,7 @@
 
 namespace App\Mcp\Resources;
 
+use App\Mcp\Concerns\FormatsMcpPayloads;
 use App\Mcp\ExplicateContext;
 use App\Mcp\ExplicateUris;
 use App\Mcp\Resources\Concerns\HandlesResourceExceptions;
@@ -13,41 +14,38 @@ use Laravel\Mcp\Server\Contracts\HasUriTemplate;
 use Laravel\Mcp\Server\Resource;
 use Laravel\Mcp\Support\UriTemplate;
 
-#[Description('Read an optional topic label from an accessible workspace.')]
-class TopicResource extends Resource implements HasUriTemplate
+#[Description('Read a thread and its posts from an accessible workspace.')]
+class ThreadResource extends Resource implements HasUriTemplate
 {
+    use FormatsMcpPayloads;
     use HandlesResourceExceptions;
 
     public function __construct(protected ExplicateContext $context) {}
 
     public function uriTemplate(): UriTemplate
     {
-        return new UriTemplate(ExplicateUris::TopicTemplate);
+        return new UriTemplate(ExplicateUris::ThreadTemplate);
     }
 
-    /**
-     * Handle the resource request.
-     */
     public function handle(Request $request): Response
     {
         return $this->guardResource(function () use ($request): Response {
             /** @var User $user */
             $user = $this->context->requireUser($request->user());
-            $topic = $this->context->topicFor(
+            $thread = $this->context->threadFor(
                 $user,
-                (string) $request->get('topic'),
+                (string) $request->get('thread'),
                 (string) $request->get('workspace'),
             );
-
-            $topic->load('workspace');
+            $thread->load(['workspace', 'topic', 'latestPost.sender.user', 'latestPost.sender.agent']);
 
             return Response::json([
-                'workspace' => $topic->workspace->only(['id', 'name', 'slug']),
-                'topic' => [
-                    ...$topic->only(['id', 'name', 'slug']),
-                    'threads_count' => $topic->threads()->count(),
-                    'resource_uri' => ExplicateUris::topic($topic),
-                ],
+                'workspace' => $thread->workspace->only(['id', 'name', 'slug']),
+                'thread' => $this->threadSummaryPayload($thread),
+                'posts' => $thread->conversationPosts()
+                    ->map(fn ($post) => $this->postPayload($post))
+                    ->values()
+                    ->all(),
             ]);
         });
     }

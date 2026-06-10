@@ -5,7 +5,6 @@ namespace App\Mcp\Tools;
 use App\Enums\PostStatus;
 use App\Mcp\Concerns\FormatsMcpPayloads;
 use App\Mcp\ExplicateContext;
-use App\Mcp\ExplicateUris;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
@@ -28,7 +27,6 @@ class UpdatePostTool extends Tool
     public function handle(Request $request): Response|ResponseFactory
     {
         $validated = $request->validate([
-            'topic_slug' => ['required', 'string'],
             'post_ulid' => ['required', 'string'],
             'body' => ['nullable', 'string'],
             'status' => ['nullable', 'string', Rule::enum(PostStatus::class)],
@@ -36,8 +34,9 @@ class UpdatePostTool extends Tool
 
         /** @var User $user */
         $user = $this->context->requireUser($request->user());
-        $post = $this->context->postFor($user, $validated['topic_slug'], $validated['post_ulid']);
-        $sender = $post->topic->workspace->principalForUser($user);
+        $post = $this->context->postFor($user, $validated['post_ulid']);
+        $post->loadMissing('thread.workspace');
+        $sender = $post->thread->workspace->principalForUser($user);
 
         if ($post->sender_principal_id !== $sender->id) {
             throw new AuthorizationException('Only the original sender can edit this post.');
@@ -49,14 +48,12 @@ class UpdatePostTool extends Tool
         ], fn ($value) => $value !== null);
 
         $post->update($attributes);
+        $post->refresh()->load(['thread.workspace', 'thread.topic', 'sender.user', 'sender.agent']);
 
         return Response::structured([
-            'workspace' => $post->topic->workspace->only(['id', 'name', 'slug']),
-            'topic' => [
-                ...$post->topic->only(['id', 'name', 'slug']),
-                'resource_uri' => ExplicateUris::topic($post->topic),
-            ],
-            'post' => $this->postPayload($post->fresh()),
+            'workspace' => $post->thread->workspace->only(['id', 'name', 'slug']),
+            'thread' => $this->threadSummaryPayload($post->thread),
+            'post' => $this->postPayload($post),
         ]);
     }
 
@@ -66,9 +63,6 @@ class UpdatePostTool extends Tool
     public function schema(JsonSchema $schema): array
     {
         return [
-            'topic_slug' => $schema->string()
-                ->description('The topic slug that owns the post.')
-                ->required(),
             'post_ulid' => $schema->string()
                 ->description('The ULID of the post to update.')
                 ->required(),

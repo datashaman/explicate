@@ -24,7 +24,7 @@ class ExecuteAgentTask
             'agent.latestVersion',
             'agent.workspace.team',
             'post.sender.user',
-            'post.topic',
+            'post.thread',
         ]);
 
         if ($task->status !== AgentTaskStatus::Pending || ! $task->available_at || $task->available_at->isFuture()) {

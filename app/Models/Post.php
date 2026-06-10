@@ -8,21 +8,23 @@ use App\Enums\PostStatus;
 use App\Events\WorkspacePostsChanged;
 use Database\Factories\PostFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Relations\HasOneThrough;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
-#[Fillable(['topic_id', 'thread_id', 'sender_principal_id', 'ulid', 'body', 'status', 'deleted_by_user_id'])]
+#[Fillable(['thread_id', 'sender_principal_id', 'ulid', 'body', 'status', 'deleted_by_user_id'])]
 class Post extends Model
 {
     /** @use HasFactory<PostFactory> */
     use HasFactory, SoftDeletes;
+
+    /** @var list<string> */
+    protected $touches = ['thread'];
 
     /** @return array<string, string> */
     protected function casts(): array
@@ -61,6 +63,14 @@ class Post extends Model
             $post->broadcastWorkspaceChange();
         });
 
+        static::forceDeleted(function (Post $post) {
+            $post->loadMissing('thread');
+
+            if ($post->thread && ! $post->thread->posts()->withTrashed()->exists()) {
+                $post->thread->forceDelete();
+            }
+        });
+
         static::restored(function (Post $post) {
             $post->broadcastWorkspaceChange();
         });
@@ -89,19 +99,11 @@ class Post extends Model
 
     public function broadcastWorkspaceChange(): void
     {
-        $this->loadMissing('topic');
+        $this->loadMissing('thread');
 
-        if ($this->topic?->workspace_id) {
-            WorkspacePostsChanged::dispatch($this->topic->workspace_id, $this->id);
+        if ($this->thread?->workspace_id) {
+            WorkspacePostsChanged::dispatch($this->thread->workspace_id, $this->id);
         }
-    }
-
-    /**
-     * @param  Builder<Post>  $query
-     */
-    public function scopeTopLevel(Builder $query): void
-    {
-        $query->whereNull('thread_id');
     }
 
     public function moveToDraft(): void
@@ -120,7 +122,9 @@ class Post extends Model
             return Collection::make();
         }
 
-        return $this->topic->workspace
+        $this->loadMissing('thread.workspace');
+
+        return $this->thread->workspace
             ->agents()
             ->whereIn('slug', $slugs->all())
             ->get();
@@ -140,14 +144,6 @@ class Post extends Model
     }
 
     /**
-     * @return BelongsTo<Topic, $this>
-     */
-    public function topic(): BelongsTo
-    {
-        return $this->belongsTo(Topic::class);
-    }
-
-    /**
      * @return BelongsTo<Thread, $this>
      */
     public function thread(): BelongsTo
@@ -156,41 +152,18 @@ class Post extends Model
     }
 
     /**
-     * @return HasOne<Thread, $this>
+     * @return HasOneThrough<Topic, Thread, $this>
      */
-    public function startedThread(): HasOne
+    public function topic(): HasOneThrough
     {
-        return $this->hasOne(Thread::class, 'parent_post_id');
-    }
-
-    /**
-     * @return Collection<int, Post>
-     */
-    public function conversationPosts(): Collection
-    {
-        $thread = $this->thread ?: $this->startedThread;
-
-        if (! $thread) {
-            return Collection::make([$this]);
-        }
-
-        $thread->loadMissing([
-            'parentPost.agentTasks.agent',
-            'parentPost.attachments',
-            'parentPost.sender.user',
-            'parentPost.sender.agent',
-            'parentPost.topic',
-        ]);
-
-        $threadPosts = $thread->posts()
-            ->with(['agentTasks.agent', 'attachments', 'sender.user', 'sender.agent', 'topic'])
-            ->get();
-
-        return Collection::make([$thread->parentPost])
-            ->filter()
-            ->merge($threadPosts)
-            ->unique('id')
-            ->values();
+        return $this->hasOneThrough(
+            Topic::class,
+            Thread::class,
+            'id',
+            'id',
+            'thread_id',
+            'topic_id',
+        );
     }
 
     /**
@@ -235,22 +208,20 @@ class Post extends Model
      */
     public function listTopicMeta(bool $showSender, ?string $timezone = null): array
     {
-        $meta = [];
+        $this->loadMissing('thread.topic');
 
-        if ($showSender && $this->sender) {
-            $meta[] = ['key' => PostListColumn::Sender->value, 'label' => __('Sender'), 'value' => $this->sender->label()];
-        }
-
-        $meta[] = ['key' => PostListColumn::Topic->value, 'label' => __('Topic'), 'value' => $this->topic->name];
-
-        $meta[] = [
-            'key' => $this->dateListColumn()->value,
-            'label' => $this->status === PostStatus::Draft ? __('Saved') : __('Sent'),
-            'value' => $this->updated_at->diffForHumans(),
-            'title' => $this->updated_at->timezone($timezone ?: config('app.timezone'))->isoFormat('LLLL'),
+        return [
+            ...($showSender && $this->sender ? [
+                ['key' => PostListColumn::Sender->value, 'label' => __('Sender'), 'value' => $this->sender->label()],
+            ] : []),
+            ['key' => PostListColumn::Topic->value, 'label' => __('Topic'), 'value' => $this->thread->topic?->name ?? __('No topic')],
+            [
+                'key' => $this->dateListColumn()->value,
+                'label' => $this->status === PostStatus::Draft ? __('Saved') : __('Sent'),
+                'value' => $this->updated_at->diffForHumans(),
+                'title' => $this->updated_at->timezone($timezone ?: config('app.timezone'))->isoFormat('LLLL'),
+            ],
         ];
-
-        return $meta;
     }
 
     /**

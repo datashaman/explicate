@@ -10,8 +10,8 @@ class DeletePostAttachment
     {
         $attachment = $post->attachments()->findOrFail($attachmentId);
 
-        $post->loadMissing('topic.workspace');
-        $post->topic->workspace->filesystem()->delete($attachment->path);
+        $post->loadMissing('thread.workspace');
+        $post->thread->workspace->filesystem()->delete($attachment->path);
 
         $attachment->delete();
     }

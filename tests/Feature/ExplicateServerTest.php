@@ -4,20 +4,22 @@ use App\Enums\PostStatus;
 use App\Enums\Provider;
 use App\Enums\ReasoningEffort;
 use App\Jobs\ProcessAgentTask;
+use App\Mcp\ExplicateContext;
+use App\Mcp\ExplicateTools;
 use App\Mcp\Resources\AgentResource;
 use App\Mcp\Resources\AgentTaskResource;
 use App\Mcp\Resources\AgentTasksResource;
 use App\Mcp\Resources\PlaybookResource;
 use App\Mcp\Resources\PostResource;
-use App\Mcp\Resources\TopicPostsResource;
 use App\Mcp\Resources\TopicResource;
+use App\Mcp\Resources\TopicThreadsResource;
 use App\Mcp\Resources\WhoamiResource;
 use App\Mcp\Resources\WorkspaceAgentsResource;
 use App\Mcp\Resources\WorkspacesResource;
 use App\Mcp\Resources\WorkspaceTopicsResource;
 use App\Mcp\Servers\ExplicateServer;
 use App\Mcp\Tools\CreateAgentTool;
-use App\Mcp\Tools\CreatePostTool;
+use App\Mcp\Tools\CreateThreadTool;
 use App\Mcp\Tools\CreateTopicTool;
 use App\Mcp\Tools\DeleteFileTool;
 use App\Mcp\Tools\DeletePostTool;
@@ -29,8 +31,8 @@ use App\Mcp\Tools\GetTopicTool;
 use App\Mcp\Tools\ListAgentsTool;
 use App\Mcp\Tools\ListAgentTasksTool;
 use App\Mcp\Tools\ListFilesTool;
-use App\Mcp\Tools\ListPostsTool;
 use App\Mcp\Tools\ListReposTool;
+use App\Mcp\Tools\ListThreadsTool;
 use App\Mcp\Tools\ListTopicsTool;
 use App\Mcp\Tools\ListWorkspacesTool;
 use App\Mcp\Tools\RunGitCommandTool;
@@ -39,13 +41,12 @@ use App\Mcp\Tools\UpdateAgentTool;
 use App\Mcp\Tools\UpdatePostTool;
 use App\Mcp\Tools\WhoAmITool;
 use App\Mcp\Tools\WriteFileTool;
-use App\Mcp\ExplicateContext;
-use App\Mcp\ExplicateTools;
 use App\Models\Agent;
 use App\Models\AgentTask;
 use App\Models\AgentVersion;
 use App\Models\Attachment;
 use App\Models\Post;
+use App\Models\Thread;
 use App\Models\Topic;
 use App\Models\User;
 use App\Models\Workspace;
@@ -176,7 +177,7 @@ test('list topics defaults to the current workspace', function () {
         'name' => 'Alpha Topic',
         'slug' => 'alpha-topic',
     ]);
-    Post::factory()->for($topic)->count(2)->create();
+    Post::factory()->for(Thread::factory()->forTopic($topic))->count(2)->create();
     Topic::factory()->for($otherWorkspace)->create([
         'name' => 'Hidden Topic',
         'slug' => 'hidden-topic',
@@ -193,7 +194,7 @@ test('list topics defaults to the current workspace', function () {
                     'id' => $topic->id,
                     'name' => 'Alpha Topic',
                     'slug' => 'alpha-topic',
-                    'posts_count' => 2,
+                    'threads_count' => 1,
                     'resource_uri' => 'explicate://workspaces/strategy/topics/alpha-topic',
                 ],
             ],
@@ -245,7 +246,7 @@ test('switch workspace inbox the current mcp workspace context', function () {
                     'id' => $targetTopic->id,
                     'name' => 'Target Topic',
                     'slug' => 'target-topic',
-                    'posts_count' => 0,
+                    'threads_count' => 0,
                     'resource_uri' => 'explicate://workspaces/target-workspace/topics/target-topic',
                 ],
             ],
@@ -269,7 +270,7 @@ test('topic forge tools expose switch workspace instead of workspace slug parame
         'get-agent-task',
         'get-topic',
         'get-agent',
-        'list-posts',
+        'list-threads',
         'get-post',
         'create-topic',
         'create-agent',
@@ -398,7 +399,7 @@ test('create topic creates a topic in the current workspace', function () {
             ->where('workspace.slug', 'strategy')
             ->where('topic.name', 'General')
             ->where('topic.slug', 'general')
-            ->where('topic.posts_count', 0)
+            ->where('topic.threads_count', 0)
             ->where('topic.resource_uri', 'explicate://workspaces/strategy/topics/general')
             ->etc()
         );
@@ -416,7 +417,7 @@ test('get topic returns attached agents for an accessible workspace', function (
         'name' => 'Alpha Topic',
         'slug' => 'alpha-topic',
     ]);
-    Post::factory()->for($topic)->count(2)->create();
+    Post::factory()->for(Thread::factory()->forTopic($topic))->count(2)->create();
 
     $response = ExplicateServer::actingAs($user)->tool(GetTopicTool::class, [
         'topic_slug' => 'alpha-topic',
@@ -427,7 +428,7 @@ test('get topic returns attached agents for an accessible workspace', function (
         ->assertStructuredContent(fn ($json) => $json
             ->where('workspace.slug', 'strategy')
             ->where('topic.slug', 'alpha-topic')
-            ->where('topic.posts_count', 2)
+            ->where('topic.threads_count', 1)
             ->where('topic.resource_uri', 'explicate://workspaces/strategy/topics/alpha-topic')
             ->etc()
         );
@@ -630,16 +631,16 @@ test('list posts returns topic posts in feed order', function () {
     $topic = Topic::factory()->for($workspace)->create([
         'slug' => 'alpha-topic',
     ]);
-    Post::factory()->for($topic)->create([
+    Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'body' => 'Zulu Note',
         'status' => PostStatus::Published,
     ]);
-    Post::factory()->for($topic)->create([
+    Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'body' => 'Alpha Draft',
         'status' => PostStatus::Draft,
     ]);
 
-    $response = ExplicateServer::actingAs($user)->tool(ListPostsTool::class, [
+    $response = ExplicateServer::actingAs($user)->tool(ListThreadsTool::class, [
         'topic_slug' => 'alpha-topic',
     ]);
 
@@ -649,9 +650,9 @@ test('list posts returns topic posts in feed order', function () {
             ->where('workspace.slug', 'strategy')
             ->where('topic.slug', 'alpha-topic')
             ->where('topic.resource_uri', 'explicate://workspaces/strategy/topics/alpha-topic')
-            ->where('posts.0.preview', 'Zulu Note')
-            ->where('posts.0.status', 'published')
-            ->where('posts.1.preview', 'Alpha Draft')
+            ->where('threads.0.latest_post.preview', 'Alpha Draft')
+            ->where('threads.0.latest_post.status', 'draft')
+            ->where('threads.1.latest_post.preview', 'Zulu Note')
             ->etc()
         );
 });
@@ -668,22 +669,21 @@ test('list posts includes sender context', function () {
     ]);
     $senderPrincipal = $workspace->principalForUser($user);
 
-    Post::factory()->for($topic)->create([
+    Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'body' => 'Topic Request',
         'status' => PostStatus::Published,
         'sender_principal_id' => $senderPrincipal->id,
     ]);
 
-    $response = ExplicateServer::actingAs($user)->tool(ListPostsTool::class, [
+    $response = ExplicateServer::actingAs($user)->tool(ListThreadsTool::class, [
         'topic_slug' => 'alpha-topic',
     ]);
 
     $response
         ->assertOk()
         ->assertStructuredContent(fn ($json) => $json
-            ->where('posts.0.preview', 'Topic Request')
-            ->where('posts.0.sender.type', 'user')
-            ->where('posts.0.sender.name', $user->name)
+            ->where('threads.0.latest_post.preview', 'Topic Request')
+            ->where('threads.0.latest_post.sender_principal_id', $senderPrincipal->id)
             ->etc()
         );
 });
@@ -699,7 +699,7 @@ test('get post returns the post body and attachment metadata', function () {
         'name' => 'Alpha Topic',
         'slug' => 'alpha-topic',
     ]);
-    $post = Post::factory()->for($topic)->create([
+    $post = Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'body' => 'Alpha Draft',
         'status' => PostStatus::Draft,
         'sender_principal_id' => $workspace->principalForUser($user)->id,
@@ -711,7 +711,6 @@ test('get post returns the post body and attachment metadata', function () {
     ]);
 
     $response = ExplicateServer::actingAs($user)->tool(GetPostTool::class, [
-        'topic_slug' => 'alpha-topic',
         'post_ulid' => $post->ulid,
     ]);
 
@@ -719,12 +718,11 @@ test('get post returns the post body and attachment metadata', function () {
         ->assertOk()
         ->assertStructuredContent(fn ($json) => $json
             ->where('workspace.slug', 'strategy')
-            ->where('topic.slug', 'alpha-topic')
-            ->where('topic.resource_uri', 'explicate://workspaces/strategy/topics/alpha-topic')
+            ->where('thread.topic.slug', 'alpha-topic')
             ->where('post.ulid', $post->ulid)
             ->where('post.sender.name', $user->name)
             ->where('post.body', 'Alpha Draft')
-            ->where('post.resource_uri', "explicate://workspaces/strategy/topics/alpha-topic/posts/{$post->ulid}")
+            ->where('post.resource_uri', "explicate://workspaces/strategy/posts/{$post->ulid}")
             ->where('attachments.0.filename', 'report.pdf')
             ->where('attachments.0.mime_type', 'application/pdf')
             ->where('attachments.0.size', 4096)
@@ -748,7 +746,7 @@ test('list agent tasks returns post-derived work for an agent', function () {
         'name' => 'Research Agent',
         'slug' => 'research-agent',
     ]);
-    $post = Post::factory()->for($topic)->create([
+    $post = Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'status' => PostStatus::Published,
         'sender_principal_id' => $workspace->principalForUser($user)->id,
         'body' => '@research-agent Please summarize.',
@@ -790,7 +788,7 @@ test('get agent task returns full post context for agent work', function () {
         'name' => 'Research Agent',
         'slug' => 'research-agent',
     ]);
-    $post = Post::factory()->for($topic)->create([
+    $post = Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'status' => PostStatus::Published,
         'sender_principal_id' => $workspace->principalForUser($user)->id,
         'body' => '@research-agent Please summarize.',
@@ -814,7 +812,7 @@ test('get agent task returns full post context for agent work', function () {
         );
 });
 
-test('create post creates a draft by default', function () {
+test('create thread creates a draft first post when requested', function () {
     $user = User::factory()->create();
     $workspace = Workspace::factory()->for($user->currentTeam)->create([
         'slug' => 'strategy',
@@ -825,12 +823,16 @@ test('create post creates a draft by default', function () {
         'slug' => 'alpha-topic',
     ]);
 
-    $response = ExplicateServer::actingAs($user)->tool(CreatePostTool::class, [
+    $response = ExplicateServer::actingAs($user)->tool(CreateThreadTool::class, [
         'topic_slug' => 'alpha-topic',
         'body' => 'Created through the MCP server.',
+        'status' => PostStatus::Draft->value,
     ]);
 
-    $post = $topic->posts()->where('body', 'Created through the MCP server.')->first();
+    $post = Post::query()
+        ->whereHas('thread', fn ($query) => $query->whereBelongsTo($topic))
+        ->where('body', 'Created through the MCP server.')
+        ->first();
 
     expect($post)->not->toBeNull();
     expect($post?->status)->toBe(PostStatus::Draft);
@@ -839,16 +841,15 @@ test('create post creates a draft by default', function () {
         ->assertOk()
         ->assertStructuredContent(fn ($json) => $json
             ->where('workspace.slug', 'strategy')
-            ->where('topic.slug', 'alpha-topic')
-            ->where('topic.resource_uri', 'explicate://workspaces/strategy/topics/alpha-topic')
+            ->where('thread.topic.slug', 'alpha-topic')
             ->where('post.preview', 'Created through the MCP server.')
             ->where('post.status', 'draft')
-            ->where('post.resource_uri', "explicate://workspaces/strategy/topics/alpha-topic/posts/{$post->ulid}")
+            ->where('post.resource_uri', "explicate://workspaces/strategy/posts/{$post->ulid}")
             ->etc()
         );
 });
 
-test('create post dispatches mentioned agent task once when published', function () {
+test('create thread dispatches mentioned agent task once when published', function () {
     Queue::fake();
 
     $user = User::factory()->create();
@@ -864,13 +865,16 @@ test('create post dispatches mentioned agent task once when published', function
         'name' => 'Research Agent',
     ]);
 
-    ExplicateServer::actingAs($user)->tool(CreatePostTool::class, [
+    ExplicateServer::actingAs($user)->tool(CreateThreadTool::class, [
         'topic_slug' => 'alpha-topic',
         'body' => '@research-agent Please summarize.',
         'status' => PostStatus::Published->value,
     ])->assertOk();
 
-    $post = $topic->posts()->where('body', '@research-agent Please summarize.')->sole();
+    $post = Post::query()
+        ->whereHas('thread', fn ($query) => $query->whereBelongsTo($topic))
+        ->where('body', '@research-agent Please summarize.')
+        ->sole();
     $task = AgentTask::query()->whereBelongsTo($post)->sole();
 
     Queue::assertPushed(ProcessAgentTask::class, fn (ProcessAgentTask $job): bool => $job->task->is($task));
@@ -890,7 +894,7 @@ test('delete post soft deletes an own post and clears derived records', function
     $agent = Agent::factory()->for($workspace)->create([
         'slug' => 'research-agent',
     ]);
-    $post = Post::factory()->for($topic)->create([
+    $post = Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'body' => 'Please summarize.',
         'status' => PostStatus::Published,
         'sender_principal_id' => $workspace->principalForUser($user)->id,
@@ -901,7 +905,6 @@ test('delete post soft deletes an own post and clears derived records', function
     expect(AgentTask::query()->whereBelongsTo($post)->count())->toBe(1);
 
     $response = ExplicateServer::actingAs($user)->tool(DeletePostTool::class, [
-        'topic_slug' => 'alpha-topic',
         'post_ulid' => $post->ulid,
     ]);
 
@@ -909,7 +912,7 @@ test('delete post soft deletes an own post and clears derived records', function
         ->assertOk()
         ->assertStructuredContent(fn ($json) => $json
             ->where('workspace.slug', 'strategy')
-            ->where('topic.slug', 'alpha-topic')
+            ->where('thread.topic.slug', 'alpha-topic')
             ->where('post.ulid', $post->ulid)
             ->where('post.preview', 'Please summarize.')
             ->where('deleted', true)
@@ -933,12 +936,11 @@ test('delete post denies posts sent by another user', function () {
     $topic = Topic::factory()->for($workspace)->create([
         'slug' => 'alpha-topic',
     ]);
-    $post = Post::factory()->for($topic)->create([
+    $post = Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'sender_principal_id' => $memberPrincipal->id,
     ]);
 
     $response = ExplicateServer::actingAs($user)->tool(DeletePostTool::class, [
-        'topic_slug' => 'alpha-topic',
         'post_ulid' => $post->ulid,
     ]);
 
@@ -960,14 +962,13 @@ test('update post changes body and status of an own post', function () {
     $topic = Topic::factory()->for($workspace)->create([
         'slug' => 'alpha-topic',
     ]);
-    $post = Post::factory()->for($topic)->create([
+    $post = Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'body' => 'Original body.',
         'status' => PostStatus::Draft,
         'sender_principal_id' => $workspace->principalForUser($user)->id,
     ]);
 
     $response = ExplicateServer::actingAs($user)->tool(UpdatePostTool::class, [
-        'topic_slug' => 'alpha-topic',
         'post_ulid' => $post->ulid,
         'body' => 'Updated body.',
         'status' => PostStatus::Published->value,
@@ -977,7 +978,7 @@ test('update post changes body and status of an own post', function () {
         ->assertOk()
         ->assertStructuredContent(fn ($json) => $json
             ->where('workspace.slug', 'strategy')
-            ->where('topic.slug', 'alpha-topic')
+            ->where('thread.topic.slug', 'alpha-topic')
             ->where('post.ulid', $post->ulid)
             ->where('post.body', 'Updated body.')
             ->where('post.status', 'published')
@@ -999,13 +1000,12 @@ test('update post denies editing a post sent by another user', function () {
     $topic = Topic::factory()->for($workspace)->create([
         'slug' => 'alpha-topic',
     ]);
-    $post = Post::factory()->for($topic)->create([
+    $post = Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'body' => 'Someone else wrote this.',
         'sender_principal_id' => $memberPrincipal->id,
     ]);
 
     $response = ExplicateServer::actingAs($user)->tool(UpdatePostTool::class, [
-        'topic_slug' => 'alpha-topic',
         'post_ulid' => $post->ulid,
         'body' => 'Overwritten.',
     ]);
@@ -1028,7 +1028,7 @@ test('topic resource returns topic context by uri template', function () {
         'name' => 'Alpha Topic',
         'slug' => 'alpha-topic',
     ]);
-    $post = Post::factory()->for($topic)->create([
+    $post = Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'status' => PostStatus::Draft,
         'body' => 'Draft body',
     ]);
@@ -1047,9 +1047,7 @@ test('topic resource returns topic context by uri template', function () {
         ->assertOk()
         ->assertSee('"slug":"alpha-topic"')
         ->assertSee('"resource_uri":"explicate://workspaces/strategy/topics/alpha-topic"')
-        ->assertSee('"preview":"Draft body"')
-        ->assertSee('"resource_uri":"explicate://workspaces/strategy/topics/alpha-topic/posts/'.$post->ulid.'"')
-        ->assertSee('"body":"Draft body"');
+        ->assertSee('"threads_count":1');
 });
 
 test('workspace topics resource returns topics for a workspace by uri template', function () {
@@ -1063,7 +1061,7 @@ test('workspace topics resource returns topics for a workspace by uri template',
         'name' => 'Alpha Topic',
         'slug' => 'alpha-topic',
     ]);
-    Post::factory()->for($topic)->count(2)->create();
+    Post::factory()->for(Thread::factory()->forTopic($topic))->count(2)->create();
 
     $resource = new class(app(ExplicateContext::class)) extends WorkspaceTopicsResource
     {
@@ -1079,7 +1077,7 @@ test('workspace topics resource returns topics for a workspace by uri template',
         ->assertOk()
         ->assertSee('"slug":"strategy"')
         ->assertSee('"slug":"alpha-topic"')
-        ->assertSee('"posts_count":2')
+        ->assertSee('"threads_count":1')
         ->assertSee('"resource_uri":"explicate://workspaces/strategy/topics/alpha-topic"');
 });
 
@@ -1094,7 +1092,7 @@ test('workspace topics resource is readable through a concrete template uri', fu
         'name' => 'Alpha Topic',
         'slug' => 'alpha-topic',
     ]);
-    Post::factory()->for($topic)->count(2)->create();
+    Post::factory()->for(Thread::factory()->forTopic($topic))->count(2)->create();
 
     app('auth')->guard()->setUser($user);
     app('auth')->shouldUse(null);
@@ -1106,7 +1104,7 @@ test('workspace topics resource is readable through a concrete template uri', fu
     expect($response['result']['contents'][0]['uri'])->toBe('explicate://workspaces/strategy/topics');
     expect($response['result']['contents'][0]['text'])->toContain('"slug":"strategy"');
     expect($response['result']['contents'][0]['text'])->toContain('"slug":"alpha-topic"');
-    expect($response['result']['contents'][0]['text'])->toContain('"posts_count":2');
+    expect($response['result']['contents'][0]['text'])->toContain('"threads_count":1');
     expect($response['result']['contents'][0]['text'])->toContain('"resource_uri":"explicate://workspaces/strategy/topics/alpha-topic"');
 });
 
@@ -1156,16 +1154,16 @@ test('topic posts resource returns posts for a topic by uri template', function 
         'name' => 'Alpha Topic',
         'slug' => 'alpha-topic',
     ]);
-    Post::factory()->for($topic)->create([
+    Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'status' => PostStatus::Published,
         'body' => 'Ready to ship.',
     ]);
-    Post::factory()->for($topic)->create([
+    Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'body' => 'Alpha Draft',
         'status' => PostStatus::Draft,
     ]);
 
-    $resource = new class(app(ExplicateContext::class)) extends TopicPostsResource
+    $resource = new class(app(ExplicateContext::class)) extends TopicThreadsResource
     {
         public function uri(): string
         {
@@ -1193,7 +1191,7 @@ test('post resource returns post context by uri template', function () {
         'name' => 'Alpha Topic',
         'slug' => 'alpha-topic',
     ]);
-    $post = Post::factory()->for($topic)->create([
+    $post = Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'status' => PostStatus::Draft,
         'body' => 'Draft body',
     ]);
@@ -1207,7 +1205,7 @@ test('post resource returns post context by uri template', function () {
     {
         public function uri(): string
         {
-            return 'explicate://workspaces/strategy/topics/alpha-topic/posts/'.$GLOBALS['postResourceUlid'];
+            return 'explicate://workspaces/strategy/posts/'.$GLOBALS['postResourceUlid'];
         }
     };
 
@@ -1218,7 +1216,7 @@ test('post resource returns post context by uri template', function () {
     $response
         ->assertOk()
         ->assertSee('"ulid":"'.$post->ulid.'"')
-        ->assertSee('"resource_uri":"explicate://workspaces/strategy/topics/alpha-topic/posts/'.$post->ulid.'"')
+        ->assertSee('"resource_uri":"explicate://workspaces/strategy/posts/'.$post->ulid.'"')
         ->assertSee('"filename":"report.pdf"');
 });
 
@@ -1238,7 +1236,7 @@ test('agent tasks resource returns queued work by uri template', function () {
         'name' => 'Research Agent',
         'slug' => 'research-agent',
     ]);
-    $post = Post::factory()->for($topic)->create([
+    $post = Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'body' => '@research-agent Agent Request',
         'status' => PostStatus::Published,
         'sender_principal_id' => $workspace->principalForUser($user)->id,
@@ -1280,7 +1278,7 @@ test('agent task resource returns queued work by uri template', function () {
         'name' => 'Research Agent',
         'slug' => 'research-agent',
     ]);
-    $post = Post::factory()->for($topic)->create([
+    $post = Post::factory()->for(Thread::factory()->forTopic($topic))->create([
         'status' => PostStatus::Published,
         'sender_principal_id' => $workspace->principalForUser($user)->id,
         'body' => '@research-agent Please summarize.',
@@ -1372,7 +1370,7 @@ test('playbook resource returns top-level navigation guidance', function () {
     $response
         ->assertOk()
         ->assertSee('"resource_uri":"explicate://playbook"')
-        ->assertSee('explicate://workspaces/{workspace}/topics/{topic}/posts/{post}');
+        ->assertSee('explicate://workspaces/{workspace}/posts/{post}');
 });
 
 test('playbook resource is readable by its static uri', function () {
@@ -1551,7 +1549,7 @@ test('invalid local mcp auth config does not write laravel exceptions to stdout'
 test('topic forge server lists topic, post, and agent resource templates', function () {
     $response = topicForgeServerMethodResponse('resources/templates/list');
 
-    expect($response['result']['resourceTemplates'])->toHaveCount(8);
+    expect($response['result']['resourceTemplates'])->toHaveCount(10);
 
     expect(collect($response['result']['resourceTemplates'])->contains(
         fn (array $resource): bool => $resource['uriTemplate'] === 'explicate://workspaces/{workspace}/topics'
@@ -1572,7 +1570,7 @@ test('topic forge server lists topic, post, and agent resource templates', funct
 
     expect(collect($response['result']['resourceTemplates'])->contains(
         fn (array $resource): bool => $resource['name'] === 'post-resource'
-            && $resource['uriTemplate'] === 'explicate://workspaces/{workspace}/topics/{topic}/posts/{post}'
+            && $resource['uriTemplate'] === 'explicate://workspaces/{workspace}/posts/{post}'
     ))->toBeTrue();
 
     expect(collect($response['result']['resourceTemplates'])->contains(

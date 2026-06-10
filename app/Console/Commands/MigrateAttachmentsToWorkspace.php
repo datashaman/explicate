@@ -20,10 +20,10 @@ class MigrateAttachmentsToWorkspace extends Command
         $failed = 0;
 
         Attachment::withTrashed()
-            ->with('post.topic.workspace')
+            ->with('post.thread.workspace')
             ->lazyById()
             ->each(function (Attachment $attachment) use ($dryRun, &$moved, &$missing, &$failed): void {
-                $workspace = $attachment->post?->topic?->workspace;
+                $workspace = $attachment->post?->thread?->workspace;
 
                 if (! $workspace) {
                     $this->warn("Attachment {$attachment->id}: no workspace found, skipping.");

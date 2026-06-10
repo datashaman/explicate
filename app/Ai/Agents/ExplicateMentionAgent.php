@@ -2,8 +2,8 @@
 
 namespace App\Ai\Agents;
 
-use App\Ai\Tools\ManageAgentTaskListTool;
 use App\Ai\Tools\ExplicateToolFactory;
+use App\Ai\Tools\ManageAgentTaskListTool;
 use App\Models\AgentTask;
 use App\Models\Post;
 use App\Models\Principal;
@@ -53,14 +53,11 @@ class ExplicateMentionAgent implements Agent, Conversational, HasTools
         $this->task->loadMissing([
             'post.sender.user',
             'post.sender.agent',
-            'post.thread.parentPost.sender.user',
-            'post.thread.parentPost.sender.agent',
-            'post.startedThread.parentPost.sender.user',
-            'post.startedThread.parentPost.sender.agent',
+            'post.thread',
             'statusPost',
         ]);
 
-        return $this->task->post
+        return $this->task->post->thread
             ->conversationPosts()
             ->filter(fn (Post $post): bool => $post->id !== $this->task->post_id)
             ->filter(fn (Post $post): bool => $post->id !== $this->task->status_post_id)

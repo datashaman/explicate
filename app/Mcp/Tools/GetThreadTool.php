@@ -4,7 +4,6 @@ namespace App\Mcp\Tools;
 
 use App\Mcp\Concerns\FormatsMcpPayloads;
 use App\Mcp\ExplicateContext;
-use App\Mcp\ExplicateUris;
 use App\Models\User;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
@@ -16,57 +15,45 @@ use Laravel\Mcp\Server\Tool;
 use Laravel\Mcp\Server\Tools\Annotations\IsIdempotent;
 use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 
-#[Name('list-posts')]
-#[Description('List posts for a topic inside the current workspace.')]
+#[Name('get-thread')]
+#[Description('Get a thread and its ordered conversation posts.')]
 #[IsReadOnly]
 #[IsIdempotent]
-class ListPostsTool extends Tool
+class GetThreadTool extends Tool
 {
     use FormatsMcpPayloads;
 
     public function __construct(protected ExplicateContext $context) {}
 
-    /**
-     * Handle the tool request.
-     */
     public function handle(Request $request): Response|ResponseFactory
     {
         $validated = $request->validate([
-            'topic_slug' => ['required', 'string'],
+            'thread' => ['required', 'string'],
         ]);
 
         /** @var User $user */
         $user = $this->context->requireUser($request->user());
-        $topic = $this->context->topicFor($user, $validated['topic_slug']);
-
-        $posts = $topic->posts()
-            ->topLevel()
-            ->with(['topic.workspace', 'sender.user', 'sender.agent'])
-            ->get()
-            ->map(fn ($post) => $this->postSummaryPayload($post))
-            ->values()
-            ->all();
+        $thread = $this->context->threadFor($user, $validated['thread']);
+        $thread->load(['workspace', 'topic', 'latestPost.sender.user', 'latestPost.sender.agent']);
 
         return Response::structured([
-            'workspace' => $topic->workspace->only(['id', 'name', 'slug']),
-            'topic' => [
-                ...$topic->only(['id', 'name', 'slug']),
-                'resource_uri' => ExplicateUris::topic($topic),
-            ],
-            'posts' => $posts,
+            'workspace' => $thread->workspace->only(['id', 'name', 'slug']),
+            'thread' => $this->threadSummaryPayload($thread),
+            'posts' => $thread->conversationPosts()
+                ->map(fn ($post) => $this->postPayload($post))
+                ->values()
+                ->all(),
         ]);
     }
 
     /**
-     * Get the tool's input schema.
-     *
      * @return array<string, JsonSchema>
      */
     public function schema(JsonSchema $schema): array
     {
         return [
-            'topic_slug' => $schema->string()
-                ->description('The topic slug whose posts should be listed.')
+            'thread' => $schema->string()
+                ->description('The thread slug or id.')
                 ->required(),
         ];
     }
