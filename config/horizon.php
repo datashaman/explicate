@@ -45,6 +45,22 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Horizon Access Emails
+    |--------------------------------------------------------------------------
+    |
+    | These email addresses may access the Horizon dashboard outside of local
+    | environments. Multiple addresses may be separated by commas, semicolons,
+    | spaces, or new lines in the HORIZON_ACCESS_EMAILS environment variable.
+    |
+    */
+
+    'access_emails' => array_values(array_filter(array_map(
+        fn (string $email): string => strtolower(trim($email)),
+        preg_split('/[\s,;]+/', (string) env('HORIZON_ACCESS_EMAILS', '')) ?: [],
+    ))),
+
+    /*
+    |--------------------------------------------------------------------------
     | Horizon Redis Connection
     |--------------------------------------------------------------------------
     |
