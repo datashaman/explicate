@@ -16,7 +16,7 @@ beforeEach(function () {
 
 test('agents page loads', function () {
     $this->actingAs($this->user)
-        ->get(route('agents'))
+        ->get(route('dashboard'))
         ->assertOk();
 });
 
@@ -24,9 +24,10 @@ test('agent detail page uses main and sidebar layout', function () {
     $agent = Agent::factory()->for($this->workspace)->create();
 
     $this->actingAs($this->user)
-        ->get(route('agents.show', ['agent' => $agent->slug]))
+        ->get(route('dashboard', ['agent' => $agent->slug]))
         ->assertOk()
-        ->assertSee('xl:grid-cols-[minmax(0,1.7fr)_22rem]', escape: false);
+        ->assertSee('data-test="workspace-agent-row-'.$agent->slug.'"', escape: false)
+        ->assertSee($agent->name);
 });
 
 test('agent routes resolve slugs inside the current workspace', function () {
@@ -43,7 +44,7 @@ test('agent routes resolve slugs inside the current workspace', function () {
     ]);
 
     $this->actingAs($this->user)
-        ->get(route('agents.show', ['agent' => $currentAgent->slug]))
+        ->get(route('dashboard', ['agent' => $currentAgent->slug]))
         ->assertOk()
         ->assertSee('Current Agent')
         ->assertDontSee('Other Agent');
@@ -53,7 +54,7 @@ test('agents page shows workspace agents', function () {
     $agent = Agent::factory()->for($this->workspace)->create();
 
     $this->actingAs($this->user)
-        ->get(route('agents'))
+        ->get(route('dashboard'))
         ->assertOk()
         ->assertSee($agent->name);
 });
@@ -61,7 +62,7 @@ test('agents page shows workspace agents', function () {
 test('agent can be created', function () {
     $this->actingAs($this->user);
 
-    Livewire::test('pages::agents')
+    Livewire::test('pages::dashboard')
         ->set('agentName', 'My Agent')
         ->set('provider', Provider::OpenAI->value)
         ->set('model', 'o4-mini')
@@ -85,7 +86,7 @@ test('agent can be deleted', function () {
 
     $this->actingAs($this->user);
 
-    Livewire::test('pages::agents')
+    Livewire::test('pages::dashboard')
         ->call('deleteAgent', $agent->id)
         ->assertHasNoErrors();
 
@@ -97,9 +98,10 @@ test('agent details can be updated', function () {
 
     $this->actingAs($this->user);
 
-    Livewire::test('pages::agent', ['agent' => $agent])
-        ->set('agentName', 'Renamed Agent')
-        ->call('saveDetails')
+    Livewire::test('pages::dashboard')
+        ->set('selectedAgentSlug', $agent->slug)
+        ->set('selectedAgentName', 'Renamed Agent')
+        ->call('saveSelectedAgentDetails')
         ->assertHasNoErrors();
 
     expect($agent->fresh()->name)->toBe('Renamed Agent');
@@ -110,11 +112,12 @@ test('topic page can create a workspace agent with first version details', funct
 
     $this->actingAs($this->user);
 
-    Livewire::test('pages::topic', ['topic' => $topic])
+    Livewire::test('pages::dashboard')
+        ->set('selectedTopicSlug', $topic->slug)
         ->set('agentName', 'Topic Agent')
-        ->set('agentProvider', Provider::Anthropic->value)
-        ->set('agentModel', 'claude-sonnet-4-6')
-        ->set('agentPrompt', 'Stay focused.')
+        ->set('provider', Provider::Anthropic->value)
+        ->set('model', 'claude-sonnet-4-6')
+        ->set('prompt', 'Stay focused.')
         ->call('createAgent')
         ->assertHasNoErrors();
 

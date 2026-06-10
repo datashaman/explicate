@@ -17,18 +17,16 @@ beforeEach(function () {
 
 test('post page loads', function () {
     $this->actingAs($this->user)
-        ->get(route('posts.show', ['post' => $this->post]))
+        ->get(route('dashboard', ['post' => $this->post->ulid]))
         ->assertOk()
-        ->assertSee('data-test="post-panel"', escape: false)
-        ->assertSee('min-h-[calc(100dvh-4rem)]', escape: false)
-        ->assertDontSee('data-flux-breadcrumbs', escape: false);
+        ->assertSee('data-test="dashboard-post-panel"', escape: false);
 });
 
 test('draft post page does not show redundant draft status', function () {
     $this->post->update(['body' => 'Working note']);
 
     $response = $this->actingAs($this->user)
-        ->get(route('posts.show', ['post' => $this->post]))
+        ->get(route('dashboard', ['post' => $this->post->ulid]))
         ->assertOk()
         ->assertSee('Working note')
         ->assertSee('Save draft');
@@ -38,14 +36,14 @@ test('draft post page does not show redundant draft status', function () {
 
 test('post create route redirects to the dashboard post panel', function () {
     $this->actingAs($this->user)
-        ->get(route('posts.create'))
+        ->get(route('dashboard', ['action' => 'new-post', 'panel' => 'posts']))
         ->assertOk()
         ->assertSee('data-test="dashboard-post-create-panel"', escape: false);
 });
 
 test('post create route uses the selected topic query as the form default', function () {
     $this->actingAs($this->user)
-        ->get(route('posts.create', ['topic' => $this->topic->slug]))
+        ->get(route('dashboard', ['action' => 'new-post', 'topic' => $this->topic->slug, 'panel' => 'posts']))
         ->assertOk()
         ->assertSee('data-test="dashboard-post-create-panel"', escape: false)
         ->assertSee('&quot;newPostTopicId&quot;:'.$this->topic->id, escape: false);
@@ -57,16 +55,18 @@ test('post page does not resolve topics outside the current workspace', function
     $otherPost = Post::factory()->for($otherTopic)->create();
 
     $this->actingAs($this->user)
-        ->get(route('posts.show', ['post' => $otherPost]))
-        ->assertNotFound();
+        ->get(route('dashboard', ['post' => $otherPost->ulid]))
+        ->assertOk()
+        ->assertDontSee('id="thread-panel"', escape: false);
 });
 
 test('draft post can be saved', function () {
     $this->actingAs($this->user);
 
-    Livewire::test('pages::post', ['post' => $this->post])
-        ->set('body', 'Hello world')
-        ->call('save')
+    Livewire::test('pages::dashboard')
+        ->set('selectedPostUlid', $this->post->ulid)
+        ->set('postBody', 'Hello world')
+        ->call('saveSelectedPost')
         ->assertHasNoErrors();
 
     expect($this->post->fresh()->body)->toBe('Hello world');
@@ -84,7 +84,7 @@ test('published post page shows sender and topic', function () {
     ])->save();
 
     $this->actingAs($this->user)
-        ->get(route('posts.show', ['post' => $this->post]))
+        ->get(route('dashboard', ['post' => $this->post->ulid]))
         ->assertOk()
         ->assertSee('data-test="post-message"', escape: false)
         ->assertSee('data-test="post-message-sender"', escape: false)
@@ -209,9 +209,10 @@ test('published post cannot be saved', function () {
 
     $this->actingAs($this->user);
 
-    Livewire::test('pages::post', ['post' => $this->post])
-        ->set('body', 'Hello world')
-        ->call('save')
+    Livewire::test('pages::dashboard')
+        ->set('selectedPostUlid', $this->post->ulid)
+        ->set('postBody', 'Hello world')
+        ->call('saveSelectedPost')
         ->assertForbidden();
 });
 
@@ -220,10 +221,11 @@ test('attachments are saved with a draft post', function () {
 
     $file = UploadedFile::fake()->create('report.pdf', 512, 'application/pdf');
 
-    Livewire::test('pages::post', ['post' => $this->post])
-        ->set('uploads', [$file])
-        ->set('body', 'Attach this')
-        ->call('save')
+    Livewire::test('pages::dashboard')
+        ->set('selectedPostUlid', $this->post->ulid)
+        ->set('postUploads', [$file])
+        ->set('postBody', 'Attach this')
+        ->call('saveSelectedPost')
         ->assertHasNoErrors();
 
     $attachment = $this->post->attachments()->first();
@@ -240,9 +242,10 @@ test('draft post publishes as a topic post', function () {
 
     $senderPrincipal = $this->workspace->principalForUser($this->user);
 
-    Livewire::test('pages::post', ['post' => $this->post])
-        ->set('body', 'Topic post')
-        ->call('publish')
+    Livewire::test('pages::dashboard')
+        ->set('selectedPostUlid', $this->post->ulid)
+        ->set('postBody', 'Topic post')
+        ->call('publishSelectedPost')
         ->assertHasNoErrors();
 
     expect($this->post->fresh())

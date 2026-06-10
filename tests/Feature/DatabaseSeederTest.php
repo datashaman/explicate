@@ -7,11 +7,8 @@ use App\Models\Team;
 use App\Models\Topic;
 use App\Models\User;
 use App\Models\Workspace;
-use Illuminate\Support\Facades\Storage;
 
 test('database seeder creates demo workspace content', function () {
-    Storage::fake('public');
-
     $this->seed();
 
     $user = User::where('email', 'test@example.com')->first();
@@ -60,8 +57,9 @@ test('database seeder creates demo workspace content', function () {
     expect($attachments)->toHaveCount(3);
     expect($attachments->pluck('mime_type')->contains('image/svg+xml'))->toBeTrue();
 
-    $attachments->each(function (Attachment $attachment): void {
-        Storage::disk('public')->assertExists($attachment->path);
+    $workspace = $user->currentWorkspace;
+    $attachments->each(function (Attachment $attachment) use ($workspace): void {
+        expect($workspace->filesystem()->exists($attachment->path))->toBeTrue();
     });
 });
 

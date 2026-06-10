@@ -950,6 +950,22 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
         Flux::toast(variant: 'success', text: __('Agent created.'));
     }
 
+    public function deleteAgent(int $agentId): void
+    {
+        $workspace = $this->workspace();
+
+        abort_unless($workspace, 403);
+
+        $agent = $workspace->agents()->findOrFail($agentId);
+
+        if ($this->selectedAgentSlug === $agent->slug) {
+            $this->selectedAgentSlug = null;
+            $this->syncSelectedAgentFields();
+        }
+
+        $agent->delete();
+    }
+
     public function createDashboardPost(): void
     {
         $this->createDashboardPostWithStatus(PostStatus::Draft);

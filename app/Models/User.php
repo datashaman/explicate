@@ -19,8 +19,8 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
 use Laravel\Passport\Contracts\OAuthenticatable;
 use Laravel\Passport\HasApiTokens;
 
-#[Fillable(['name', 'email', 'timezone', 'password', 'current_team_id', 'current_workspace_id'])]
-#[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
+#[Fillable(['name', 'email', 'timezone', 'password', 'current_team_id', 'current_workspace_id', 'github_id', 'github_nickname', 'github_token'])]
+#[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token', 'github_token'])]
 class User extends Authenticatable implements OAuthenticatable, PasskeyUser
 {
     /** @use HasFactory<UserFactory> */
@@ -37,6 +37,7 @@ class User extends Authenticatable implements OAuthenticatable, PasskeyUser
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'two_factor_confirmed_at' => 'datetime',
+            'github_token' => 'encrypted',
         ];
     }
 

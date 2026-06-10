@@ -1,10 +1,14 @@
 <?php
 
 use App\Http\Controllers\AttachmentController;
+use App\Http\Controllers\GitHubController;
 use App\Http\Middleware\EnsureTeamMembership;
 use Illuminate\Support\Facades\Route;
 
 Route::view('/', 'welcome')->name('home');
+
+Route::get('/auth/github/redirect', [GitHubController::class, 'redirect'])->name('auth.github.redirect');
+Route::get('/auth/github/callback', [GitHubController::class, 'callback'])->name('auth.github.callback');
 
 Route::middleware(['auth', 'verified', EnsureTeamMembership::class])
     ->group(function () {
