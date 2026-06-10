@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Actions\Onboarding\SetupNewUser;
 use App\Actions\Teams\CreateTeam;
 use App\Models\User;
+use Illuminate\Http\Client\Factory as Http;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -16,6 +17,7 @@ class GitHubController extends Controller
     public function __construct(
         private CreateTeam $createTeam,
         private SetupNewUser $setupNewUser,
+        private Http $http,
     ) {}
 
     public function redirect(): RedirectResponse
@@ -43,7 +45,7 @@ class GitHubController extends Controller
             return redirect()->route('profile.edit')->with('status', 'github-connected');
         }
 
-        $email = $githubUser->getEmail()
+        $email = $githubUser->getEmail() ?? $this->primaryGitHubEmail($githubUser->token)
             ?? $githubUser->getId().'+'.$githubUser->getNickname().'@users.noreply.github.com';
 
         $existing = User::where('github_id', $githubUser->getId())
@@ -81,5 +83,22 @@ class GitHubController extends Controller
         Auth::login($user);
 
         return redirect()->intended(route('dashboard'));
+    }
+
+    private function primaryGitHubEmail(string $token): ?string
+    {
+        $emails = $this->http
+            ->withToken($token)
+            ->withHeader('Accept', 'application/vnd.github+json')
+            ->get('https://api.github.com/user/emails')
+            ->json();
+
+        if (! is_array($emails)) {
+            return null;
+        }
+
+        $primary = collect($emails)->firstWhere(fn ($e) => ($e['primary'] ?? false) && ($e['verified'] ?? false));
+
+        return $primary['email'] ?? null;
     }
 }
