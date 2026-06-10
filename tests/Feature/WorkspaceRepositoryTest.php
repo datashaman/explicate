@@ -62,6 +62,10 @@ test('repositories panel shows github repository dropdown for connected users', 
         ->get(route('dashboard', ['action' => 'repos', 'panel' => 'posts']))
         ->assertOk()
         ->assertSee('data-test="github-repository-select"', false)
+        ->assertSee('data-test="repository-github-account-auth"', false)
+        ->assertDontSee('Auth type')
+        ->assertDontSee('Access token')
+        ->assertDontSee('SSH private key')
         ->assertSee('datashaman/explicate')
         ->assertSee('private');
 });
