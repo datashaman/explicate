@@ -2,6 +2,7 @@
 
 use App\Models\WorkspaceRepository;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
 
 afterEach(function () {
@@ -41,6 +42,89 @@ test('createRepository validates required fields', function () {
         ->set('repositoryUrl', '')
         ->call('createRepository')
         ->assertHasErrors(['repositoryName', 'repositoryUrl']);
+});
+
+test('repositories panel shows github repository dropdown for connected users', function () {
+    [$user] = userWithWorkspace(['github_token' => 'gho-secret-token']);
+
+    Http::fake([
+        'api.github.com/user/repos*' => Http::response([
+            [
+                'full_name' => 'datashaman/explicate',
+                'clone_url' => 'https://github.com/datashaman/explicate.git',
+                'default_branch' => 'main',
+                'private' => true,
+            ],
+        ]),
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('dashboard', ['action' => 'repos', 'panel' => 'posts']))
+        ->assertOk()
+        ->assertSee('data-test="github-repository-select"', false)
+        ->assertSee('datashaman/explicate')
+        ->assertSee('private');
+});
+
+test('selecting a github repository fills repository fields without exposing token', function () {
+    [$user] = userWithWorkspace(['github_token' => 'gho-secret-token']);
+
+    Http::fake([
+        'api.github.com/user/repos*' => Http::response([
+            [
+                'full_name' => 'datashaman/explicate',
+                'clone_url' => 'https://github.com/datashaman/explicate.git',
+                'default_branch' => 'develop',
+                'private' => false,
+            ],
+        ]),
+    ]);
+
+    Livewire::actingAs($user)
+        ->test('pages::dashboard', ['action' => 'repos'])
+        ->set('repositoryProvider', 'github')
+        ->set('selectedGitHubRepository', 'datashaman/explicate')
+        ->assertSet('repositoryName', 'datashaman/explicate')
+        ->assertSet('repositoryUrl', 'https://github.com/datashaman/explicate.git')
+        ->assertSet('repositoryBranch', 'develop')
+        ->assertSet('repositoryAuthType', 'token')
+        ->assertSet('repositoryAccessToken', '');
+
+    Http::assertSent(fn ($request): bool => $request->hasHeader('Authorization', 'Bearer gho-secret-token')
+        && str_starts_with($request->url(), 'https://api.github.com/user/repos'));
+});
+
+test('createRepository can use connected github token without public token field', function () {
+    [$user, $workspace] = userWithWorkspace(['github_token' => 'gho-secret-token']);
+
+    Http::fake([
+        'api.github.com/user/repos*' => Http::response([]),
+    ]);
+
+    $bare = sys_get_temp_dir().'/bare-'.uniqid();
+    exec("git init --bare {$bare} 2>&1");
+    $tmp = sys_get_temp_dir().'/clone-'.uniqid();
+    exec("git clone {$bare} {$tmp} 2>&1");
+    file_put_contents("{$tmp}/README.md", '# x');
+    exec("git -C {$tmp} config user.email test@example.com && git -C {$tmp} config user.name T && git -C {$tmp} add . && git -C {$tmp} commit -m init && git -C {$tmp} push origin HEAD:main 2>&1");
+    exec("rm -rf {$tmp}");
+
+    Livewire::actingAs($user)
+        ->test('pages::dashboard', ['action' => 'repos'])
+        ->set('repositoryProvider', 'github')
+        ->set('repositoryName', 'datashaman/explicate')
+        ->set('repositoryUrl', $bare)
+        ->set('repositoryBranch', 'main')
+        ->set('repositoryAuthType', 'token')
+        ->set('repositoryAccessToken', '')
+        ->call('createRepository')
+        ->assertHasNoErrors();
+
+    $repo = $workspace->repositories()->where('name', 'datashaman/explicate')->sole();
+
+    expect($repo->access_token)->toBe('gho-secret-token');
+
+    exec("rm -rf {$bare}");
 });
 
 test('createRepository saves repo when credentials validate', function () {

@@ -5,6 +5,7 @@ use App\Actions\Agents\CreateAgentVersion;
 use App\Actions\Posts\CreatePost;
 use App\Actions\Posts\DeletePostAttachment;
 use App\Actions\Posts\UpdateDraftPost;
+use App\Actions\Repositories\ListGitHubRepositories;
 use App\Enums\PostFolder;
 use App\Enums\PostListColumn;
 use App\Enums\PostStatus;
@@ -103,6 +104,10 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
     public string $workspaceFileContent = '';
 
     public ?int $editingRepositoryId = null;
+
+    public string $repositoryProvider = 'github';
+
+    public string $selectedGitHubRepository = '';
 
     public string $repositoryName = '';
 
@@ -396,6 +401,8 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
         }
 
         $this->editingRepositoryId = $repo->id;
+        $this->repositoryProvider = str_contains($repo->url, 'github.com') ? 'github' : 'other';
+        $this->selectedGitHubRepository = '';
         $this->repositoryName = $repo->name;
         $this->repositoryUrl = $repo->url;
         $this->repositoryBranch = $repo->branch;
@@ -409,12 +416,13 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
     public function createRepository(): void
     {
         $this->validate([
+            'repositoryProvider' => ['required', 'in:github,gitlab,bitbucket,other'],
             'repositoryName' => ['required', 'string', 'max:255'],
             'repositoryUrl' => ['required', 'string', 'max:2048'],
             'repositoryBranch' => ['required', 'string', 'max:255'],
             'repositoryAuthType' => ['required', 'in:ssh,token'],
             'repositorySshPrivateKey' => ['required_if:repositoryAuthType,ssh', 'nullable', 'string'],
-            'repositoryAccessToken' => ['required_if:repositoryAuthType,token', 'nullable', 'string'],
+            'repositoryAccessToken' => [Rule::requiredIf(fn (): bool => $this->repositoryAuthType === 'token' && ! $this->canUseConnectedGitHubToken()), 'nullable', 'string'],
         ]);
 
         $workspace = $this->workspace();
@@ -433,7 +441,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
         if ($this->repositoryAuthType === 'ssh') {
             $repo->ssh_private_key = $this->repositorySshPrivateKey;
         } else {
-            $repo->access_token = $this->repositoryAccessToken;
+            $repo->access_token = $this->repositoryAccessToken ?: Auth::user()?->github_token;
         }
 
         $service = new GitRepositoryService($repo);
@@ -455,12 +463,13 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
     public function saveRepository(): void
     {
         $this->validate([
+            'repositoryProvider' => ['required', 'in:github,gitlab,bitbucket,other'],
             'repositoryName' => ['required', 'string', 'max:255'],
             'repositoryUrl' => ['required', 'string', 'max:2048'],
             'repositoryBranch' => ['required', 'string', 'max:255'],
             'repositoryAuthType' => ['required', 'in:ssh,token'],
             'repositorySshPrivateKey' => ['nullable', 'string'],
-            'repositoryAccessToken' => ['nullable', 'string'],
+            'repositoryAccessToken' => [Rule::requiredIf(fn (): bool => $this->repositoryAuthType === 'token' && ! $this->canUseConnectedGitHubToken() && ! $this->editingRepositoryId), 'nullable', 'string'],
         ]);
 
         $repo = $this->repositories()->find($this->editingRepositoryId);
@@ -478,8 +487,12 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
             $repo->ssh_private_key = $this->repositorySshPrivateKey;
         }
 
-        if ($this->repositoryAuthType === 'token' && $this->repositoryAccessToken) {
-            $repo->access_token = $this->repositoryAccessToken;
+        if ($this->repositoryAuthType === 'token') {
+            if ($this->repositoryAccessToken) {
+                $repo->access_token = $this->repositoryAccessToken;
+            } elseif ($this->canUseConnectedGitHubToken()) {
+                $repo->access_token = Auth::user()->github_token;
+            }
         }
 
         $service = new GitRepositoryService($repo);
@@ -515,9 +528,74 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
 
     private function resetRepositoryForm(): void
     {
-        $this->reset('editingRepositoryId', 'repositoryName', 'repositoryUrl', 'repositoryBranch', 'repositoryAuthType', 'repositorySshPrivateKey', 'repositoryAccessToken');
+        $this->reset('editingRepositoryId', 'selectedGitHubRepository', 'repositoryName', 'repositoryUrl', 'repositoryBranch', 'repositoryAuthType', 'repositorySshPrivateKey', 'repositoryAccessToken');
+        $this->repositoryProvider = 'github';
         $this->repositoryBranch = 'main';
         $this->repositoryAuthType = 'ssh';
+    }
+
+    public function updatedRepositoryProvider(): void
+    {
+        $this->selectedGitHubRepository = '';
+
+        if ($this->repositoryProvider === 'github' && Auth::user()?->github_token) {
+            $this->repositoryAuthType = 'token';
+            $this->repositoryAccessToken = '';
+
+            return;
+        }
+
+        $this->repositoryAuthType = 'ssh';
+        $this->repositoryAccessToken = '';
+    }
+
+    public function updatedSelectedGitHubRepository(string $fullName): void
+    {
+        $repository = collect($this->githubRepositoryOptions())
+            ->firstWhere('full_name', $fullName);
+
+        if (! $repository) {
+            return;
+        }
+
+        $this->repositoryName = $repository['full_name'];
+        $this->repositoryUrl = $repository['clone_url'];
+        $this->repositoryBranch = $repository['default_branch'];
+        $this->repositoryAuthType = 'token';
+        $this->repositoryAccessToken = '';
+    }
+
+    /**
+     * @return list<array{full_name: string, clone_url: string, default_branch: string, private: bool}>
+     */
+    public function githubRepositoryOptions(): array
+    {
+        if ($this->repositoryProvider !== 'github' || ! Auth::user()?->github_token) {
+            return [];
+        }
+
+        try {
+            return app(ListGitHubRepositories::class)->handle(Auth::user());
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return [];
+        }
+    }
+
+    public function repositoryProviderLoginUrl(): ?string
+    {
+        return match ($this->repositoryProvider) {
+            'github' => route('auth.github.redirect'),
+            'gitlab' => 'https://gitlab.com/users/sign_in',
+            'bitbucket' => 'https://bitbucket.org/account/signin/',
+            default => null,
+        };
+    }
+
+    private function canUseConnectedGitHubToken(): bool
+    {
+        return $this->repositoryProvider === 'github' && filled(Auth::user()?->github_token);
     }
 
     /** @return list<array{slug: string, name: string, icon: string, href: string, count: int}> */
@@ -2226,10 +2304,48 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
 
         <flux:modal name="new-repository" focusable class="max-w-lg">
             <form wire:submit="createRepository" class="space-y-6">
+                @php
+                    $githubRepositoryOptions = $this->githubRepositoryOptions();
+                    $repositoryProviderLoginUrl = $this->repositoryProviderLoginUrl();
+                @endphp
+
                 <div>
                     <flux:heading size="lg">{{ __('Add repository') }}</flux:heading>
                     <flux:subheading>{{ __('Connect a git repository to this workspace.') }}</flux:subheading>
                 </div>
+
+                <flux:select wire:model.live="repositoryProvider" :label="__('Provider')">
+                    <flux:select.option value="github">{{ __('GitHub') }}</flux:select.option>
+                    <flux:select.option value="gitlab">{{ __('GitLab') }}</flux:select.option>
+                    <flux:select.option value="bitbucket">{{ __('Bitbucket') }}</flux:select.option>
+                    <flux:select.option value="other">{{ __('Other git host') }}</flux:select.option>
+                </flux:select>
+
+                @if ($repositoryProvider === 'github')
+                    @if (Auth::user()->github_token)
+                        <flux:select wire:model.change.live="selectedGitHubRepository" :label="__('GitHub repository')" placeholder="{{ __('Select a repository…') }}" data-test="github-repository-select">
+                            @foreach ($githubRepositoryOptions as $githubRepository)
+                                <flux:select.option :value="$githubRepository['full_name']">
+                                    {{ $githubRepository['full_name'] }}{{ $githubRepository['private'] ? ' · private' : '' }}
+                                </flux:select.option>
+                            @endforeach
+                        </flux:select>
+                    @else
+                        <div class="rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-white/10 dark:bg-white/5">
+                            <div class="flex items-center justify-between gap-3">
+                                <flux:text class="text-sm text-neutral-500 dark:text-neutral-400">{{ __('Connect GitHub to choose from repositories you can access.') }}</flux:text>
+                                <flux:button :href="$repositoryProviderLoginUrl" size="sm" variant="filled">{{ __('Connect GitHub') }}</flux:button>
+                            </div>
+                        </div>
+                    @endif
+                @elseif ($repositoryProviderLoginUrl)
+                    <div class="rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-white/10 dark:bg-white/5">
+                        <div class="flex items-center justify-between gap-3">
+                            <flux:text class="text-sm text-neutral-500 dark:text-neutral-400">{{ __('Sign in with your provider, then paste the repository clone URL below.') }}</flux:text>
+                            <flux:button :href="$repositoryProviderLoginUrl" target="_blank" size="sm" variant="filled">{{ __('Open login') }}</flux:button>
+                        </div>
+                    </div>
+                @endif
 
                 <flux:input wire:model="repositoryName" :label="__('Name')" type="text" required autofocus />
                 <flux:input wire:model="repositoryUrl" :label="__('URL')" type="text" required placeholder="git@github.com:org/repo.git" />
@@ -2257,9 +2373,40 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
 
         <flux:modal name="edit-repository" focusable class="max-w-lg">
             <form wire:submit="saveRepository" class="space-y-6">
+                @php
+                    $githubRepositoryOptions = $this->githubRepositoryOptions();
+                    $repositoryProviderLoginUrl = $this->repositoryProviderLoginUrl();
+                @endphp
+
                 <div>
                     <flux:heading size="lg">{{ __('Edit repository') }}</flux:heading>
                 </div>
+
+                <flux:select wire:model.live="repositoryProvider" :label="__('Provider')">
+                    <flux:select.option value="github">{{ __('GitHub') }}</flux:select.option>
+                    <flux:select.option value="gitlab">{{ __('GitLab') }}</flux:select.option>
+                    <flux:select.option value="bitbucket">{{ __('Bitbucket') }}</flux:select.option>
+                    <flux:select.option value="other">{{ __('Other git host') }}</flux:select.option>
+                </flux:select>
+
+                @if ($repositoryProvider === 'github' && Auth::user()->github_token)
+                    <flux:select wire:model.change.live="selectedGitHubRepository" :label="__('GitHub repository')" placeholder="{{ __('Select a repository…') }}" data-test="github-repository-select">
+                        @foreach ($githubRepositoryOptions as $githubRepository)
+                            <flux:select.option :value="$githubRepository['full_name']">
+                                {{ $githubRepository['full_name'] }}{{ $githubRepository['private'] ? ' · private' : '' }}
+                            </flux:select.option>
+                        @endforeach
+                    </flux:select>
+                @elseif ($repositoryProviderLoginUrl)
+                    <div class="rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-white/10 dark:bg-white/5">
+                        <div class="flex items-center justify-between gap-3">
+                            <flux:text class="text-sm text-neutral-500 dark:text-neutral-400">{{ __('Sign in with your provider, then update the repository clone URL below.') }}</flux:text>
+                            <flux:button :href="$repositoryProviderLoginUrl" target="{{ $repositoryProvider === 'github' ? '_self' : '_blank' }}" size="sm" variant="filled">
+                                {{ $repositoryProvider === 'github' ? __('Connect GitHub') : __('Open login') }}
+                            </flux:button>
+                        </div>
+                    </div>
+                @endif
 
                 <flux:input wire:model="repositoryName" :label="__('Name')" type="text" required autofocus />
                 <flux:input wire:model="repositoryUrl" :label="__('URL')" type="text" required />
