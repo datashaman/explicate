@@ -178,3 +178,17 @@ This project has domain-specific skills available in `**/skills/**`. You MUST ac
 - Do NOT delete tests without approval.
 
 </laravel-boost-guidelines>
+
+## Agent skills
+
+### Issue tracker
+
+Issues and PRDs are tracked in GitHub Issues for `datashaman/explicate`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Triage uses canonical state labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, and `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+This is a single-context repo; skills should use root `CONTEXT.md` and `docs/adr/` when present. See `docs/agents/domain.md`.
