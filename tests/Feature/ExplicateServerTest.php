@@ -36,6 +36,7 @@ use App\Mcp\Tools\ListThreadsTool;
 use App\Mcp\Tools\ListTopicsTool;
 use App\Mcp\Tools\ListWorkspacesTool;
 use App\Mcp\Tools\RunGitCommandTool;
+use App\Mcp\Tools\SearchThreadsTool;
 use App\Mcp\Tools\SwitchWorkspaceTool;
 use App\Mcp\Tools\UpdateAgentTool;
 use App\Mcp\Tools\UpdatePostTool;
@@ -271,6 +272,7 @@ test('topic forge tools expose switch workspace instead of workspace slug parame
         'get-topic',
         'get-agent',
         'list-threads',
+        'search-threads',
         'get-post',
         'create-topic',
         'create-agent',
@@ -684,6 +686,70 @@ test('list posts includes sender context', function () {
         ->assertStructuredContent(fn ($json) => $json
             ->where('threads.0.latest_post.preview', 'Topic Request')
             ->where('threads.0.latest_post.sender_principal_id', $senderPrincipal->id)
+            ->etc()
+        );
+});
+
+test('search threads finds workspace threads by title summary and post body', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->for($user->currentTeam)->create([
+        'slug' => 'strategy',
+    ]);
+    $otherWorkspace = Workspace::factory()->for($user->currentTeam)->create();
+    $user->switchWorkspace($workspace);
+
+    $topic = Topic::factory()->for($workspace)->create([
+        'slug' => 'alpha-topic',
+    ]);
+    $otherTopic = Topic::factory()->for($workspace)->create([
+        'slug' => 'beta-topic',
+    ]);
+
+    $titleThread = Thread::factory()->forTopic($topic)->create([
+        'title' => 'Quarterly Planning',
+        'summary' => 'Roadmap discussion.',
+    ]);
+    Post::factory()->for($titleThread)->create([
+        'body' => 'Initial context.',
+        'status' => PostStatus::Published,
+    ]);
+
+    $bodyThread = Thread::factory()->forTopic($topic)->create([
+        'title' => 'Agent Notes',
+        'summary' => 'Follow-up work.',
+    ]);
+    Post::factory()->for($bodyThread)->create([
+        'body' => 'The rollout plan mentions quarterly milestones.',
+        'status' => PostStatus::Published,
+    ]);
+
+    $filteredThread = Thread::factory()->forTopic($otherTopic)->create([
+        'title' => 'Quarterly Budget',
+    ]);
+    Post::factory()->for($filteredThread)->create([
+        'body' => 'Different topic.',
+        'status' => PostStatus::Published,
+    ]);
+
+    Post::factory()->for(Thread::factory()->for($otherWorkspace))->create([
+        'body' => 'quarterly private workspace note',
+        'status' => PostStatus::Published,
+    ]);
+
+    $response = ExplicateServer::actingAs($user)->tool(SearchThreadsTool::class, [
+        'query' => 'quarterly',
+        'topic_slug' => 'alpha-topic',
+    ]);
+
+    $response
+        ->assertOk()
+        ->assertStructuredContent(fn ($json) => $json
+            ->where('workspace.slug', 'strategy')
+            ->where('query', 'quarterly')
+            ->where('topic.slug', 'alpha-topic')
+            ->where('threads.0.slug', $bodyThread->slug)
+            ->where('threads.1.slug', $titleThread->slug)
+            ->has('threads', 2)
             ->etc()
         );
 });

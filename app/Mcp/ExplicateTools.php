@@ -22,6 +22,7 @@ use App\Mcp\Tools\ListThreadsTool;
 use App\Mcp\Tools\ListTopicsTool;
 use App\Mcp\Tools\ListWorkspacesTool;
 use App\Mcp\Tools\RunGitCommandTool;
+use App\Mcp\Tools\SearchThreadsTool;
 use App\Mcp\Tools\SwitchWorkspaceTool;
 use App\Mcp\Tools\UpdateAgentTool;
 use App\Mcp\Tools\UpdatePostTool;
@@ -43,6 +44,7 @@ final class ExplicateTools
         GetTopicTool::class,
         GetAgentTool::class,
         ListThreadsTool::class,
+        SearchThreadsTool::class,
         GetThreadTool::class,
         GetPostTool::class,
         CreateTopicTool::class,
@@ -71,6 +73,7 @@ final class ExplicateTools
         GetTopicTool::class,
         GetAgentTool::class,
         ListThreadsTool::class,
+        SearchThreadsTool::class,
         GetThreadTool::class,
         GetPostTool::class,
         CreateTopicTool::class,
