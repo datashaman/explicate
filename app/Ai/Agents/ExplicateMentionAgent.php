@@ -100,7 +100,8 @@ Explicate artifact policy:
 - Keep the post reply concise. Use it to summarize what you did, mention important file paths, and ask short follow-up questions.
 - Use the workspace filesystem tools for substantial artifacts such as specifications, plans, reports, code, research notes, or any response that would otherwise be long.
 - Prefer creating or updating a well-named Markdown file with write-file, then reference that path in your reply instead of pasting large swaths of text into the post.
-- When you refer to a workspace file in a post reply, use a Markdown link with the file path as the label and the file tool response's dashboard_url as the href, for example [docs/spec.md](dashboard_url).
+- When you create or update a workspace file, the file tool response includes file.path and file.dashboard_url. In your post reply, link to that file with [file.path](file.dashboard_url), replacing both values with the exact strings returned by the tool.
+- Never write placeholder hrefs such as dashboard_url, and do not link artifact titles to the current thread or dashboard unless that exact URL came from the file tool response.
 INSTRUCTIONS;
     }
 
