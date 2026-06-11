@@ -83,6 +83,8 @@ class ExplicateContext
 
     public function threadFor(User $user, string $slugOrId, ?string $workspaceSlug = null): Thread
     {
+        [$slugOrId, $workspaceSlug] = $this->normalizeThreadReference($slugOrId, $workspaceSlug);
+
         $workspace = $this->workspaceFor($user, $workspaceSlug);
 
         $thread = $workspace->threads()
@@ -97,6 +99,44 @@ class ExplicateContext
         }
 
         return $thread;
+    }
+
+    /**
+     * @return array{0: string, 1: string|null}
+     */
+    private function normalizeThreadReference(string $threadReference, ?string $workspaceSlug): array
+    {
+        $threadReference = trim($threadReference);
+        $parsedUrl = parse_url($threadReference);
+
+        if (($parsedUrl['scheme'] ?? null) === 'explicate' && ($parsedUrl['host'] ?? null) === 'workspaces') {
+            $segments = $this->pathSegments($parsedUrl['path'] ?? '');
+
+            if (count($segments) >= 3 && $segments[1] === 'threads') {
+                return [
+                    rawurldecode($segments[2]),
+                    $workspaceSlug ?: rawurldecode($segments[0]),
+                ];
+            }
+        }
+
+        if (str_contains($threadReference, '?')) {
+            parse_str($parsedUrl['query'] ?? '', $query);
+
+            if (is_string($query['thread'] ?? null) && filled($query['thread'])) {
+                return [$query['thread'], $workspaceSlug];
+            }
+        }
+
+        return [$threadReference, $workspaceSlug];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function pathSegments(string $path): array
+    {
+        return array_values(array_filter(explode('/', trim($path, '/')), fn (string $segment): bool => $segment !== ''));
     }
 
     public function postFor(User $user, string $postUlid, ?string $workspaceSlug = null): Post

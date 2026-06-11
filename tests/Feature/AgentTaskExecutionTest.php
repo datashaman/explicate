@@ -6,6 +6,7 @@ use App\Ai\Tools\ExplicateToolFactory;
 use App\Enums\AgentTaskStatus;
 use App\Enums\PostStatus;
 use App\Enums\Provider;
+use App\Mcp\ExplicateUris;
 use App\Models\Agent;
 use App\Models\AgentTask;
 use App\Models\AgentVersion;
@@ -292,4 +293,65 @@ test('mention agent tools run against the task workspace context', function () {
     expect($this->workspace->filesystem()->exists('notes/context.md'))->toBeTrue();
     expect($otherWorkspace->filesystem()->exists('notes/context.md'))->toBeFalse();
     expect($this->user->fresh()->current_workspace_id)->toBe($otherWorkspace->id);
+});
+
+test('mention agent thread tools resolve threads from the task workspace context', function () {
+    $otherWorkspace = Workspace::factory()->for($this->user->currentTeam)->create([
+        'name' => 'Other Workspace',
+        'slug' => 'other-workspace',
+    ]);
+    $this->user->switchWorkspace($otherWorkspace);
+
+    $thread = Thread::factory()->for($this->workspace)->create([
+        'title' => 'Task Thread',
+        'slug' => 'task-thread',
+    ]);
+    Post::factory()->for($thread)->create([
+        'sender_principal_id' => $this->senderPrincipal->id,
+        'body' => 'Original request.',
+        'status' => PostStatus::Published,
+    ]);
+
+    $tool = collect(app(ExplicateToolFactory::class)->forAgentTask($this->user, $this->workspace))
+        ->first(fn ($tool): bool => ToolNameResolver::resolve($tool) === 'create-post');
+
+    expect($tool)->not->toBeNull();
+
+    $response = json_decode((string) $tool->handle(new AiToolRequest([
+        'thread' => 'task-thread',
+        'body' => 'Agent follow-up.',
+    ])), true, flags: JSON_THROW_ON_ERROR);
+
+    expect($response['workspace']['id'])->toBe($this->workspace->id)
+        ->and($response['thread']['slug'])->toBe('task-thread')
+        ->and($thread->posts()->where('body', 'Agent follow-up.')->exists())->toBeTrue()
+        ->and($otherWorkspace->posts()->where('body', 'Agent follow-up.')->exists())->toBeFalse()
+        ->and($this->user->fresh()->current_workspace_id)->toBe($otherWorkspace->id);
+});
+
+test('mention agent thread tools accept emitted thread resource references', function () {
+    $thread = Thread::factory()->for($this->workspace)->create([
+        'title' => 'Task Thread',
+        'slug' => 'task-thread',
+    ]);
+    Post::factory()->for($thread)->create([
+        'sender_principal_id' => $this->senderPrincipal->id,
+        'body' => 'Original request.',
+        'status' => PostStatus::Published,
+    ]);
+
+    $tool = collect(app(ExplicateToolFactory::class)->forAgentTask($this->user, $this->workspace))
+        ->first(fn ($tool): bool => ToolNameResolver::resolve($tool) === 'create-post');
+
+    expect($tool)->not->toBeNull();
+
+    foreach ([ExplicateUris::thread($thread), route('dashboard', ['thread' => $thread->slug])] as $threadReference) {
+        $response = json_decode((string) $tool->handle(new AiToolRequest([
+            'thread' => $threadReference,
+            'body' => "Reply via {$threadReference}.",
+        ])), true, flags: JSON_THROW_ON_ERROR);
+
+        expect($response['thread']['slug'])->toBe('task-thread')
+            ->and($thread->posts()->where('body', "Reply via {$threadReference}.")->exists())->toBeTrue();
+    }
 });
