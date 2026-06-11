@@ -119,43 +119,6 @@ test('post list metadata uses sender and timestamp labels', function () {
     ]);
 });
 
-test('post list topic metadata uses stable keys', function () {
-    $senderPrincipal = $this->workspace->principalForUser($this->user);
-    $updatedAt = now()->subMinutes(8);
-
-    $this->post->timestamps = false;
-    $this->post->forceFill([
-        'status' => PostStatus::Published,
-        'sender_principal_id' => $senderPrincipal->id,
-        'updated_at' => $updatedAt,
-    ])->save();
-
-    expect($this->post->fresh()->load(['sender.user', 'topic'])->listTopicMeta(
-        showSender: true,
-    ))->toBe([
-        ['key' => 'sender', 'label' => 'Sender', 'value' => $this->user->name],
-        ['key' => 'topic', 'label' => 'Topic', 'value' => $this->topic->name],
-        ['key' => 'sent', 'label' => 'Sent', 'value' => '8 minutes ago', 'title' => $updatedAt->timezone(config('app.timezone'))->isoFormat('LLLL')],
-    ]);
-});
-
-test('draft post topic metadata hides sender', function () {
-    $updatedAt = now()->subMinutes(3);
-
-    $this->post->timestamps = false;
-    $this->post->forceFill([
-        'status' => PostStatus::Draft,
-        'updated_at' => $updatedAt,
-    ])->save();
-
-    expect($this->post->fresh()->load('topic')->listTopicMeta(
-        showSender: false,
-    ))->toBe([
-        ['key' => 'topic', 'label' => 'Topic', 'value' => $this->topic->name],
-        ['key' => 'saved', 'label' => 'Saved', 'value' => '3 minutes ago', 'title' => $updatedAt->timezone(config('app.timezone'))->isoFormat('LLLL')],
-    ]);
-});
-
 test('post list timestamp titles use the user timezone when provided', function () {
     $updatedAt = now()->setTimezone('UTC')->setTime(12, 0);
 
@@ -238,7 +201,7 @@ test('attachments are saved with a draft post', function () {
     $this->workspace->filesystem()->delete('attachments');
 });
 
-test('draft post publishes as a topic post', function () {
+test('draft post publishes in its thread', function () {
     $this->actingAs($this->user);
 
     $senderPrincipal = $this->workspace->principalForUser($this->user);
@@ -255,10 +218,11 @@ test('draft post publishes as a topic post', function () {
         ->status->toBe(PostStatus::Published);
 });
 
-test('a topic has many posts', function () {
-    Post::factory()->count(2)->for(Thread::factory()->forTopic($this->topic))->create();
+test('a topic labels many threads', function () {
+    Post::factory()->for(Thread::factory()->forTopic($this->topic))->create();
+    Post::factory()->for(Thread::factory()->forTopic($this->topic))->create();
 
-    expect($this->topic->posts()->count())->toBe(3); // 1 from beforeEach + 2
+    expect($this->topic->threads()->count())->toBe(3);
 });
 
 test('a post has many attachments', function () {

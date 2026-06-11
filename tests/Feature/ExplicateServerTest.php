@@ -621,7 +621,7 @@ test('update agent renames the agent and creates a new version in the current wo
         );
 });
 
-test('list posts returns topic posts in feed order', function () {
+test('list threads returns topic-labeled threads in feed order', function () {
     $user = User::factory()->create();
     $workspace = Workspace::factory()->for($user->currentTeam)->create([
         'slug' => 'strategy',
@@ -1143,7 +1143,7 @@ test('workspace agents resource returns agents for a workspace by uri template',
         ->assertSee('"resource_uri":"explicate://workspaces/strategy/agents/research-agent"');
 });
 
-test('topic posts resource returns posts for a topic by uri template', function () {
+test('topic threads resource returns threads for a topic by uri template', function () {
     $user = User::factory()->create();
     $workspace = Workspace::factory()->for($user->currentTeam)->create([
         'slug' => 'strategy',
@@ -1167,7 +1167,7 @@ test('topic posts resource returns posts for a topic by uri template', function 
     {
         public function uri(): string
         {
-            return 'explicate://workspaces/strategy/topics/alpha-topic/posts';
+            return 'explicate://workspaces/strategy/topics/alpha-topic/threads';
         }
     };
 
@@ -1340,7 +1340,7 @@ test('agent resource returns agent context by uri template', function () {
         ->assertSee('"tasks_resource_uri":"explicate://workspaces/strategy/agents/research-agent/tasks"');
 });
 
-test('topic forge server lists top-level resources', function () {
+test('topic forge server lists root resources', function () {
     $response = topicForgeServerMethodResponse('resources/list');
 
     expect($response['result']['resources'])->toHaveCount(3);
@@ -1364,7 +1364,7 @@ test('topic forge server lists top-level resources', function () {
     ))->toBeTrue();
 });
 
-test('playbook resource returns top-level navigation guidance', function () {
+test('playbook resource returns root navigation guidance', function () {
     $response = ExplicateServer::resource(PlaybookResource::class);
 
     $response
@@ -1560,7 +1560,7 @@ test('topic forge server lists topic, post, and agent resource templates', funct
     ))->toBeTrue();
 
     expect(collect($response['result']['resourceTemplates'])->contains(
-        fn (array $resource): bool => $resource['uriTemplate'] === 'explicate://workspaces/{workspace}/topics/{topic}/posts'
+        fn (array $resource): bool => $resource['uriTemplate'] === 'explicate://workspaces/{workspace}/topics/{topic}/threads'
     ))->toBeTrue();
 
     expect(collect($response['result']['resourceTemplates'])->contains(

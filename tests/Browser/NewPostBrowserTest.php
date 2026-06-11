@@ -1,12 +1,13 @@
 <?php
 
 use App\Enums\PostStatus;
+use App\Models\Post;
 use App\Models\Topic;
 use App\Models\User;
 use App\Models\Workspace;
 
-test('dashboard new post button opens canonical create URL and sends the form', function () {
-    $user = User::factory()->create();
+test('dashboard new post URL opens the create panel and sends the form', function () {
+    $user = User::factory()->create(['coach_marks_seen_at' => now()]);
     $workspace = Workspace::factory()->for($user->currentTeam)->create();
     $user->switchWorkspace($workspace);
 
@@ -19,9 +20,9 @@ test('dashboard new post button opens canonical create URL and sends the form', 
 
     $this->actingAs($user);
 
-    visit(route('dashboard', ['topic' => $topic->slug], false))
-        ->click('@dashboard-new-post-button-desktop')
-        ->assertPathIs('/posts/new')
+    visit(route('dashboard', ['action' => 'new-post', 'topic' => $topic->slug, 'panel' => 'posts'], false))
+        ->assertPathIs('/dashboard')
+        ->assertQueryStringHas('action', 'new-post')
         ->assertQueryStringHas('topic', $topic->slug)
         ->assertSee('New post')
         ->type('@new-post-body', 'TEST')
@@ -29,7 +30,10 @@ test('dashboard new post button opens canonical create URL and sends the form', 
         ->wait(0.5)
         ->assertNoJavaScriptErrors();
 
-    $post = $topic->posts()->where('body', 'TEST')->first();
+    $post = Post::query()
+        ->where('body', 'TEST')
+        ->whereHas('thread', fn ($query) => $query->whereBelongsTo($topic))
+        ->first();
 
     expect($post)->not->toBeNull()
         ->and($post->sender_principal_id)->toBe($senderPrincipal->id)
@@ -37,7 +41,7 @@ test('dashboard new post button opens canonical create URL and sends the form', 
 });
 
 test('new post query values become form defaults and form fields submit the post', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->create(['coach_marks_seen_at' => now()]);
     $workspace = Workspace::factory()->for($user->currentTeam)->create();
     $user->switchWorkspace($workspace);
 
@@ -52,8 +56,9 @@ test('new post query values become form defaults and form fields submit the post
 
     $this->actingAs($user);
 
-    visit(route('posts.create', ['topic' => $design->slug], false))
-        ->assertPathIs('/posts/new')
+    visit(route('dashboard', ['action' => 'new-post', 'topic' => $design->slug, 'panel' => 'posts'], false))
+        ->assertPathIs('/dashboard')
+        ->assertQueryStringHas('action', 'new-post')
         ->assertQueryStringHas('topic', $design->slug)
         ->assertSelected('@new-post-topic', $design->id)
         ->type('@new-post-body', 'Query default overridden')
@@ -62,9 +67,15 @@ test('new post query values become form defaults and form fields submit the post
         ->wait(0.5)
         ->assertNoJavaScriptErrors();
 
-    expect($design->posts()->where('body', 'Query default overridden')->exists())->toBeFalse();
+    expect(Post::query()
+        ->where('body', 'Query default overridden')
+        ->whereHas('thread', fn ($query) => $query->whereBelongsTo($design))
+        ->exists())->toBeFalse();
 
-    $post = $engineering->posts()->where('body', 'Query default overridden')->first();
+    $post = Post::query()
+        ->where('body', 'Query default overridden')
+        ->whereHas('thread', fn ($query) => $query->whereBelongsTo($engineering))
+        ->first();
 
     expect($post)->not->toBeNull()
         ->and($post->status)->toBe(PostStatus::Published);

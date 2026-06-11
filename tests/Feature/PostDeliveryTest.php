@@ -57,7 +57,7 @@ test('mentioning an agent in a published post creates agent work instead of a no
     Queue::assertPushed(ProcessAgentTask::class, fn (ProcessAgentTask $job): bool => $job->task->is($task));
 });
 
-test('topic posts without assignments do not create notifications or agent tasks', function () {
+test('topic-labeled thread posts without assignments do not create notifications or agent tasks', function () {
     Notification::fake();
 
     Post::factory()->for(Thread::factory()->forTopic($this->topic))->create([

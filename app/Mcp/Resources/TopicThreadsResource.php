@@ -24,7 +24,7 @@ class TopicThreadsResource extends Resource implements HasUriTemplate
 
     public function uriTemplate(): UriTemplate
     {
-        return new UriTemplate(ExplicateUris::TopicPostsTemplate);
+        return new UriTemplate(ExplicateUris::TopicThreadsTemplate);
     }
 
     public function handle(Request $request): Response

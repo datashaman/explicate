@@ -251,14 +251,14 @@ test('dashboard feed folder does not show draft posts', function () {
         ->assertDontSee('Hidden draft');
 });
 
-test('dashboard feed folder shows all published topic posts', function () {
+test('dashboard feed folder shows all published topic-labeled threads', function () {
     [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['name' => 'Design', 'slug' => 'design']);
     $userPrincipal = $workspace->principalForUser($user);
 
     $firstPost = Post::factory()->for(Thread::factory()->forTopic($topic))->create([
-        'body' => 'First topic post',
+        'body' => 'First topic-labeled thread',
         'status' => PostStatus::Published,
         'sender_principal_id' => $userPrincipal->id,
     ]);
@@ -266,13 +266,13 @@ test('dashboard feed folder shows all published topic posts', function () {
     $firstPost->forceFill(['created_at' => now()->subMinutes(9)])->save();
 
     Post::factory()->for(Thread::factory()->forTopic($topic))->create([
-        'body' => 'Second topic post',
+        'body' => 'Second topic-labeled thread',
         'status' => PostStatus::Published,
         'sender_principal_id' => $userPrincipal->id,
     ]);
 
     Post::factory()->for(Thread::factory()->forTopic($topic))->create([
-        'body' => 'Third topic post',
+        'body' => 'Third topic-labeled thread',
         'status' => PostStatus::Published,
         'sender_principal_id' => $userPrincipal->id,
     ]);
@@ -282,9 +282,9 @@ test('dashboard feed folder shows all published topic posts', function () {
         ->assertOk()
         ->assertSee('data-test="folder-title"', escape: false)
         ->assertSeeText('Feed')
-        ->assertSee('First topic post')
-        ->assertSee('Second topic post')
-        ->assertSee('Third topic post')
+        ->assertSee('First topic-labeled thread')
+        ->assertSee('Second topic-labeled thread')
+        ->assertSee('Third topic-labeled thread')
         ->assertDontSeeText('Author')
         ->assertSee('data-test="post-message"', escape: false)
         ->assertSee('data-test="post-message-actions"', escape: false)
@@ -532,7 +532,7 @@ test('dashboard selected topic shows a sticky composer in the main panel', funct
         ->assertSee('shrink-0 border-t border-neutral-200', escape: false);
 });
 
-test('dashboard main composer creates a published top level post', function () {
+test('dashboard main composer starts a published thread', function () {
     [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['name' => 'Selected Topic', 'slug' => 'selected-topic']);
@@ -548,7 +548,7 @@ test('dashboard main composer creates a published top level post', function () {
 
     $post = Post::query()->where('body', 'A smoother post from the composer.')->sole();
 
-    expect($post->topic->is($topic))->toBeTrue()
+    expect($post->thread->topic->is($topic))->toBeTrue()
         ->and($post->thread)->not->toBeNull()
         ->and($post->sender->is($workspace->principalForUser($user)))->toBeTrue()
         ->and($post->status)->toBe(PostStatus::Published);
@@ -607,7 +607,7 @@ test('dashboard main composer can remove a pending attachment before posting', f
     expect($post->attachments()->pluck('filename')->all())->toBe(['keep-me.pdf']);
 });
 
-test('dashboard keeps thread replies out of top-level topic lists', function () {
+test('dashboard keeps thread replies out of topic feed lists', function () {
     [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['name' => 'Selected Topic', 'slug' => 'selected-topic']);
@@ -674,7 +674,7 @@ test('dashboard post messages open from the replies affordance instead of the wh
         ->assertDontSee('block whitespace-pre-wrap hover:underline', escape: false);
 });
 
-test('dashboard top level post without replies still has a thread button', function () {
+test('dashboard single-post thread still has a thread button', function () {
     [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['name' => 'Selected Topic', 'slug' => 'selected-topic']);
@@ -810,7 +810,7 @@ test('dashboard thread composer replies in the selected post thread', function (
 
     $reply = Post::query()->where('body', 'Replying from the thread composer.')->sole();
 
-    expect($reply->topic->is($topic))->toBeTrue()
+    expect($reply->thread->topic->is($topic))->toBeTrue()
         ->and($reply->sender->is($workspace->principalForUser($user)))->toBeTrue()
         ->and($reply->status)->toBe(PostStatus::Published)
         ->and($reply->thread_id)->toBe($thread->id);
@@ -1423,7 +1423,10 @@ test('dashboard can create a draft post in the main panel', function () {
         ->assertSet('selectedTopicSlug', $topic->slug)
         ->assertSet('selectedThreadSlug', fn (?string $slug): bool => filled($slug));
 
-    $post = $topic->posts()->where('body', 'Draft body')->first();
+    $post = Post::query()
+        ->where('body', 'Draft body')
+        ->whereHas('thread', fn ($query) => $query->whereBelongsTo($topic))
+        ->first();
 
     expect($post)->not->toBeNull()
         ->and($post->status)->toBe(PostStatus::Draft);
@@ -1447,7 +1450,10 @@ test('dashboard can make a new post actionable in the main panel', function () {
         ->assertSet('selectedTopicSlug', $topic->slug)
         ->assertSet('selectedThreadSlug', fn (?string $slug): bool => filled($slug));
 
-    $post = $topic->posts()->where('body', 'Actionable body')->first();
+    $post = Post::query()
+        ->where('body', 'Actionable body')
+        ->whereHas('thread', fn ($query) => $query->whereBelongsTo($topic))
+        ->first();
     $senderPrincipal = $workspace->principalForUser($user);
 
     expect($post)->not->toBeNull()
@@ -1474,7 +1480,10 @@ test('dashboard creates agent tasks from mentions when sending a new post', func
         ->call('sendDashboardPost')
         ->assertHasNoErrors();
 
-    $post = $topic->posts()->where('body', '@researcher @reviewer Please both review this.')->first();
+    $post = Post::query()
+        ->where('body', '@researcher @reviewer Please both review this.')
+        ->whereHas('thread', fn ($query) => $query->whereBelongsTo($topic))
+        ->first();
 
     expect($post)->not->toBeNull()
         ->and($post->agentTasks)->toHaveCount(2)
@@ -1482,7 +1491,7 @@ test('dashboard creates agent tasks from mentions when sending a new post', func
         ->and($post->agentTasks->pluck('available_at')->filter())->toHaveCount(2);
 });
 
-test('dashboard posts a new post to a topic', function () {
+test('dashboard starts a new thread labeled with a topic', function () {
     [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create(['slug' => 'design']);
@@ -1497,7 +1506,10 @@ test('dashboard posts a new post to a topic', function () {
         ->call('sendDashboardPost')
         ->assertHasNoErrors();
 
-    $post = $topic->posts()->where('body', 'For the topic')->first();
+    $post = Post::query()
+        ->where('body', 'For the topic')
+        ->whereHas('thread', fn ($query) => $query->whereBelongsTo($topic))
+        ->first();
     $senderPrincipal = $workspace->principalForUser($user);
 
     expect($post)->not->toBeNull()
@@ -1520,7 +1532,10 @@ test('dashboard sets sender when posting a new post', function () {
         ->call('sendDashboardPost')
         ->assertHasNoErrors();
 
-    $post = $topic->posts()->where('body', 'Topic body')->first();
+    $post = Post::query()
+        ->where('body', 'Topic body')
+        ->whereHas('thread', fn ($query) => $query->whereBelongsTo($topic))
+        ->first();
 
     expect($post)->not->toBeNull()
         ->and($post->sender_principal_id)->toBe($senderPrincipal->id)
@@ -1614,7 +1629,7 @@ test('topic page renders posts as message feed items', function () {
         ->assertDontSee('xl:sticky xl:top-6');
 });
 
-test('topic post list uses insertion order for channel order', function () {
+test('topic thread list uses insertion order for channel order', function () {
     [$user, $workspace] = userWithWorkspace();
 
     $topic = Topic::factory()->for($workspace)->create();

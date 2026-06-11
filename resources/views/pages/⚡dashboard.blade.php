@@ -974,6 +974,12 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
         $this->syncSelectedPostFields();
     }
 
+    public function closeThread(): void
+    {
+        $this->selectedThreadSlug = null;
+        $this->selectedPostUlid = null;
+    }
+
     public function updatedSelectedAgentSlug(): void
     {
         if ($this->selectedAgentSlug) {
@@ -2172,7 +2178,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
                     <div class="flex items-center justify-between gap-3 border-b border-neutral-300 bg-emerald-50 px-4 py-3 dark:border-white/10 dark:bg-emerald-500/10">
                         <flux:heading size="sm" class="min-w-0 flex-1 truncate">{{ __('Thread') }}</flux:heading>
 
-                        <flux:button wire:click="$set('selectedThreadSlug', null); $set('selectedPostUlid', null)" size="xs" variant="filled" icon="x-mark" data-test="thread-panel-close">
+                        <flux:button wire:click="closeThread" size="xs" variant="filled" icon="x-mark" data-test="thread-panel-close">
                             {{ __('Close') }}
                         </flux:button>
                     </div>

@@ -10,7 +10,7 @@ use Laravel\Mcp\Server\Attributes\MimeType;
 use Laravel\Mcp\Server\Attributes\Uri;
 use Laravel\Mcp\Server\Resource;
 
-#[Description('A top-level guide for navigating Explicate workspaces, topic labels, agents, threads, and posts.')]
+#[Description('A root guide for navigating Explicate workspaces, topic labels, agents, threads, and posts.')]
 #[Uri(ExplicateUris::Playbook)]
 #[MimeType('application/json')]
 class PlaybookResource extends Resource
@@ -35,7 +35,7 @@ class PlaybookResource extends Resource
                 'workspace_threads' => ExplicateUris::WorkspaceThreadsTemplate,
                 'workspace_agents' => ExplicateUris::WorkspaceAgentsTemplate,
                 'topic' => ExplicateUris::TopicTemplate,
-                'topic_threads' => ExplicateUris::TopicPostsTemplate,
+                'topic_threads' => ExplicateUris::TopicThreadsTemplate,
                 'thread' => ExplicateUris::ThreadTemplate,
                 'post' => ExplicateUris::PostTemplate,
                 'agent' => ExplicateUris::AgentTemplate,

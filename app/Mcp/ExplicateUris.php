@@ -28,7 +28,7 @@ final class ExplicateUris
 
     public const TopicTemplate = 'explicate://workspaces/{workspace}/topics/{topic}';
 
-    public const TopicPostsTemplate = 'explicate://workspaces/{workspace}/topics/{topic}/posts';
+    public const TopicThreadsTemplate = 'explicate://workspaces/{workspace}/topics/{topic}/threads';
 
     public const WorkspaceThreadsTemplate = 'explicate://workspaces/{workspace}/threads';
 
@@ -69,9 +69,9 @@ final class ExplicateUris
         return self::Workspaces."/{$topic->workspace->slug}/topics/{$topic->slug}";
     }
 
-    public static function topicPosts(Topic $topic): string
+    public static function topicThreads(Topic $topic): string
     {
-        return self::topic($topic).'/posts';
+        return self::topic($topic).'/threads';
     }
 
     public static function workspaceThreads(Workspace|UserWorkspace|string $workspace): string

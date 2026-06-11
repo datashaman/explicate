@@ -12,7 +12,6 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasOneThrough;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
@@ -152,21 +151,6 @@ class Post extends Model
     }
 
     /**
-     * @return HasOneThrough<Topic, Thread, $this>
-     */
-    public function topic(): HasOneThrough
-    {
-        return $this->hasOneThrough(
-            Topic::class,
-            Thread::class,
-            'id',
-            'id',
-            'thread_id',
-            'topic_id',
-        );
-    }
-
-    /**
      * @return BelongsTo<Principal, $this>
      */
     public function sender(): BelongsTo
@@ -201,27 +185,6 @@ class Post extends Model
         ];
 
         return $meta;
-    }
-
-    /**
-     * @return list<array{key: string, label: string, value: string, title?: string}>
-     */
-    public function listTopicMeta(bool $showSender, ?string $timezone = null): array
-    {
-        $this->loadMissing('thread.topic');
-
-        return [
-            ...($showSender && $this->sender ? [
-                ['key' => PostListColumn::Sender->value, 'label' => __('Sender'), 'value' => $this->sender->label()],
-            ] : []),
-            ['key' => PostListColumn::Topic->value, 'label' => __('Topic'), 'value' => $this->thread->topic?->name ?? __('No topic')],
-            [
-                'key' => $this->dateListColumn()->value,
-                'label' => $this->status === PostStatus::Draft ? __('Saved') : __('Sent'),
-                'value' => $this->updated_at->diffForHumans(),
-                'title' => $this->updated_at->timezone($timezone ?: config('app.timezone'))->isoFormat('LLLL'),
-            ],
-        ];
     }
 
     /**
