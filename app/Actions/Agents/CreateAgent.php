@@ -4,6 +4,7 @@ namespace App\Actions\Agents;
 
 use App\Models\Agent;
 use App\Models\Workspace;
+use Illuminate\Support\Facades\DB;
 
 class CreateAgent
 {
@@ -18,10 +19,12 @@ class CreateAgent
         ?string $prompt,
         ?array $allowedTools = null,
     ): Agent {
-        $agent = $workspace->agents()->create(['name' => $name]);
+        return DB::transaction(function () use ($workspace, $name, $provider, $model, $reasoningEffort, $prompt, $allowedTools): Agent {
+            $agent = $workspace->agents()->create(['name' => $name]);
 
-        $this->createAgentVersion->handle($agent, $provider, $model, $reasoningEffort, $prompt, $allowedTools);
+            $this->createAgentVersion->handle($agent, $provider, $model, $reasoningEffort, $prompt, $allowedTools);
 
-        return $agent->fresh(['latestVersion']);
+            return $agent->fresh(['latestVersion']);
+        });
     }
 }

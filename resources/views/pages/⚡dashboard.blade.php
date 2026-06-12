@@ -21,6 +21,7 @@ use App\Models\Topic;
 use App\Models\Workspace;
 use App\Models\WorkspaceRepository;
 use App\Services\GitRepositoryService;
+use App\Services\AiProviderKeyService;
 use App\Services\WorkspaceFilesystemService;
 use Flux\Flux;
 use Illuminate\Database\Eloquent\Collection;
@@ -878,6 +879,19 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
         return $provider ? $provider->models() : [];
     }
 
+    /** @return list<array{provider: string, label: string, models: list<string>, source: string}> */
+    #[Computed]
+    public function availableProviderOptions(): array
+    {
+        $workspace = $this->workspace();
+
+        if (! $workspace) {
+            return [];
+        }
+
+        return app(AiProviderKeyService::class)->availableProvidersForWorkspace($workspace);
+    }
+
     #[Computed]
     public function showReasoningEffort(): bool
     {
@@ -1096,7 +1110,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
 
         $validated = $this->validate([
             'agentName' => ['required', 'string', 'max:255'],
-            'provider' => ['required', 'string', Rule::enum(Provider::class)],
+            'provider' => ['required', 'string', Rule::in(collect($this->availableProviderOptions)->pluck('provider')->all())],
             'model' => ['required', 'string', 'max:255'],
             'reasoningEffort' => ['nullable', 'string', Rule::enum(ReasoningEffort::class)],
             'prompt' => ['nullable', 'string'],
@@ -1431,7 +1445,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
         abort_unless($agent, 404);
 
         $validated = $this->validate([
-            'selectedAgentProvider' => ['required', 'string', Rule::enum(Provider::class)],
+            'selectedAgentProvider' => ['required', 'string', Rule::in(collect($this->availableProviderOptions)->pluck('provider')->all())],
             'selectedAgentModel' => ['required', 'string', 'max:255'],
             'selectedAgentReasoningEffort' => ['nullable', 'string', Rule::enum(ReasoningEffort::class)],
             'selectedAgentPrompt' => ['nullable', 'string'],
@@ -2358,7 +2372,9 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
 
                 <div class="grid grid-cols-2 gap-4">
                     <flux:select wire:model.live="provider" :label="__('Provider')" placeholder="{{ __('Select provider…') }}" required>
-                        <x-provider-options />
+                        @foreach ($this->availableProviderOptions as $availableProvider)
+                            <flux:select.option :value="$availableProvider['provider']">{{ $availableProvider['label'] }}</flux:select.option>
+                        @endforeach
                     </flux:select>
 
                     <flux:select wire:model="model" :label="__('Model')" placeholder="{{ __('Select model…') }}" :disabled="!$provider" required>

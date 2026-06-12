@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\Provider;
 use App\Models\ProviderKey;
 use App\Models\Workspace;
 use Closure;
@@ -25,6 +26,60 @@ class AiProviderKeyService
             ->first();
 
         return filled($providerKey?->api_key) ? $providerKey->api_key : null;
+    }
+
+    public function hasKeyForWorkspace(Workspace $workspace, string $providerName): bool
+    {
+        return filled($this->forWorkspace($workspace, $providerName))
+            || filled(config("ai.providers.{$providerName}.key"));
+    }
+
+    /**
+     * @return list<array{provider: string, label: string, models: list<string>, source: string}>
+     */
+    public function availableProvidersForWorkspace(Workspace $workspace): array
+    {
+        return collect(Provider::cases())
+            ->map(fn (Provider $provider): ?array => match ($source = $this->keySourceForWorkspace($workspace, $provider->value)) {
+                null => null,
+                default => [
+                    'provider' => $provider->value,
+                    'label' => $provider->label(),
+                    'models' => $provider->models(),
+                    'source' => $source,
+                ],
+            })
+            ->filter()
+            ->values()
+            ->all();
+    }
+
+    public function keySourceForWorkspace(Workspace $workspace, string $providerName): ?string
+    {
+        $workspaceProviderKey = ProviderKey::query()
+            ->where('provider', $providerName)
+            ->where('workspace_id', $workspace->id)
+            ->first();
+
+        if (filled($workspaceProviderKey?->api_key)) {
+            return 'workspace';
+        }
+
+        $teamProviderKey = ProviderKey::query()
+            ->where('provider', $providerName)
+            ->where('team_id', $workspace->team_id)
+            ->whereNull('workspace_id')
+            ->first();
+
+        if (filled($teamProviderKey?->api_key)) {
+            return 'team';
+        }
+
+        if (filled(config("ai.providers.{$providerName}.key"))) {
+            return 'config';
+        }
+
+        return null;
     }
 
     public function withWorkspaceKey(Workspace $workspace, string $providerName, Closure $callback): mixed

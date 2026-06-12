@@ -4,15 +4,32 @@ use App\Enums\Provider;
 use App\Enums\ReasoningEffort;
 use App\Models\Agent;
 use App\Models\AgentVersion;
+use App\Models\ProviderKey;
 use App\Models\Topic;
 use App\Models\User;
 use App\Models\Workspace;
 use Livewire\Livewire;
 
 beforeEach(function () {
+    config([
+        'ai.providers.anthropic.key' => null,
+        'ai.providers.gemini.key' => null,
+        'ai.providers.openai.key' => null,
+        'ai.providers.groq.key' => null,
+    ]);
+
     $this->user = User::factory()->create();
     $this->workspace = Workspace::factory()->for($this->user->currentTeam)->create();
     $this->user->switchWorkspace($this->workspace);
+
+    foreach ([Provider::Anthropic, Provider::OpenAI] as $provider) {
+        ProviderKey::create([
+            'team_id' => $this->user->currentTeam->id,
+            'workspace_id' => null,
+            'provider' => $provider,
+            'api_key' => 'test-'.$provider->value.'-key',
+        ]);
+    }
 });
 
 test('agents page loads', function () {
@@ -84,6 +101,19 @@ test('agent can be created', function () {
     expect($agent->versions->first()->allowed_tools)->toBe(['get-thread', 'write-file']);
 });
 
+test('agent cannot be created for a provider without a configured key', function () {
+    $this->actingAs($this->user);
+
+    Livewire::test('pages::dashboard')
+        ->set('agentName', 'No Key Agent')
+        ->set('provider', Provider::Gemini->value)
+        ->set('model', 'gemini-2.5-pro')
+        ->call('createAgent')
+        ->assertHasErrors(['provider']);
+
+    expect($this->workspace->agents()->where('name', 'No Key Agent')->exists())->toBeFalse();
+});
+
 test('agent form shows and saves allowed tools on new versions', function () {
     $agent = Agent::factory()->for($this->workspace)->create([
         'name' => 'Tool Agent',
@@ -118,6 +148,27 @@ test('agent form shows and saves allowed tools on new versions', function () {
 
     expect($latest?->version)->toBe(2)
         ->and($latest?->allowed_tools)->toBe(['get-thread', 'write-file']);
+});
+
+test('agent version cannot be created for a provider without a configured key', function () {
+    $agent = Agent::factory()->for($this->workspace)->create([
+        'name' => 'Tool Agent',
+        'slug' => 'tool-agent',
+    ]);
+    AgentVersion::factory()->for($agent)->create([
+        'provider' => Provider::Anthropic,
+        'model' => 'claude-sonnet-4-6',
+    ]);
+
+    Livewire::actingAs($this->user)
+        ->test('pages::dashboard')
+        ->set('selectedAgentSlug', 'tool-agent')
+        ->set('selectedAgentProvider', Provider::Gemini->value)
+        ->set('selectedAgentModel', 'gemini-2.5-pro')
+        ->call('saveSelectedAgentVersion')
+        ->assertHasErrors(['selectedAgentProvider']);
+
+    expect($agent->versions()->count())->toBe(1);
 });
 
 test('agent can be deleted', function () {

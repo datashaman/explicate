@@ -21,6 +21,7 @@ use App\Mcp\Tools\ListAgentsTool;
 use App\Mcp\Tools\ListAgentTasksTool;
 use App\Mcp\Tools\ListBriefsTool;
 use App\Mcp\Tools\ListFilesTool;
+use App\Mcp\Tools\ListProviderKeysTool;
 use App\Mcp\Tools\ListReposTool;
 use App\Mcp\Tools\ListThreadsTool;
 use App\Mcp\Tools\ListTopicsTool;
@@ -44,6 +45,7 @@ final class ExplicateTools
         ListWorkspacesTool::class,
         SwitchWorkspaceTool::class,
         ListTopicsTool::class,
+        ListProviderKeysTool::class,
         ListAgentsTool::class,
         ListAgentTasksTool::class,
         GetAgentTaskTool::class,
@@ -79,6 +81,7 @@ final class ExplicateTools
         WhoAmITool::class,
         ListWorkspacesTool::class,
         ListTopicsTool::class,
+        ListProviderKeysTool::class,
         ListAgentsTool::class,
         ListAgentTasksTool::class,
         GetAgentTaskTool::class,

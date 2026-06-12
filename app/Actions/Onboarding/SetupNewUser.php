@@ -6,6 +6,7 @@ use App\Actions\Agents\CreateAgent;
 use App\Actions\Agents\DefaultAgentDefinitions;
 use App\Actions\Workspaces\CreateWorkspace;
 use App\Models\User;
+use App\Services\AiProviderKeyService;
 
 class SetupNewUser
 {
@@ -13,6 +14,7 @@ class SetupNewUser
         private CreateWorkspace $createWorkspace,
         private CreateAgent $createAgent,
         private DefaultAgentDefinitions $defaultAgentDefinitions,
+        private AiProviderKeyService $providerKeys,
     ) {}
 
     public function handle(User $user): void
@@ -23,7 +25,11 @@ class SetupNewUser
 
         $user->switchWorkspace($workspace);
 
-        foreach ($this->defaultAgentDefinitions->all() as $agent) {
+        $availableProviders = collect($this->providerKeys->availableProvidersForWorkspace($workspace))
+            ->pluck('provider')
+            ->all();
+
+        foreach ($this->defaultAgentDefinitions->forAvailableProviders($availableProviders) as $agent) {
             $this->createAgent->handle(
                 workspace: $workspace,
                 name: $agent['name'],

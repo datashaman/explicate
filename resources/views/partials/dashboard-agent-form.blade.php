@@ -30,7 +30,9 @@
         <form wire:submit="saveSelectedAgentVersion" class="space-y-4 p-4">
             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <flux:select wire:model.live="selectedAgentProvider" :label="__('Provider')" placeholder="{{ __('Select provider…') }}" required>
-                    <x-provider-options />
+                    @foreach ($this->availableProviderOptions as $availableProvider)
+                        <flux:select.option :value="$availableProvider['provider']">{{ $availableProvider['label'] }}</flux:select.option>
+                    @endforeach
                 </flux:select>
 
                 <flux:select wire:model="selectedAgentModel" :label="__('Model')" placeholder="{{ __('Select model…') }}" :disabled="!$selectedAgentProvider" required>

@@ -21,6 +21,7 @@ class AgentToolCatalog
         'who-am-i' => 'Context',
         'list-workspaces' => 'Context',
         'list-topics' => 'Context',
+        'list-provider-keys' => 'Context',
         'list-agents' => 'Context',
         'list-agent-tasks' => 'Context',
         'get-agent-task' => 'Context',

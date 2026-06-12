@@ -9,6 +9,7 @@ use App\Models\Agent;
 use App\Models\Attachment;
 use App\Models\Brief;
 use App\Models\Post;
+use App\Models\ProviderKey;
 use App\Models\Thread;
 use App\Models\Topic;
 use App\Models\User;
@@ -36,6 +37,16 @@ class DatabaseSeeder extends Seeder
         $workspace = Workspace::factory()->for($team)->create(['name' => 'My First Workspace']);
         $user->switchWorkspace($workspace);
         $senderPrincipal = $workspace->principalForUser($user);
+
+        collect($defaultAgentDefinitions->all())
+            ->pluck('provider')
+            ->unique(fn ($provider) => $provider->value)
+            ->each(fn ($provider) => ProviderKey::create([
+                'team_id' => $team->id,
+                'workspace_id' => null,
+                'provider' => $provider,
+                'api_key' => 'seed-'.$provider->value.'-key',
+            ]));
 
         $topics = Topic::factory()->for($workspace)->createMany([
             ['name' => 'Design'],

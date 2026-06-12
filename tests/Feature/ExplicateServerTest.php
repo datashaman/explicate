@@ -41,6 +41,7 @@ use App\Mcp\Tools\ListAgentsTool;
 use App\Mcp\Tools\ListAgentTasksTool;
 use App\Mcp\Tools\ListBriefsTool;
 use App\Mcp\Tools\ListFilesTool;
+use App\Mcp\Tools\ListProviderKeysTool;
 use App\Mcp\Tools\ListReposTool;
 use App\Mcp\Tools\ListThreadsTool;
 use App\Mcp\Tools\ListTopicsTool;
@@ -61,6 +62,7 @@ use App\Models\Attachment;
 use App\Models\Brief;
 use App\Models\Plan;
 use App\Models\Post;
+use App\Models\ProviderKey;
 use App\Models\Task;
 use App\Models\Thread;
 use App\Models\Topic;
@@ -283,6 +285,7 @@ test('topic forge tools expose switch workspace instead of workspace slug parame
 
     foreach ([
         'list-topics',
+        'list-provider-keys',
         'list-agents',
         'list-agent-tasks',
         'get-agent-task',
@@ -498,13 +501,59 @@ test('list agents returns workspace agents with latest versions', function () {
         );
 });
 
+test('list provider keys returns usable providers without secret values', function () {
+    config([
+        'ai.providers.anthropic.key' => null,
+        'ai.providers.gemini.key' => null,
+        'ai.providers.openai.key' => null,
+        'ai.providers.groq.key' => null,
+    ]);
+
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->for($user->currentTeam)->create([
+        'slug' => 'strategy',
+    ]);
+    $user->switchWorkspace($workspace);
+
+    ProviderKey::create([
+        'team_id' => $user->currentTeam->id,
+        'workspace_id' => null,
+        'provider' => Provider::Anthropic,
+        'api_key' => 'sk-ant-secret',
+    ]);
+
+    $response = ExplicateServer::actingAs($user)->tool(ListProviderKeysTool::class, []);
+
+    $response
+        ->assertOk()
+        ->assertStructuredContent(fn ($json) => $json
+            ->where('workspace.slug', 'strategy')
+            ->where('providers.0.provider', 'anthropic')
+            ->where('providers.0.source', 'team')
+            ->has('providers.0.models')
+            ->etc()
+        )
+        ->assertDontSee('sk-ant-secret');
+});
+
 test('create agent creates an agent with an initial version in the current workspace', function () {
+    config([
+        'ai.providers.openai.key' => null,
+    ]);
+
     $user = User::factory()->create();
     $workspace = Workspace::factory()->for($user->currentTeam)->create([
         'slug' => 'strategy',
     ]);
     $otherWorkspace = Workspace::factory()->for($user->currentTeam)->create();
     $user->switchWorkspace($workspace);
+
+    ProviderKey::create([
+        'team_id' => $user->currentTeam->id,
+        'workspace_id' => null,
+        'provider' => Provider::OpenAI,
+        'api_key' => 'sk-openai-test-key',
+    ]);
 
     $response = ExplicateServer::actingAs($user)->tool(CreateAgentTool::class, [
         'name' => 'Research Agent',
@@ -545,6 +594,31 @@ test('create agent creates an agent with an initial version in the current works
             ->where('latest_version.allowed_tools', ['get-thread', 'write-file'])
             ->etc()
         );
+});
+
+test('create agent rejects providers without configured keys', function () {
+    config([
+        'ai.providers.anthropic.key' => null,
+        'ai.providers.gemini.key' => null,
+        'ai.providers.openai.key' => null,
+        'ai.providers.groq.key' => null,
+    ]);
+
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->for($user->currentTeam)->create([
+        'slug' => 'strategy',
+    ]);
+    $user->switchWorkspace($workspace);
+
+    $response = ExplicateServer::actingAs($user)->tool(CreateAgentTool::class, [
+        'name' => 'No Key Agent',
+        'provider' => Provider::Gemini->value,
+        'model' => 'gemini-2.5-pro',
+    ]);
+
+    $response->assertHasErrors();
+
+    expect($workspace->agents()->where('name', 'No Key Agent')->exists())->toBeFalse();
 });
 
 test('get agent returns version history for an accessible workspace', function () {
@@ -593,12 +667,23 @@ test('get agent returns version history for an accessible workspace', function (
 });
 
 test('update agent renames the agent and creates a new version in the current workspace', function () {
+    config([
+        'ai.providers.openai.key' => null,
+    ]);
+
     $user = User::factory()->create();
     $workspace = Workspace::factory()->for($user->currentTeam)->create([
         'slug' => 'strategy',
     ]);
     $otherWorkspace = Workspace::factory()->for($user->currentTeam)->create();
     $user->switchWorkspace($workspace);
+
+    ProviderKey::create([
+        'team_id' => $user->currentTeam->id,
+        'workspace_id' => null,
+        'provider' => Provider::OpenAI,
+        'api_key' => 'sk-openai-test-key',
+    ]);
 
     $agent = Agent::factory()->for($workspace)->create([
         'name' => 'Research Agent',
@@ -655,6 +740,41 @@ test('update agent renames the agent and creates a new version in the current wo
             ->where('latest_version.allowed_tools', ['get-thread', 'create-post'])
             ->etc()
         );
+});
+
+test('update agent rejects new versions for providers without configured keys', function () {
+    config([
+        'ai.providers.anthropic.key' => null,
+        'ai.providers.gemini.key' => null,
+        'ai.providers.openai.key' => null,
+        'ai.providers.groq.key' => null,
+    ]);
+
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->for($user->currentTeam)->create([
+        'slug' => 'strategy',
+    ]);
+    $user->switchWorkspace($workspace);
+
+    $agent = Agent::factory()->for($workspace)->create([
+        'name' => 'Research Agent',
+        'slug' => 'research-agent',
+    ]);
+    AgentVersion::factory()->for($agent)->create([
+        'version' => 1,
+        'provider' => Provider::OpenAI,
+        'model' => 'o3-mini',
+    ]);
+
+    $response = ExplicateServer::actingAs($user)->tool(UpdateAgentTool::class, [
+        'agent_slug' => 'research-agent',
+        'provider' => Provider::Gemini->value,
+        'model' => 'gemini-2.5-pro',
+    ]);
+
+    $response->assertHasErrors();
+
+    expect($agent->versions()->count())->toBe(1);
 });
 
 test('list threads returns topic-labeled threads in feed order', function () {

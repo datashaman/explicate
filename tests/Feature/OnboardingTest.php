@@ -38,7 +38,23 @@ test('already onboarded user visiting onboarding is redirected to dashboard', fu
 });
 
 test('skipping wizard creates workspace and agent with defaults', function () {
+    config([
+        'ai.providers.anthropic.key' => null,
+        'ai.providers.gemini.key' => null,
+        'ai.providers.openai.key' => null,
+        'ai.providers.groq.key' => null,
+    ]);
+
     $user = userNeedingOnboarding();
+
+    foreach ([Provider::Anthropic, Provider::Gemini, Provider::OpenAI] as $provider) {
+        ProviderKey::create([
+            'team_id' => $user->currentTeam->id,
+            'workspace_id' => null,
+            'provider' => $provider,
+            'api_key' => 'sk-'.$provider->value.'-test-key',
+        ]);
+    }
 
     Livewire::actingAs($user)
         ->test('pages::onboarding')
@@ -56,6 +72,56 @@ test('skipping wizard creates workspace and agent with defaults', function () {
 
     expect($agents->pluck('name')->all())->toBe(['Analyst', 'Implementer', 'Planner'])
         ->and($agents->pluck('slug')->all())->toBe(['analyst', 'implementer', 'planner']);
+});
+
+test('skipping wizard does not create default agents for providers without keys', function () {
+    config([
+        'ai.providers.anthropic.key' => null,
+        'ai.providers.gemini.key' => null,
+        'ai.providers.openai.key' => null,
+        'ai.providers.groq.key' => null,
+    ]);
+
+    $user = userNeedingOnboarding();
+
+    Livewire::actingAs($user)
+        ->test('pages::onboarding')
+        ->call('skip')
+        ->assertRedirect(route('dashboard'));
+
+    $user->refresh();
+
+    expect($user->currentWorkspace)->not->toBeNull()
+        ->and($user->currentWorkspace->agents()->count())->toBe(0);
+});
+
+test('skipping wizard creates every default role using the available provider', function () {
+    config([
+        'ai.providers.anthropic.key' => null,
+        'ai.providers.gemini.key' => null,
+        'ai.providers.openai.key' => null,
+        'ai.providers.groq.key' => null,
+    ]);
+
+    $user = userNeedingOnboarding();
+
+    ProviderKey::create([
+        'team_id' => $user->currentTeam->id,
+        'workspace_id' => null,
+        'provider' => Provider::OpenAI,
+        'api_key' => 'sk-openai-test-key',
+    ]);
+
+    Livewire::actingAs($user)
+        ->test('pages::onboarding')
+        ->call('skip')
+        ->assertRedirect(route('dashboard'));
+
+    $agents = $user->fresh()->currentWorkspace->agents()->with('latestVersion')->orderBy('name')->get();
+
+    expect($agents->pluck('name')->all())->toBe(['Analyst', 'Implementer', 'Planner'])
+        ->and($agents->pluck('latestVersion.provider')->all())->toBe([Provider::OpenAI, Provider::OpenAI, Provider::OpenAI])
+        ->and($agents->pluck('latestVersion.model')->all())->toBe(['gpt-4o', 'o4-mini', 'gpt-4o']);
 });
 
 test('completing wizard saves api key and creates workspace and agent', function () {
