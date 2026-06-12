@@ -7,6 +7,7 @@ use App\Enums\Provider;
 use App\Enums\ReasoningEffort;
 use App\Models\Agent;
 use App\Models\Attachment;
+use App\Models\Brief;
 use App\Models\Post;
 use App\Models\Thread;
 use App\Models\Topic;
@@ -206,6 +207,67 @@ class DatabaseSeeder extends Seeder
             'status' => PostStatus::Published,
             'sender_principal_id' => $senderPrincipal->id,
         ]);
+
+        $this->createSeedBriefs($workspace, $designPublishedThread, $engineeringDraftThread);
+    }
+
+    private function createSeedBriefs(Workspace $workspace, Thread $designThread, Thread $engineeringThread): void
+    {
+        $brief = $workspace->briefs()->create([
+            'source_thread_id' => $designThread->id,
+            'category' => 'feature',
+            'summary' => 'Turn brand voice notes into a reusable review checklist',
+            'current_behaviour' => 'Review notes live in a thread and have to be interpreted manually before each content pass.',
+            'expected_behaviour' => 'The reviewer should have a durable checklist that captures the preferred tone, phrases to avoid, and review gates.',
+            'acceptance_criteria' => [
+                ['text' => 'Checklist covers tone, banned phrases, and proof requirements.', 'done' => false],
+                ['text' => 'Checklist can be reused by the Reviewer agent during future drafts.', 'done' => false],
+            ],
+            'out_of_scope' => 'Changing the agent prompt or publishing workflow.',
+        ]);
+
+        $this->createSeedPlan($brief, [
+            'Extract brand voice constraints from the source thread.',
+            'Group review gates by tone, proof, and phrasing.',
+            'Validate the checklist against the homepage hero draft.',
+        ], 'Capture the thread context as a reusable checklist before wiring it into agent behaviour.');
+
+        $brief = $workspace->briefs()->create([
+            'source_thread_id' => $engineeringThread->id,
+            'category' => 'bug',
+            'summary' => 'Clarify queue failure handling in the orchestration outline',
+            'current_behaviour' => 'The orchestration draft mentions retries but does not describe lock release, status posts, or error visibility.',
+            'expected_behaviour' => 'The outline should explain how failed agent work is surfaced and what can be retried safely.',
+            'acceptance_criteria' => [
+                ['text' => 'Failure states are named consistently with agent task statuses.', 'done' => false],
+                ['text' => 'Retry and status-post behaviour are covered with examples.', 'done' => false],
+            ],
+            'out_of_scope' => 'Implementing queue worker changes.',
+        ]);
+
+        $this->createSeedPlan($brief, [
+            'Map each queue status to the user-visible state.',
+            'Document retry boundaries and lock handling.',
+            'Add one example failure path to the outline.',
+        ], 'Tighten the engineering draft so it can guide later implementation work.');
+    }
+
+    /**
+     * @param  list<string>  $tasks
+     */
+    private function createSeedPlan(Brief $brief, array $tasks, string $summary): void
+    {
+        $plan = $brief->plan()->create([
+            'summary' => $summary,
+        ]);
+
+        foreach ($tasks as $index => $task) {
+            $plan->tasks()->create([
+                'text' => $task,
+                'done' => $index === 0,
+                'position' => $index + 1,
+            ]);
+        }
     }
 
     private function createSeedAttachment(Post $post, string $filename, string $contents, string $mimeType): Attachment

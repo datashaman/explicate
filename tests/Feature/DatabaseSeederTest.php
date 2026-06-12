@@ -2,7 +2,10 @@
 
 use App\Models\Agent;
 use App\Models\Attachment;
+use App\Models\Brief;
+use App\Models\Plan;
 use App\Models\Post;
+use App\Models\Task;
 use App\Models\Team;
 use App\Models\Thread;
 use App\Models\Topic;
@@ -63,6 +66,18 @@ test('database seeder creates demo workspace content', function () {
     $attachments->each(function (Attachment $attachment) use ($workspace): void {
         expect($workspace->filesystem()->exists($attachment->path))->toBeTrue();
     });
+
+    $briefs = Brief::query()
+        ->with(['plan.tasks', 'sourceThread'])
+        ->whereBelongsTo($workspace)
+        ->get();
+
+    expect($briefs)->toHaveCount(2)
+        ->and($briefs->pluck('sourceThread')->filter())->toHaveCount(2)
+        ->and(Plan::query()->whereIn('brief_id', $briefs->pluck('id'))->count())->toBe(2)
+        ->and(Task::query()->whereHas('plan', fn ($query) => $query->whereIn('brief_id', $briefs->pluck('id')))->count())->toBe(6);
+
+    expect($briefs->firstWhere('summary', 'Turn brand voice notes into a reusable review checklist'))->not->toBeNull();
 });
 
 test('factories derive slugs from overridden names and post ulids', function () {
