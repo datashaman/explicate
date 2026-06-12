@@ -116,7 +116,7 @@ class Thread extends Model
      */
     public function briefs(): HasMany
     {
-        return $this->hasMany(Brief::class)->orderByDesc('updated_at');
+        return $this->hasMany(Brief::class, 'source_thread_id')->orderByDesc('updated_at');
     }
 
     public function agentStateFor(Agent $agent): ThreadAgentState

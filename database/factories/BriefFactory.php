@@ -22,15 +22,11 @@ class BriefFactory extends Factory
     {
         return [
             'workspace_id' => Workspace::factory(),
-            'thread_id' => null,
+            'source_thread_id' => null,
             'category' => fake()->randomElement(BriefCategory::cases()),
             'summary' => fake()->sentence(6),
             'current_behaviour' => fake()->paragraph(),
             'expected_behaviour' => fake()->paragraph(),
-            'key_interfaces' => [
-                fake()->words(2, true),
-                fake()->words(2, true),
-            ],
             'acceptance_criteria' => [
                 ['text' => fake()->sentence(), 'done' => false],
                 ['text' => fake()->sentence(), 'done' => false],
@@ -66,7 +62,7 @@ class BriefFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'workspace_id' => $thread->workspace_id,
-            'thread_id' => $thread->id,
+            'source_thread_id' => $thread->id,
         ]);
     }
 

@@ -8,16 +8,16 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 #[Fillable([
     'workspace_id',
-    'thread_id',
+    'source_thread_id',
     'category',
     'summary',
     'current_behaviour',
     'expected_behaviour',
-    'key_interfaces',
     'acceptance_criteria',
     'out_of_scope',
 ])]
@@ -28,7 +28,6 @@ class Brief extends Model
 
     /** @var array<string, mixed> */
     protected $attributes = [
-        'key_interfaces' => '[]',
         'acceptance_criteria' => '[]',
     ];
 
@@ -37,7 +36,6 @@ class Brief extends Model
     {
         return [
             'category' => BriefCategory::class,
-            'key_interfaces' => 'array',
             'acceptance_criteria' => 'array',
         ];
     }
@@ -53,8 +51,16 @@ class Brief extends Model
     /**
      * @return BelongsTo<Thread, $this>
      */
-    public function thread(): BelongsTo
+    public function sourceThread(): BelongsTo
     {
-        return $this->belongsTo(Thread::class);
+        return $this->belongsTo(Thread::class, 'source_thread_id');
+    }
+
+    /**
+     * @return HasOne<Plan, $this>
+     */
+    public function plan(): HasOne
+    {
+        return $this->hasOne(Plan::class);
     }
 }
