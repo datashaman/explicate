@@ -82,6 +82,11 @@ class ExplicateMentionAgent implements Agent, Conversational, HasProviderOptions
         ];
     }
 
+    public function timeout(): int
+    {
+        return 240;
+    }
+
     /**
      * Get provider-specific generation options.
      *

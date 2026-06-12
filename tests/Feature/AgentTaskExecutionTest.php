@@ -7,6 +7,7 @@ use App\Enums\AgentTaskStatus;
 use App\Enums\PostStatus;
 use App\Enums\Provider;
 use App\Enums\ReasoningEffort;
+use App\Jobs\ProcessAgentTask;
 use App\Mcp\ExplicateUris;
 use App\Models\Agent;
 use App\Models\AgentTask;
@@ -146,6 +147,66 @@ test('it injects the decrypted team provider key before prompting the agent', fu
     $task = AgentTask::query()->whereBelongsTo($post)->sole();
 
     app(ExecuteAgentTask::class)->handle($task);
+});
+
+test('process agent task failed hook marks the task failed visibly', function () {
+    $agent = Agent::factory()->for($this->workspace)->create(['name' => 'Researcher']);
+    AgentVersion::factory()->for($agent)->create([
+        'provider' => Provider::OpenAI,
+        'model' => 'gpt-5.5',
+    ]);
+    $post = Post::factory()->for(Thread::factory()->forTopic($this->topic))->create([
+        'sender_principal_id' => $this->senderPrincipal->id,
+        'body' => '@researcher Do work.',
+        'status' => PostStatus::Published,
+    ]);
+    $task = AgentTask::query()->whereBelongsTo($post)->sole();
+    $task->forceFill([
+        'status' => AgentTaskStatus::Processing,
+        'locked_at' => now(),
+        'attempts' => 1,
+    ])->save();
+    $statusPost = $task->syncStatusPost();
+
+    (new ProcessAgentTask($task))->failed(new RuntimeException('Worker timeout.'));
+
+    $task->refresh();
+
+    expect($task->status)->toBe(AgentTaskStatus::Failed)
+        ->and($task->locked_at)->toBeNull()
+        ->and($task->last_error)->toBe('Worker timeout.')
+        ->and($statusPost->fresh()->body)->toBe('Researcher failed: Worker timeout.');
+});
+
+test('stale processing agent tasks are marked failed by the cleanup command', function () {
+    $agent = Agent::factory()->for($this->workspace)->create(['name' => 'Researcher']);
+    AgentVersion::factory()->for($agent)->create([
+        'provider' => Provider::OpenAI,
+        'model' => 'gpt-5.5',
+    ]);
+    $post = Post::factory()->for(Thread::factory()->forTopic($this->topic))->create([
+        'sender_principal_id' => $this->senderPrincipal->id,
+        'body' => '@researcher Do work.',
+        'status' => PostStatus::Published,
+    ]);
+    $task = AgentTask::query()->whereBelongsTo($post)->sole();
+    $task->forceFill([
+        'status' => AgentTaskStatus::Processing,
+        'locked_at' => now()->subMinutes(11),
+        'attempts' => 1,
+    ])->save();
+    $statusPost = $task->syncStatusPost();
+
+    $this->artisan('agent-tasks:fail-stale')
+        ->expectsOutputToContain('Marked 1 stale agent task(s) as failed.')
+        ->assertSuccessful();
+
+    $task->refresh();
+
+    expect($task->status)->toBe(AgentTaskStatus::Failed)
+        ->and($task->locked_at)->toBeNull()
+        ->and($task->last_error)->toBe('Agent task timed out or the worker exited before completing.')
+        ->and($statusPost->fresh()->body)->toBe('Researcher failed: Agent task timed out or the worker exited before completing.');
 });
 
 test('it passes the agent version reasoning effort to openai provider options', function () {
