@@ -7,7 +7,9 @@ use App\Mcp\Tools\CreateBriefTool;
 use App\Mcp\Tools\CreatePostTool;
 use App\Mcp\Tools\CreateThreadTool;
 use App\Mcp\Tools\CreateTopicTool;
+use App\Mcp\Tools\DeleteBriefTool;
 use App\Mcp\Tools\DeleteFileTool;
+use App\Mcp\Tools\DeletePlanTool;
 use App\Mcp\Tools\DeletePostTool;
 use App\Mcp\Tools\GetAgentTaskTool;
 use App\Mcp\Tools\GetAgentTool;
@@ -62,6 +64,8 @@ final class ExplicateTools
         CreateBriefTool::class,
         UpdateBriefTool::class,
         UpdatePlanTool::class,
+        DeleteBriefTool::class,
+        DeletePlanTool::class,
         CreateAgentTool::class,
         UpdateAgentTool::class,
         CreateThreadTool::class,
@@ -98,6 +102,8 @@ final class ExplicateTools
         CreateBriefTool::class,
         UpdateBriefTool::class,
         UpdatePlanTool::class,
+        DeleteBriefTool::class,
+        DeletePlanTool::class,
         CreateThreadTool::class,
         CreatePostTool::class,
         UpdatePostTool::class,

@@ -28,7 +28,9 @@ use App\Mcp\Tools\CreateAgentTool;
 use App\Mcp\Tools\CreateBriefTool;
 use App\Mcp\Tools\CreateThreadTool;
 use App\Mcp\Tools\CreateTopicTool;
+use App\Mcp\Tools\DeleteBriefTool;
 use App\Mcp\Tools\DeleteFileTool;
+use App\Mcp\Tools\DeletePlanTool;
 use App\Mcp\Tools\DeletePostTool;
 use App\Mcp\Tools\GetAgentTaskTool;
 use App\Mcp\Tools\GetAgentTool;
@@ -278,10 +280,12 @@ test('topic forge tools expose switch workspace instead of workspace slug parame
     expect($response['result'])->not->toHaveKey('nextCursor');
     expect($tools)->toHaveKey('who-am-i');
     expect($tools)->toHaveKey('switch-workspace');
+    expect($tools)->toHaveKey('delete-brief');
+    expect($tools)->toHaveKey('delete-plan');
     expect($tools)->toHaveKey('delete-post');
     expect($tools['switch-workspace']['inputSchema']['properties'])->toHaveKey('workspace_slug');
-    expect($tools['create-agent']['inputSchema']['properties']['allowed_tools']['items']['enum'])->toContain('get-thread', 'write-file');
-    expect($tools['update-agent']['inputSchema']['properties']['allowed_tools']['items']['enum'])->toContain('get-thread', 'write-file');
+    expect($tools['create-agent']['inputSchema']['properties']['allowed_tools']['items']['enum'])->toContain('get-thread', 'write-file', 'delete-brief', 'delete-plan');
+    expect($tools['update-agent']['inputSchema']['properties']['allowed_tools']['items']['enum'])->toContain('get-thread', 'write-file', 'delete-brief', 'delete-plan');
 
     foreach ([
         'list-topics',
@@ -301,6 +305,8 @@ test('topic forge tools expose switch workspace instead of workspace slug parame
         'create-brief',
         'update-brief',
         'update-plan',
+        'delete-brief',
+        'delete-plan',
         'create-agent',
         'update-agent',
         'create-post',
@@ -1193,6 +1199,81 @@ test('update plan creates a plan and replaces ordered tasks', function () {
         ->and($plan->tasks()->sole()->status)->toBe(TaskStatus::Done);
 });
 
+test('delete plan removes a briefs plan and tasks but keeps the brief', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->for($user->currentTeam)->create([
+        'slug' => 'strategy',
+    ]);
+    $user->switchWorkspace($workspace);
+    $brief = Brief::factory()->for($workspace)->create([
+        'summary' => 'Keep this brief',
+    ]);
+    $plan = Plan::factory()->for($brief)->create([
+        'summary' => 'Delete this plan',
+    ]);
+    $task = Task::factory()->for($plan)->create([
+        'text' => 'Remove this task.',
+    ]);
+
+    $response = ExplicateServer::actingAs($user)->tool(DeletePlanTool::class, [
+        'brief_id' => $brief->id,
+    ]);
+
+    $response
+        ->assertOk()
+        ->assertStructuredContent(fn ($json) => $json
+            ->where('workspace.slug', 'strategy')
+            ->where('brief.id', $brief->id)
+            ->where('plan.id', $plan->id)
+            ->where('plan.tasks.0.id', $task->id)
+            ->where('deleted', true)
+            ->etc()
+        );
+
+    expect($brief->fresh())->not->toBeNull()
+        ->and(Plan::find($plan->id))->toBeNull()
+        ->and(Task::find($task->id))->toBeNull();
+});
+
+test('delete brief removes the brief with its plan and tasks', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->for($user->currentTeam)->create([
+        'slug' => 'strategy',
+    ]);
+    $otherWorkspace = Workspace::factory()->for($user->currentTeam)->create();
+    $user->switchWorkspace($workspace);
+    $brief = Brief::factory()->for($workspace)->create([
+        'summary' => 'Delete this brief',
+    ]);
+    $plan = Plan::factory()->for($brief)->create([
+        'summary' => 'Delete this plan too',
+    ]);
+    $task = Task::factory()->for($plan)->create([
+        'text' => 'Remove this task too.',
+    ]);
+    $otherBrief = Brief::factory()->for($otherWorkspace)->create();
+
+    $response = ExplicateServer::actingAs($user)->tool(DeleteBriefTool::class, [
+        'brief_id' => $brief->id,
+    ]);
+
+    $response
+        ->assertOk()
+        ->assertStructuredContent(fn ($json) => $json
+            ->where('workspace.slug', 'strategy')
+            ->where('brief.id', $brief->id)
+            ->where('brief.summary', 'Delete this brief')
+            ->where('deleted', true)
+            ->etc()
+        );
+
+    expect(Brief::find($brief->id))->toBeNull()
+        ->and(Brief::withTrashed()->find($brief->id))->not->toBeNull()
+        ->and(Plan::find($plan->id))->toBeNull()
+        ->and(Task::find($task->id))->toBeNull()
+        ->and(Brief::find($otherBrief->id))->not->toBeNull();
+});
+
 test('get plan returns full plan context', function () {
     $user = User::factory()->create();
     $workspace = Workspace::factory()->for($user->currentTeam)->create([
@@ -1906,6 +1987,8 @@ test('agent tool catalog resource returns assignable agent tools', function () {
         ->assertSee('"allowed_tools":["who-am-i"')
         ->assertSee('"get-thread"')
         ->assertSee('"write-file"')
+        ->assertSee('"delete-brief"')
+        ->assertSee('"delete-plan"')
         ->assertSee('"Repositories"');
 });
 

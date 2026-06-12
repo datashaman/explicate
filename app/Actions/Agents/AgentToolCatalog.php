@@ -38,6 +38,8 @@ class AgentToolCatalog
         'create-brief' => 'Planning',
         'update-brief' => 'Planning',
         'update-plan' => 'Planning',
+        'delete-brief' => 'Planning',
+        'delete-plan' => 'Planning',
         'create-thread' => 'Conversation',
         'create-post' => 'Conversation',
         'update-post' => 'Conversation',
