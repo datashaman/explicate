@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\TaskStatus;
 use App\Models\Plan;
 use App\Models\Task;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -21,7 +22,8 @@ class TaskFactory extends Factory
         return [
             'plan_id' => Plan::factory(),
             'text' => fake()->sentence(),
-            'done' => false,
+            'expected_artifact' => null,
+            'status' => TaskStatus::Pending,
             'position' => 1,
         ];
     }
@@ -29,10 +31,10 @@ class TaskFactory extends Factory
     /**
      * Indicate that the task is complete.
      */
-    public function done(): static
+    public function completed(): static
     {
         return $this->state(fn (array $attributes) => [
-            'done' => true,
+            'status' => TaskStatus::Done,
         ]);
     }
 }

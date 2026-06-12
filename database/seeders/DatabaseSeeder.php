@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Enums\PostStatus;
 use App\Enums\Provider;
 use App\Enums\ReasoningEffort;
+use App\Enums\TaskStatus;
 use App\Models\Agent;
 use App\Models\Attachment;
 use App\Models\Brief;
@@ -264,7 +265,7 @@ class DatabaseSeeder extends Seeder
         foreach ($tasks as $index => $task) {
             $plan->tasks()->create([
                 'text' => $task,
-                'done' => $index === 0,
+                'status' => $index === 0 ? TaskStatus::Done : TaskStatus::Pending,
                 'position' => $index + 1,
             ]);
         }

@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\BriefCategory;
+use App\Enums\TaskStatus;
 use App\Models\Brief;
 use App\Models\Thread;
 use App\Models\Workspace;
@@ -61,7 +62,7 @@ new #[Layout('layouts::workspace'), Title('Briefs')] class extends Component
         }
 
         return $workspace->briefs()
-            ->with(['sourceThread'])
+            ->with(['plan.tasks', 'sourceThread'])
             ->orderByDesc('updated_at')
             ->get();
     }
@@ -235,6 +236,7 @@ new #[Layout('layouts::workspace'), Title('Briefs')] class extends Component
             ->values()
             ->all();
     }
+
 }; ?>
 
 <section class="grid min-h-0 flex-1 grid-cols-1 overflow-hidden rounded-lg border border-neutral-300 bg-white shadow-sm shadow-black/[0.04] lg:grid-cols-[20rem_minmax(0,1fr)] dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-none" data-test="briefs-page">
@@ -268,6 +270,19 @@ new #[Layout('layouts::workspace'), Title('Briefs')] class extends Component
                                 <span class="truncate">{{ $brief->sourceThread->title }}</span>
                             @endif
                         </span>
+                        <span class="mt-2 inline-flex">
+                            @if ($brief->plan)
+                                @php
+                                    $taskCount = $brief->plan->tasks->count();
+                                    $doneTaskCount = $brief->plan->tasks->where('status', TaskStatus::Done)->count();
+                                @endphp
+                                <flux:badge :color="$taskCount > 0 && $doneTaskCount === $taskCount ? 'green' : 'blue'" size="sm">
+                                    {{ __(':done/:total done', ['done' => $doneTaskCount, 'total' => $taskCount]) }}
+                                </flux:badge>
+                            @else
+                                <flux:badge color="zinc" size="sm">{{ __('No plan') }}</flux:badge>
+                            @endif
+                        </span>
                     </span>
                 </button>
             @empty
@@ -286,9 +301,14 @@ new #[Layout('layouts::workspace'), Title('Briefs')] class extends Component
             </div>
 
             @if ($selectedBriefId)
-                <flux:button type="button" wire:click="deleteBrief" wire:confirm="{{ __('Delete this brief?') }}" size="xs" variant="danger" icon="trash" data-test="delete-brief-button">
-                    {{ __('Delete') }}
-                </flux:button>
+                <div class="flex shrink-0 gap-2">
+                    <flux:button :href="route('briefs.plan', $selectedBriefId)" wire:navigate size="xs" variant="filled" icon="list-bullet" data-test="open-brief-plan">
+                        {{ __('Plan') }}
+                    </flux:button>
+                    <flux:button type="button" wire:click="deleteBrief" wire:confirm="{{ __('Delete this brief?') }}" size="xs" variant="danger" icon="trash" data-test="delete-brief-button">
+                        {{ __('Delete') }}
+                    </flux:button>
+                </div>
             @endif
         </div>
 

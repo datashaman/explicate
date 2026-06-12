@@ -2,13 +2,14 @@
 
 namespace App\Models;
 
+use App\Enums\TaskStatus;
 use Database\Factories\TaskFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['plan_id', 'text', 'done', 'position'])]
+#[Fillable(['plan_id', 'text', 'expected_artifact', 'status', 'position'])]
 class Task extends Model
 {
     /** @use HasFactory<TaskFactory> */
@@ -16,14 +17,14 @@ class Task extends Model
 
     /** @var array<string, mixed> */
     protected $attributes = [
-        'done' => false,
+        'status' => TaskStatus::Pending->value,
     ];
 
     /** @return array<string, string> */
     protected function casts(): array
     {
         return [
-            'done' => 'boolean',
+            'status' => TaskStatus::class,
         ];
     }
 

@@ -1,7 +1,10 @@
 <?php
 
 use App\Enums\BriefCategory;
+use App\Enums\TaskStatus;
 use App\Models\Brief;
+use App\Models\Plan;
+use App\Models\Task;
 use App\Models\Thread;
 use Livewire\Livewire;
 
@@ -14,9 +17,28 @@ test('briefs page lists current workspace briefs', function () {
         ->get(route('briefs'))
         ->assertOk()
         ->assertSee('data-test="briefs-page"', false)
+        ->assertSee('data-test="plans-nav-link"', false)
         ->assertSee('Improve onboarding')
         ->assertDontSee('Other workspace brief')
         ->assertSee('data-test="brief-row-'.$brief->id.'"', false);
+});
+
+test('briefs page shows plan state for each brief', function () {
+    [$user, $workspace] = userWithWorkspace();
+    $plannedBrief = Brief::factory()->for($workspace)->create(['summary' => 'Planned brief']);
+    $plan = Plan::factory()->for($plannedBrief)->create();
+    Task::factory()->for($plan)->create(['position' => 1, 'status' => TaskStatus::Done]);
+    Task::factory()->for($plan)->create(['position' => 2]);
+
+    Brief::factory()->for($workspace)->create(['summary' => 'Unplanned brief']);
+
+    $this->actingAs($user)
+        ->get(route('briefs'))
+        ->assertOk()
+        ->assertSee('Planned brief')
+        ->assertSee('1/2 done')
+        ->assertSee('Unplanned brief')
+        ->assertSee('No plan');
 });
 
 test('briefs page creates a brief', function () {

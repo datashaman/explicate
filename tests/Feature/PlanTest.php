@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\TaskStatus;
 use App\Models\Brief;
 use App\Models\Plan;
 use App\Models\Task;
@@ -40,13 +41,19 @@ test('a task belongs to a plan', function () {
 test('tasks default to incomplete', function () {
     $task = Task::factory()->create();
 
-    expect($task->done)->toBeFalse();
+    expect($task->status)->toBe(TaskStatus::Pending);
 });
 
 test('task factory can create completed tasks', function () {
-    $task = Task::factory()->done()->create();
+    $task = Task::factory()->completed()->create();
 
-    expect($task->done)->toBeTrue();
+    expect($task->status)->toBe(TaskStatus::Done);
+});
+
+test('tasks may describe an expected artifact', function () {
+    $task = Task::factory()->create(['expected_artifact' => 'A passing feature test.']);
+
+    expect($task->expected_artifact)->toBe('A passing feature test.');
 });
 
 test('deleting a plan deletes its tasks', function () {

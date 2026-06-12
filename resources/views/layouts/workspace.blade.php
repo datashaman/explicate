@@ -19,6 +19,9 @@
                         <flux:button :href="route('briefs')" wire:navigate size="xs" :variant="request()->routeIs('briefs') ? 'primary' : 'ghost'" data-test="briefs-nav-link">
                             {{ __('Briefs') }}
                         </flux:button>
+                        <flux:button :href="route('plans')" wire:navigate size="xs" :variant="request()->routeIs('plans', 'briefs.plan') ? 'primary' : 'ghost'" data-test="plans-nav-link">
+                            {{ __('Plans') }}
+                        </flux:button>
                     </nav>
                 </div>
 

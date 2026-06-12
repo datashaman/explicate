@@ -20,6 +20,8 @@ Route::middleware(['auth', 'verified', EnsureTeamMembership::class, EnsureOnboar
     ->group(function () {
         Route::livewire('dashboard', 'pages::dashboard')->name('dashboard');
         Route::livewire('briefs', 'pages::briefs')->name('briefs');
+        Route::livewire('plans', 'pages::plans')->name('plans');
+        Route::livewire('briefs/{brief}/plan', 'pages::brief-plan')->name('briefs.plan');
         Route::get('attachments/{attachment}', AttachmentController::class)->name('attachments.show');
     });
 
