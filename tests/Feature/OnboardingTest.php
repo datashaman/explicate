@@ -50,7 +50,12 @@ test('skipping wizard creates workspace and agent with defaults', function () {
     expect($user->currentWorkspace)->not->toBeNull()
         ->and($user->currentWorkspace->name)->toBe('My Workspace')
         ->and($user->currentWorkspace->topics()->count())->toBe(0)
-        ->and($user->currentWorkspace->agents()->count())->toBe(1);
+        ->and($user->currentWorkspace->agents()->count())->toBe(3);
+
+    $agents = $user->currentWorkspace->agents()->orderBy('name')->get();
+
+    expect($agents->pluck('name')->all())->toBe(['Analyst', 'Implementer', 'Planner'])
+        ->and($agents->pluck('slug')->all())->toBe(['analyst', 'implementer', 'planner']);
 });
 
 test('completing wizard saves api key and creates workspace and agent', function () {

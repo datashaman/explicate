@@ -3,8 +3,8 @@
 namespace App\Actions\Onboarding;
 
 use App\Actions\Agents\CreateAgent;
+use App\Actions\Agents\DefaultAgentDefinitions;
 use App\Actions\Workspaces\CreateWorkspace;
-use App\Enums\Provider;
 use App\Models\User;
 
 class SetupNewUser
@@ -12,6 +12,7 @@ class SetupNewUser
     public function __construct(
         private CreateWorkspace $createWorkspace,
         private CreateAgent $createAgent,
+        private DefaultAgentDefinitions $defaultAgentDefinitions,
     ) {}
 
     public function handle(User $user): void
@@ -22,13 +23,15 @@ class SetupNewUser
 
         $user->switchWorkspace($workspace);
 
-        $this->createAgent->handle(
-            workspace: $workspace,
-            name: 'Analyst',
-            provider: Provider::Anthropic->value,
-            model: 'claude-sonnet-4-6',
-            reasoningEffort: null,
-            prompt: "You are a spec analyst. Given a user's input or idea, produce a clear, structured specification: define the goal, list constraints and assumptions, break it into requirements, and call out open questions. Be concise and precise.",
-        );
+        foreach ($this->defaultAgentDefinitions->all() as $agent) {
+            $this->createAgent->handle(
+                workspace: $workspace,
+                name: $agent['name'],
+                provider: $agent['provider']->value,
+                model: $agent['model'],
+                reasoningEffort: $agent['reasoning_effort']?->value,
+                prompt: $agent['prompt'],
+            );
+        }
     }
 }

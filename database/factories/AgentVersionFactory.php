@@ -25,6 +25,7 @@ class AgentVersionFactory extends Factory
             'model' => 'claude-sonnet-4-6',
             'reasoning_effort' => null,
             'prompt' => fake()->paragraph(),
+            'allowed_tools' => null,
         ];
     }
 }

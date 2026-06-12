@@ -48,6 +48,12 @@
 
             <flux:textarea wire:model="selectedAgentPrompt" :label="__('Prompt')" rows="7" :placeholder="__('System prompt…')" />
 
+            @include('partials.agent-tool-checkbox-matrix', [
+                'model' => 'selectedAgentAllowedTools',
+                'groups' => $this->agentToolGroups,
+                'dataTest' => 'selected-agent-tool-matrix',
+            ])
+
             <div class="flex justify-end">
                 <flux:button type="submit" variant="primary">{{ __('Save version') }}</flux:button>
             </div>

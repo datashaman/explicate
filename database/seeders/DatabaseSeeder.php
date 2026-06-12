@@ -2,9 +2,8 @@
 
 namespace Database\Seeders;
 
+use App\Actions\Agents\DefaultAgentDefinitions;
 use App\Enums\PostStatus;
-use App\Enums\Provider;
-use App\Enums\ReasoningEffort;
 use App\Enums\TaskStatus;
 use App\Models\Agent;
 use App\Models\Attachment;
@@ -25,7 +24,7 @@ class DatabaseSeeder extends Seeder
     /**
      * Seed the application's database.
      */
-    public function run(): void
+    public function run(DefaultAgentDefinitions $defaultAgentDefinitions): void
     {
         $user = User::factory()->create([
             'name' => 'Test User',
@@ -45,36 +44,7 @@ class DatabaseSeeder extends Seeder
             ['name' => 'Research'],
         ]);
 
-        $agents = collect([
-            [
-                'name' => 'Writer',
-                'provider' => Provider::OpenAI,
-                'model' => 'o4-mini',
-                'reasoning_effort' => ReasoningEffort::Medium,
-                'prompt' => 'Write concise, high-signal drafts and tighten structure.',
-            ],
-            [
-                'name' => 'Researcher',
-                'provider' => Provider::Anthropic,
-                'model' => 'claude-sonnet-4-6',
-                'reasoning_effort' => null,
-                'prompt' => 'Synthesize sources, note uncertainty, and surface edge cases.',
-            ],
-            [
-                'name' => 'SEO Analyst',
-                'provider' => Provider::Gemini,
-                'model' => 'gemini-2.5-pro',
-                'reasoning_effort' => null,
-                'prompt' => 'Optimize content structure, discover keyword clusters, and flag gaps.',
-            ],
-            [
-                'name' => 'Reviewer',
-                'provider' => Provider::Groq,
-                'model' => 'llama-3.3-70b-versatile',
-                'reasoning_effort' => null,
-                'prompt' => 'Review content for consistency, clarity, and missing assumptions.',
-            ],
-        ])->map(function (array $seededAgent) use ($workspace): Agent {
+        $agents = collect($defaultAgentDefinitions->all())->map(function (array $seededAgent) use ($workspace): Agent {
             $agent = $workspace->agents()->create([
                 'name' => $seededAgent['name'],
                 'slug' => Str::slug($seededAgent['name']),
@@ -82,9 +52,9 @@ class DatabaseSeeder extends Seeder
 
             $agent->versions()->create([
                 'version' => 1,
-                'provider' => $seededAgent['provider'],
+                'provider' => $seededAgent['provider']->value,
                 'model' => $seededAgent['model'],
-                'reasoning_effort' => $seededAgent['reasoning_effort'],
+                'reasoning_effort' => $seededAgent['reasoning_effort']?->value,
                 'prompt' => $seededAgent['prompt'],
                 'created_at' => now(),
             ]);
@@ -118,11 +88,11 @@ class DatabaseSeeder extends Seeder
         );
 
         $designPublishedThread = Thread::factory()->forTopic($topicsByName['Design'])->create([
-            'title' => 'Reviewer brief: Brand voice notes',
+            'title' => 'Analyst brief: Brand voice notes',
         ]);
 
         $designPublishedPost = Post::factory()->for($designPublishedThread)->create([
-            'body' => "Reviewer brief: Brand voice notes\n\nCapture phrases to avoid and preferred tone examples.",
+            'body' => "Analyst brief: Brand voice notes\n\nCapture phrases to avoid and preferred tone examples.",
             'status' => PostStatus::Published,
             'sender_principal_id' => $senderPrincipal->id,
         ]);
@@ -130,7 +100,7 @@ class DatabaseSeeder extends Seeder
         Post::factory()->for($designPublishedThread)->create([
             'body' => "I'll compare this against the homepage draft and propose a tighter phrasing list.",
             'status' => PostStatus::Published,
-            'sender_principal_id' => $workspace->principalForAgent($agents->firstWhere('name', 'Reviewer'))->id,
+            'sender_principal_id' => $workspace->principalForAgent($agents->firstWhere('name', 'Analyst'))->id,
         ]);
 
         $this->createSeedAttachment(
@@ -163,11 +133,11 @@ class DatabaseSeeder extends Seeder
         ]);
 
         $marketingThread = Thread::factory()->forTopic($topicsByName['Marketing'])->create([
-            'title' => 'SEO analyst brief: Q3 campaign angles',
+            'title' => 'Analyst brief: Q3 campaign angles',
         ]);
 
         Post::factory()->for($marketingThread)->create([
-            'body' => "SEO analyst brief: Q3 campaign angles\n\nList campaign themes tied to the strongest product outcomes.",
+            'body' => "Analyst brief: Q3 campaign angles\n\nList campaign themes tied to the strongest product outcomes.",
             'status' => PostStatus::Published,
             'sender_principal_id' => $senderPrincipal->id,
         ]);
@@ -222,7 +192,7 @@ class DatabaseSeeder extends Seeder
             'expected_behaviour' => 'The reviewer should have a durable checklist that captures the preferred tone, phrases to avoid, and review gates.',
             'acceptance_criteria' => [
                 ['text' => 'Checklist covers tone, banned phrases, and proof requirements.', 'done' => false],
-                ['text' => 'Checklist can be reused by the Reviewer agent during future drafts.', 'done' => false],
+                ['text' => 'Checklist can be reused by the Analyst agent during future drafts.', 'done' => false],
             ],
             'out_of_scope' => 'Changing the agent prompt or publishing workflow.',
         ]);

@@ -3,6 +3,7 @@
 use App\Enums\Provider;
 use App\Enums\ReasoningEffort;
 use App\Models\Agent;
+use App\Models\AgentVersion;
 use App\Models\Topic;
 use App\Models\User;
 use App\Models\Workspace;
@@ -68,6 +69,7 @@ test('agent can be created', function () {
         ->set('model', 'o4-mini')
         ->set('reasoningEffort', ReasoningEffort::Medium->value)
         ->set('prompt', 'Be helpful.')
+        ->set('allowedTools', ['get-thread', 'write-file'])
         ->call('createAgent')
         ->assertHasNoErrors();
 
@@ -79,6 +81,43 @@ test('agent can be created', function () {
     expect($agent->versions->first()->model)->toBe('o4-mini');
     expect($agent->versions->first()->reasoning_effort)->toBe(ReasoningEffort::Medium);
     expect($agent->versions->first()->prompt)->toBe('Be helpful.');
+    expect($agent->versions->first()->allowed_tools)->toBe(['get-thread', 'write-file']);
+});
+
+test('agent form shows and saves allowed tools on new versions', function () {
+    $agent = Agent::factory()->for($this->workspace)->create([
+        'name' => 'Tool Agent',
+        'slug' => 'tool-agent',
+    ]);
+    AgentVersion::factory()->for($agent)->create([
+        'provider' => Provider::Anthropic,
+        'model' => 'claude-sonnet-4-6',
+        'allowed_tools' => ['get-thread'],
+    ]);
+
+    $this->actingAs($this->user)
+        ->get(route('dashboard', ['agent' => 'tool-agent']))
+        ->assertOk()
+        ->assertSee('data-test="selected-agent-tool-matrix"', false)
+        ->assertSee('get-thread')
+        ->assertSee('write-file');
+
+    Livewire::actingAs($this->user)
+        ->test('pages::dashboard')
+        ->set('selectedAgentSlug', 'tool-agent')
+        ->assertSet('selectedAgentAllowedTools', ['get-thread'])
+        ->set('selectedAgentProvider', Provider::OpenAI->value)
+        ->set('selectedAgentModel', 'o4-mini')
+        ->set('selectedAgentReasoningEffort', ReasoningEffort::Low->value)
+        ->set('selectedAgentPrompt', 'Use only selected tools.')
+        ->set('selectedAgentAllowedTools', ['get-thread', 'write-file'])
+        ->call('saveSelectedAgentVersion')
+        ->assertHasNoErrors();
+
+    $latest = $agent->fresh()->latestVersion;
+
+    expect($latest?->version)->toBe(2)
+        ->and($latest?->allowed_tools)->toBe(['get-thread', 'write-file']);
 });
 
 test('agent can be deleted', function () {

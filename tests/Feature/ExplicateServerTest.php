@@ -507,6 +507,7 @@ test('create agent creates an agent with an initial version in the current works
         'model' => 'o4-mini',
         'reasoning_effort' => ReasoningEffort::Low->value,
         'prompt' => 'Research the latest context.',
+        'allowed_tools' => ['get-thread', 'write-file'],
     ]);
 
     $agent = $workspace->agents()->where('name', 'Research Agent')->first();
@@ -522,6 +523,7 @@ test('create agent creates an agent with an initial version in the current works
     expect($version?->model)->toBe('o4-mini');
     expect($version?->reasoning_effort)->toBe(ReasoningEffort::Low);
     expect($version?->prompt)->toBe('Research the latest context.');
+    expect($version?->allowed_tools)->toBe(['get-thread', 'write-file']);
 
     $response
         ->assertOk()
@@ -535,6 +537,7 @@ test('create agent creates an agent with an initial version in the current works
             ->where('latest_version.model', 'o4-mini')
             ->where('latest_version.reasoning_effort', 'low')
             ->where('latest_version.prompt', 'Research the latest context.')
+            ->where('latest_version.allowed_tools', ['get-thread', 'write-file'])
             ->etc()
         );
 });
@@ -611,6 +614,7 @@ test('update agent renames the agent and creates a new version in the current wo
         'name' => 'Updated Agent',
         'model' => 'o4-mini',
         'prompt' => 'New prompt.',
+        'allowed_tools' => ['get-thread', 'create-post'],
     ]);
 
     $agent->refresh();
@@ -627,6 +631,7 @@ test('update agent renames the agent and creates a new version in the current wo
     expect($version?->model)->toBe('o4-mini');
     expect($version?->reasoning_effort)->toBe(ReasoningEffort::Medium);
     expect($version?->prompt)->toBe('New prompt.');
+    expect($version?->allowed_tools)->toBe(['get-thread', 'create-post']);
 
     $response
         ->assertOk()
@@ -640,6 +645,7 @@ test('update agent renames the agent and creates a new version in the current wo
             ->where('latest_version.model', 'o4-mini')
             ->where('latest_version.reasoning_effort', 'medium')
             ->where('latest_version.prompt', 'New prompt.')
+            ->where('latest_version.allowed_tools', ['get-thread', 'create-post'])
             ->etc()
         );
 });

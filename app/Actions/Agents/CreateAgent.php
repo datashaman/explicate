@@ -16,10 +16,11 @@ class CreateAgent
         string $model,
         ?string $reasoningEffort,
         ?string $prompt,
+        ?array $allowedTools = null,
     ): Agent {
         $agent = $workspace->agents()->create(['name' => $name]);
 
-        $this->createAgentVersion->handle($agent, $provider, $model, $reasoningEffort, $prompt);
+        $this->createAgentVersion->handle($agent, $provider, $model, $reasoningEffort, $prompt, $allowedTools);
 
         return $agent->fresh(['latestVersion']);
     }

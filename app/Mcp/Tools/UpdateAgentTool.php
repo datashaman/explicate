@@ -2,6 +2,7 @@
 
 namespace App\Mcp\Tools;
 
+use App\Actions\Agents\AgentToolCatalog;
 use App\Actions\Agents\CreateAgentVersion;
 use App\Enums\Provider;
 use App\Enums\ReasoningEffort;
@@ -36,6 +37,8 @@ class UpdateAgentTool extends Tool
             'model' => ['sometimes', 'filled', 'string', 'max:255'],
             'reasoning_effort' => ['sometimes', 'nullable', 'string', Rule::enum(ReasoningEffort::class)],
             'prompt' => ['sometimes', 'nullable', 'string'],
+            'allowed_tools' => ['sometimes', 'nullable', 'array'],
+            'allowed_tools.*' => ['string', Rule::in(app(AgentToolCatalog::class)->names())],
         ]);
 
         /** @var User $user */
@@ -67,6 +70,9 @@ class UpdateAgentTool extends Tool
                 prompt: array_key_exists('prompt', $validated)
                     ? $validated['prompt']
                     : $latestVersion?->prompt,
+                allowedTools: array_key_exists('allowed_tools', $validated)
+                    ? app(AgentToolCatalog::class)->normalize($validated['allowed_tools'])
+                    : $latestVersion?->allowed_tools,
             );
 
             $agent->load('latestVersion');
@@ -112,6 +118,10 @@ class UpdateAgentTool extends Tool
             'prompt' => $schema->string()
                 ->description('Optional system prompt for a new agent version.')
                 ->nullable(),
+            'allowed_tools' => $schema->array()
+                ->description('Optional replacement list of MCP tool names for a new agent version.')
+                ->items($schema->string())
+                ->nullable(),
         ];
     }
 
@@ -121,13 +131,13 @@ class UpdateAgentTool extends Tool
     private function hasVersionInput(array $validated): bool
     {
         return array_any(
-            ['provider', 'model', 'reasoning_effort', 'prompt'],
+            ['provider', 'model', 'reasoning_effort', 'prompt', 'allowed_tools'],
             fn (string $field): bool => array_key_exists($field, $validated),
         );
     }
 
     /**
-     * @return array{version: int|null, provider: string|null, model: string|null, reasoning_effort: string|null, prompt: string|null, created_at: string|null}
+     * @return array{version: int|null, provider: string|null, model: string|null, reasoning_effort: string|null, prompt: string|null, allowed_tools: list<string>, created_at: string|null}
      */
     private function versionPayload(?AgentVersion $version): array
     {
@@ -137,6 +147,7 @@ class UpdateAgentTool extends Tool
             'model' => $version?->model,
             'reasoning_effort' => $version?->reasoning_effort?->value,
             'prompt' => $version?->prompt,
+            'allowed_tools' => app(AgentToolCatalog::class)->normalize($version?->allowed_tools),
             'created_at' => $version?->created_at?->toIso8601String(),
         ];
     }

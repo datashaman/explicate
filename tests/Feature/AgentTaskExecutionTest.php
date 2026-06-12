@@ -146,6 +146,39 @@ test('it injects the decrypted team provider key before prompting the agent', fu
     app(ExecuteAgentTask::class)->handle($task);
 });
 
+test('it only exposes MCP tools allowed by the latest agent version', function () {
+    Ai::fakeAgent(ExplicateMentionAgent::class, ['Constrained response.'])->preventStrayPrompts();
+
+    $agent = Agent::factory()->for($this->workspace)->create(['name' => 'Researcher']);
+    AgentVersion::factory()->for($agent)->create([
+        'provider' => Provider::Gemini,
+        'model' => 'gemini-2.5-flash',
+        'allowed_tools' => ['get-thread', 'write-file'],
+    ]);
+
+    $post = Post::factory()->for(Thread::factory()->forTopic($this->topic))->create([
+        'sender_principal_id' => $this->senderPrincipal->id,
+        'body' => '@researcher Use constrained tools.',
+        'status' => PostStatus::Published,
+    ]);
+
+    $task = AgentTask::query()->whereBelongsTo($post)->sole();
+
+    app(ExecuteAgentTask::class)->handle($task);
+
+    Ai::assertAgentWasPrompted(ExplicateMentionAgent::class, function (AgentPrompt $prompt): bool {
+        $toolNames = collect($prompt->agent->tools())
+            ->map(fn ($tool): string => ToolNameResolver::resolve($tool))
+            ->all();
+
+        return in_array('task-list', $toolNames, true)
+            && in_array('get-thread', $toolNames, true)
+            && in_array('write-file', $toolNames, true)
+            && ! in_array('create-post', $toolNames, true)
+            && ! in_array('list-files', $toolNames, true);
+    });
+});
+
 test('it marks a task failed when the agent has no executable version', function () {
     Ai::fakeAgent(ExplicateMentionAgent::class)->preventStrayPrompts();
 

@@ -2,6 +2,7 @@
 
 use App\Actions\Agents\CreateAgent;
 use App\Actions\Agents\CreateAgentVersion;
+use App\Actions\Agents\AgentToolCatalog;
 use App\Actions\Posts\CreatePost;
 use App\Actions\Posts\DeletePostAttachment;
 use App\Actions\Posts\UpdateDraftPost;
@@ -74,6 +75,9 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
 
     public string $prompt = '';
 
+    /** @var list<string> */
+    public array $allowedTools = [];
+
     public string $selectedAgentName = '';
 
     public string $selectedAgentProvider = '';
@@ -83,6 +87,9 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
     public string $selectedAgentReasoningEffort = '';
 
     public string $selectedAgentPrompt = '';
+
+    /** @var list<string> */
+    public array $selectedAgentAllowedTools = [];
 
     public string $postBody = '';
 
@@ -159,6 +166,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
         $this->syncSelectedWorkspaceFileFields();
         $this->syncNewPostTopic();
         $this->syncSelectedAgentFields();
+        $this->allowedTools = app(AgentToolCatalog::class)->names();
     }
 
     /** @return array<string, string> */
@@ -907,6 +915,15 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
         return $provider?->supportsReasoningEffort() ?? false;
     }
 
+    /**
+     * @return array<string, array{description: string, tools: list<array{name: string, description: string}>}>
+     */
+    #[Computed]
+    public function agentToolGroups(): array
+    {
+        return app(AgentToolCatalog::class)->grouped();
+    }
+
     public function updatedProvider(): void
     {
         $this->model = '';
@@ -1083,6 +1100,8 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
             'model' => ['required', 'string', 'max:255'],
             'reasoningEffort' => ['nullable', 'string', Rule::enum(ReasoningEffort::class)],
             'prompt' => ['nullable', 'string'],
+            'allowedTools' => ['array'],
+            'allowedTools.*' => ['string', Rule::in(app(AgentToolCatalog::class)->names())],
         ]);
 
         app(CreateAgent::class)->handle(
@@ -1092,9 +1111,11 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
             model: $validated['model'],
             reasoningEffort: $validated['reasoningEffort'],
             prompt: $validated['prompt'],
+            allowedTools: app(AgentToolCatalog::class)->normalize($validated['allowedTools']),
         );
 
         $this->reset('agentName', 'provider', 'model', 'reasoningEffort', 'prompt');
+        $this->allowedTools = app(AgentToolCatalog::class)->names();
 
         Flux::modal('new-dashboard-agent')->close();
 
@@ -1414,6 +1435,8 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
             'selectedAgentModel' => ['required', 'string', 'max:255'],
             'selectedAgentReasoningEffort' => ['nullable', 'string', Rule::enum(ReasoningEffort::class)],
             'selectedAgentPrompt' => ['nullable', 'string'],
+            'selectedAgentAllowedTools' => ['array'],
+            'selectedAgentAllowedTools.*' => ['string', Rule::in(app(AgentToolCatalog::class)->names())],
         ]);
 
         app(CreateAgentVersion::class)->handle(
@@ -1422,7 +1445,10 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
             model: $validated['selectedAgentModel'],
             reasoningEffort: $validated['selectedAgentReasoningEffort'],
             prompt: $validated['selectedAgentPrompt'],
+            allowedTools: app(AgentToolCatalog::class)->normalize($validated['selectedAgentAllowedTools']),
         );
+
+        $this->syncSelectedAgentFields();
 
         Flux::toast(variant: 'success', text: __('Version saved.'));
     }
@@ -1725,6 +1751,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
         $this->selectedAgentModel = $latest?->model ?? '';
         $this->selectedAgentReasoningEffort = $latest?->reasoning_effort?->value ?? '';
         $this->selectedAgentPrompt = $latest?->prompt ?? '';
+        $this->selectedAgentAllowedTools = app(AgentToolCatalog::class)->normalize($latest?->allowed_tools);
     }
 }; ?>
 
@@ -2320,7 +2347,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
             </form>
         </flux:modal>
 
-        <flux:modal name="new-dashboard-agent" focusable class="max-w-sm">
+        <flux:modal name="new-dashboard-agent" focusable class="max-w-3xl">
             <form wire:submit="createAgent" class="space-y-6">
                 <div>
                     <flux:heading size="lg">{{ __('New agent') }}</flux:heading>
@@ -2348,6 +2375,12 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
                 @endif
 
                 <flux:textarea wire:model="prompt" :label="__('Prompt')" rows="8" :placeholder="__('System prompt…')" />
+
+                @include('partials.agent-tool-checkbox-matrix', [
+                    'model' => 'allowedTools',
+                    'groups' => $this->agentToolGroups,
+                    'dataTest' => 'new-agent-tool-matrix',
+                ])
 
                 <div class="flex justify-end gap-2">
                     <flux:modal.close>

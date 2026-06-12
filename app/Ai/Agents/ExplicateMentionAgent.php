@@ -76,7 +76,7 @@ class ExplicateMentionAgent implements Agent, Conversational, HasTools
     {
         return [
             new ManageAgentTaskListTool($this->task),
-            ...$this->toolFactory->forAgentTask($this->toolUser, $this->task->agent->workspace),
+            ...$this->toolFactory->forAgentTask($this->toolUser, $this->task->agent->workspace, $this->task->agent),
         ];
     }
 

@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['agent_id', 'version', 'provider', 'model', 'reasoning_effort', 'prompt'])]
+#[Fillable(['agent_id', 'version', 'provider', 'model', 'reasoning_effort', 'prompt', 'allowed_tools'])]
 class AgentVersion extends Model
 {
     /** @use HasFactory<AgentVersionFactory> */
@@ -21,6 +21,7 @@ class AgentVersion extends Model
     protected $casts = [
         'provider' => Provider::class,
         'reasoning_effort' => ReasoningEffort::class,
+        'allowed_tools' => 'array',
         'created_at' => 'datetime',
     ];
 

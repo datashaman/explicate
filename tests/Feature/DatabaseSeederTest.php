@@ -22,7 +22,7 @@ test('database seeder creates demo workspace content', function () {
     expect($user->currentWorkspace->name)->toBe('My First Workspace');
     expect($user->currentWorkspace->slug)->toBe('my-first-workspace');
     expect($user->currentWorkspace->topics)->toHaveCount(4);
-    expect($user->currentWorkspace->agents)->toHaveCount(4);
+    expect($user->currentWorkspace->agents)->toHaveCount(3);
 
     $senderPrincipal = $user->currentWorkspace->principalForUser($user);
     $workspacePosts = Post::withTrashed()
@@ -48,12 +48,11 @@ test('database seeder creates demo workspace content', function () {
         ->toBe(Post::withTrashed()->whereHas('thread', fn ($query) => $query->whereBelongsTo($engineeringTopic))->count());
     expect(Post::onlyTrashed()->whereHas('thread', fn ($query) => $query->whereBelongsTo($engineeringTopic))->where('deleted_by_user_id', $user->id)->count())->toBe(1);
 
-    $writerAgent = $user->currentWorkspace->agents()->where('name', 'Writer')->first();
+    $agents = $user->currentWorkspace->agents()->with('latestVersion', 'versions')->orderBy('name')->get();
 
-    expect($writerAgent)->not->toBeNull();
-    expect($writerAgent->slug)->toBe('writer');
-    expect($writerAgent->versions)->toHaveCount(1);
-    expect($writerAgent->latestVersion)->not->toBeNull();
+    expect($agents->pluck('name')->all())->toBe(['Analyst', 'Implementer', 'Planner']);
+    expect($agents->pluck('slug')->all())->toBe(['analyst', 'implementer', 'planner']);
+    expect($agents->every(fn (Agent $agent): bool => $agent->versions->count() === 1 && $agent->latestVersion !== null))->toBeTrue();
 
     $attachments = Attachment::query()
         ->whereHas('post.thread', fn ($query) => $query->whereBelongsTo($user->currentWorkspace))
