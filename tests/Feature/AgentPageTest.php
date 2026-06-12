@@ -83,7 +83,7 @@ test('agent can be created', function () {
     Livewire::test('pages::dashboard')
         ->set('agentName', 'My Agent')
         ->set('provider', Provider::OpenAI->value)
-        ->set('model', 'o4-mini')
+        ->set('model', 'gpt-5.5')
         ->set('reasoningEffort', ReasoningEffort::Medium->value)
         ->set('prompt', 'Be helpful.')
         ->set('allowedTools', ['get-thread', 'write-file'])
@@ -95,7 +95,7 @@ test('agent can be created', function () {
     expect($agent)->not->toBeNull();
     expect($agent->versions)->toHaveCount(1);
     expect($agent->versions->first()->provider)->toBe(Provider::OpenAI);
-    expect($agent->versions->first()->model)->toBe('o4-mini');
+    expect($agent->versions->first()->model)->toBe('gpt-5.5');
     expect($agent->versions->first()->reasoning_effort)->toBe(ReasoningEffort::Medium);
     expect($agent->versions->first()->prompt)->toBe('Be helpful.');
     expect($agent->versions->first()->allowed_tools)->toBe(['get-thread', 'write-file']);
@@ -137,7 +137,7 @@ test('agent form shows and saves allowed tools on new versions', function () {
         ->set('selectedAgentSlug', 'tool-agent')
         ->assertSet('selectedAgentAllowedTools', ['get-thread'])
         ->set('selectedAgentProvider', Provider::OpenAI->value)
-        ->set('selectedAgentModel', 'o4-mini')
+        ->set('selectedAgentModel', 'gpt-5.5')
         ->set('selectedAgentReasoningEffort', ReasoningEffort::Low->value)
         ->set('selectedAgentPrompt', 'Use only selected tools.')
         ->set('selectedAgentAllowedTools', ['get-thread', 'write-file'])

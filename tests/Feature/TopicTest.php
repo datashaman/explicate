@@ -1277,7 +1277,7 @@ test('dashboard shows selected agent details in the main panel', function () {
 
     AgentVersion::factory()->for($agent)->create([
         'provider' => Provider::OpenAI,
-        'model' => 'o4-mini',
+        'model' => 'gpt-5.5',
         'prompt' => 'Research carefully.',
     ]);
 
@@ -1292,7 +1292,7 @@ test('dashboard shows selected agent details in the main panel', function () {
         ->assertSee('Agent details')
         ->assertSee('New version')
         ->assertSee('Version history')
-        ->assertSee('o4-mini')
+        ->assertSee('gpt-5.5')
         ->assertSee('Research carefully.')
         ->assertSee('xl:flex-row', escape: false)
         ->assertDontSee('xl:grid-cols-[16rem_minmax(0,1fr)_32rem]', escape: false);
@@ -1324,7 +1324,7 @@ test('dashboard can save selected agent version', function () {
     Livewire::test('pages::dashboard')
         ->set('selectedAgentSlug', $agent->slug)
         ->set('selectedAgentProvider', Provider::OpenAI->value)
-        ->set('selectedAgentModel', 'o4-mini')
+        ->set('selectedAgentModel', 'gpt-5.5')
         ->set('selectedAgentReasoningEffort', ReasoningEffort::Low->value)
         ->set('selectedAgentPrompt', 'New panel prompt.')
         ->call('saveSelectedAgentVersion')
@@ -1334,7 +1334,7 @@ test('dashboard can save selected agent version', function () {
 
     expect($version)->not->toBeNull()
         ->and($version->provider)->toBe(Provider::OpenAI)
-        ->and($version->model)->toBe('o4-mini')
+        ->and($version->model)->toBe('gpt-5.5')
         ->and($version->reasoning_effort)->toBe(ReasoningEffort::Low)
         ->and($version->prompt)->toBe('New panel prompt.');
 });
@@ -1347,7 +1347,7 @@ test('dashboard can create an agent from the right rail', function () {
     Livewire::test('pages::dashboard')
         ->set('agentName', 'Rail Agent')
         ->set('provider', Provider::OpenAI->value)
-        ->set('model', 'o4-mini')
+        ->set('model', 'gpt-5.5')
         ->set('reasoningEffort', ReasoningEffort::Low->value)
         ->set('prompt', 'Help in the sidebar.')
         ->call('createAgent')

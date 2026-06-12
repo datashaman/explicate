@@ -227,7 +227,7 @@ test('the thread router uses the configured team provider key', function () {
     $agent = Agent::factory()->for($this->workspace)->create(['name' => 'Researcher']);
     AgentVersion::factory()->for($agent)->create([
         'provider' => Provider::OpenAI,
-        'model' => 'gpt-4o-mini',
+        'model' => 'gpt-5.4-mini',
     ]);
 
     $thread = Thread::factory()->forTopic($this->topic)->create();

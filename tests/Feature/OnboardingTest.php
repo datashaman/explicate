@@ -121,7 +121,7 @@ test('skipping wizard creates every default role using the available provider', 
 
     expect($agents->pluck('name')->all())->toBe(['Analyst', 'Implementer', 'Planner'])
         ->and($agents->pluck('latestVersion.provider')->all())->toBe([Provider::OpenAI, Provider::OpenAI, Provider::OpenAI])
-        ->and($agents->pluck('latestVersion.model')->all())->toBe(['gpt-4o', 'o4-mini', 'gpt-4o']);
+        ->and($agents->pluck('latestVersion.model')->all())->toBe(['gpt-5.4', 'gpt-5.5', 'gpt-5.5']);
 });
 
 test('completing wizard saves api key and creates workspace and agent', function () {

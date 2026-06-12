@@ -125,7 +125,7 @@ test('it injects the decrypted team provider key before prompting the agent', fu
     Ai::fakeAgent(ExplicateMentionAgent::class, function (string $prompt, $attachments, $provider, string $model): string {
         expect($provider->name())->toBe('openai')
             ->and($provider->providerCredentials()['key'])->toBe('sk-team-openai-key')
-            ->and($model)->toBe('gpt-4o-mini');
+            ->and($model)->toBe('gpt-5.4-mini');
 
         return 'OpenAI response.';
     })->preventStrayPrompts();
@@ -133,7 +133,7 @@ test('it injects the decrypted team provider key before prompting the agent', fu
     $agent = Agent::factory()->for($this->workspace)->create(['name' => 'Researcher']);
     AgentVersion::factory()->for($agent)->create([
         'provider' => Provider::OpenAI,
-        'model' => 'gpt-4o-mini',
+        'model' => 'gpt-5.4-mini',
     ]);
 
     $post = Post::factory()->for(Thread::factory()->forTopic($this->topic))->create([

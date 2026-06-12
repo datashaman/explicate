@@ -477,7 +477,7 @@ test('list agents returns workspace agents with latest versions', function () {
     ]);
     AgentVersion::factory()->for($agent)->create([
         'version' => 3,
-        'model' => 'o4-mini',
+        'model' => 'gpt-5.5',
         'allowed_tools' => ['get-thread', 'write-file'],
     ]);
 
@@ -494,7 +494,7 @@ test('list agents returns workspace agents with latest versions', function () {
             ->where('workspace.slug', 'strategy')
             ->where('agents.0.slug', 'research-agent')
             ->where('agents.0.latest_version', 3)
-            ->where('agents.0.latest_model', 'o4-mini')
+            ->where('agents.0.latest_model', 'gpt-5.5')
             ->where('agents.0.allowed_tools', ['get-thread', 'write-file'])
             ->where('agents.0.resource_uri', 'explicate://workspaces/strategy/agents/research-agent')
             ->etc()
@@ -558,7 +558,7 @@ test('create agent creates an agent with an initial version in the current works
     $response = ExplicateServer::actingAs($user)->tool(CreateAgentTool::class, [
         'name' => 'Research Agent',
         'provider' => Provider::OpenAI->value,
-        'model' => 'o4-mini',
+        'model' => 'gpt-5.5',
         'reasoning_effort' => ReasoningEffort::Low->value,
         'prompt' => 'Research the latest context.',
         'allowed_tools' => ['get-thread', 'write-file'],
@@ -574,7 +574,7 @@ test('create agent creates an agent with an initial version in the current works
     $version = $agent?->versions()->first();
 
     expect($version?->provider)->toBe(Provider::OpenAI);
-    expect($version?->model)->toBe('o4-mini');
+    expect($version?->model)->toBe('gpt-5.5');
     expect($version?->reasoning_effort)->toBe(ReasoningEffort::Low);
     expect($version?->prompt)->toBe('Research the latest context.');
     expect($version?->allowed_tools)->toBe(['get-thread', 'write-file']);
@@ -588,7 +588,7 @@ test('create agent creates an agent with an initial version in the current works
             ->where('agent.resource_uri', 'explicate://workspaces/strategy/agents/research-agent')
             ->where('latest_version.version', 1)
             ->where('latest_version.provider', 'openai')
-            ->where('latest_version.model', 'o4-mini')
+            ->where('latest_version.model', 'gpt-5.5')
             ->where('latest_version.reasoning_effort', 'low')
             ->where('latest_version.prompt', 'Research the latest context.')
             ->where('latest_version.allowed_tools', ['get-thread', 'write-file'])
@@ -642,7 +642,7 @@ test('get agent returns version history for an accessible workspace', function (
     ]);
     AgentVersion::factory()->for($agent)->create([
         'version' => 2,
-        'model' => 'o4-mini',
+        'model' => 'gpt-5.5',
         'prompt' => 'Second prompt',
         'allowed_tools' => ['get-thread', 'write-file'],
     ]);
@@ -658,7 +658,7 @@ test('get agent returns version history for an accessible workspace', function (
             ->where('agent.latest_version', 2)
             ->where('agent.resource_uri', 'explicate://workspaces/strategy/agents/research-agent')
             ->where('versions.0.version', 2)
-            ->where('versions.0.model', 'o4-mini')
+            ->where('versions.0.model', 'gpt-5.5')
             ->where('versions.0.prompt', 'Second prompt')
             ->where('versions.0.allowed_tools', ['get-thread', 'write-file'])
             ->where('versions.1.version', 1)
@@ -704,7 +704,7 @@ test('update agent renames the agent and creates a new version in the current wo
     $response = ExplicateServer::actingAs($user)->tool(UpdateAgentTool::class, [
         'agent_slug' => 'research-agent',
         'name' => 'Updated Agent',
-        'model' => 'o4-mini',
+        'model' => 'gpt-5.5',
         'prompt' => 'New prompt.',
         'allowed_tools' => ['get-thread', 'create-post'],
     ]);
@@ -720,7 +720,7 @@ test('update agent renames the agent and creates a new version in the current wo
 
     expect($version?->version)->toBe(2);
     expect($version?->provider)->toBe(Provider::OpenAI);
-    expect($version?->model)->toBe('o4-mini');
+    expect($version?->model)->toBe('gpt-5.5');
     expect($version?->reasoning_effort)->toBe(ReasoningEffort::Medium);
     expect($version?->prompt)->toBe('New prompt.');
     expect($version?->allowed_tools)->toBe(['get-thread', 'create-post']);
@@ -734,7 +734,7 @@ test('update agent renames the agent and creates a new version in the current wo
             ->where('agent.resource_uri', 'explicate://workspaces/strategy/agents/updated-agent')
             ->where('latest_version.version', 2)
             ->where('latest_version.provider', 'openai')
-            ->where('latest_version.model', 'o4-mini')
+            ->where('latest_version.model', 'gpt-5.5')
             ->where('latest_version.reasoning_effort', 'medium')
             ->where('latest_version.prompt', 'New prompt.')
             ->where('latest_version.allowed_tools', ['get-thread', 'create-post'])
@@ -1537,7 +1537,7 @@ test('workspace agents resource returns agents for a workspace by uri template',
     ]);
     AgentVersion::factory()->for($agent)->create([
         'version' => 3,
-        'model' => 'o4-mini',
+        'model' => 'gpt-5.5',
         'allowed_tools' => ['get-thread', 'write-file'],
     ]);
     $resource = new class(app(ExplicateContext::class)) extends WorkspaceAgentsResource
@@ -1835,7 +1835,7 @@ test('agent resource returns agent context by uri template', function () {
     ]);
     AgentVersion::factory()->for($agent)->create([
         'version' => 2,
-        'model' => 'o4-mini',
+        'model' => 'gpt-5.5',
         'prompt' => 'Second prompt',
         'allowed_tools' => ['get-thread', 'write-file'],
     ]);
