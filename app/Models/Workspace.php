@@ -58,6 +58,14 @@ class Workspace extends Model
     }
 
     /**
+     * @return HasMany<Brief, $this>
+     */
+    public function briefs(): HasMany
+    {
+        return $this->hasMany(Brief::class)->orderByDesc('updated_at');
+    }
+
+    /**
      * @return HasManyThrough<Post, Thread, $this>
      */
     public function posts(): HasManyThrough

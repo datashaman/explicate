@@ -111,6 +111,14 @@ class Thread extends Model
         return $this->hasMany(ThreadAgentState::class);
     }
 
+    /**
+     * @return HasMany<Brief, $this>
+     */
+    public function briefs(): HasMany
+    {
+        return $this->hasMany(Brief::class)->orderByDesc('updated_at');
+    }
+
     public function agentStateFor(Agent $agent): ThreadAgentState
     {
         return $this->agentStates()->firstOrCreate([
