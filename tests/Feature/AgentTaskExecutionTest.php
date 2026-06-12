@@ -6,6 +6,7 @@ use App\Ai\Tools\ExplicateToolFactory;
 use App\Enums\AgentTaskStatus;
 use App\Enums\PostStatus;
 use App\Enums\Provider;
+use App\Enums\ReasoningEffort;
 use App\Mcp\ExplicateUris;
 use App\Models\Agent;
 use App\Models\AgentTask;
@@ -145,6 +146,41 @@ test('it injects the decrypted team provider key before prompting the agent', fu
     $task = AgentTask::query()->whereBelongsTo($post)->sole();
 
     app(ExecuteAgentTask::class)->handle($task);
+});
+
+test('it passes the agent version reasoning effort to openai provider options', function () {
+    config(['ai.providers.openai.key' => '']);
+
+    ProviderKey::create([
+        'team_id' => $this->user->currentTeam->id,
+        'provider' => Provider::OpenAI,
+        'api_key' => 'sk-team-openai-key',
+    ]);
+
+    Ai::fakeAgent(ExplicateMentionAgent::class, ['OpenAI response.'])->preventStrayPrompts();
+
+    $agent = Agent::factory()->for($this->workspace)->create(['name' => 'Implementer']);
+    AgentVersion::factory()->for($agent)->create([
+        'provider' => Provider::OpenAI,
+        'model' => 'gpt-5.5',
+        'reasoning_effort' => ReasoningEffort::High,
+    ]);
+
+    $post = Post::factory()->for(Thread::factory()->forTopic($this->topic))->create([
+        'sender_principal_id' => $this->senderPrincipal->id,
+        'body' => '@implementer Use explicit reasoning.',
+        'status' => PostStatus::Published,
+    ]);
+
+    $task = AgentTask::query()->whereBelongsTo($post)->sole();
+
+    app(ExecuteAgentTask::class)->handle($task);
+
+    Ai::assertAgentWasPrompted(ExplicateMentionAgent::class, fn (AgentPrompt $prompt): bool => $prompt->agent->providerOptions('openai') === [
+        'reasoning' => [
+            'effort' => 'high',
+        ],
+    ]);
 });
 
 test('it normalizes nested anthropic beta config while prompting with a workspace key', function () {

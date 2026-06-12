@@ -10,15 +10,17 @@ use App\Models\Principal;
 use App\Models\User;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Conversational;
+use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Promptable;
 use Stringable;
 
-class ExplicateMentionAgent implements Agent, Conversational, HasTools
+class ExplicateMentionAgent implements Agent, Conversational, HasProviderOptions, HasTools
 {
     use Promptable;
 
@@ -78,6 +80,29 @@ class ExplicateMentionAgent implements Agent, Conversational, HasTools
             new ManageAgentTaskListTool($this->task),
             ...$this->toolFactory->forAgentTask($this->toolUser, $this->task->agent->workspace, $this->task->agent),
         ];
+    }
+
+    /**
+     * Get provider-specific generation options.
+     *
+     * @return array<string, mixed>
+     */
+    public function providerOptions(Lab|string $provider): array
+    {
+        $this->task->loadMissing('agent.latestVersion');
+
+        $version = $this->task->agent->latestVersion;
+        $providerValue = $provider instanceof Lab ? $provider->value : $provider;
+
+        if ($version === null || $providerValue !== $version->provider->value) {
+            return [];
+        }
+
+        if (! $version->reasoning_effort) {
+            return [];
+        }
+
+        return $version->provider->reasoningEffortOptions($version->model, $version->reasoning_effort);
     }
 
     private function identityInstructions(): string

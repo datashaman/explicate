@@ -57,11 +57,87 @@ enum Provider: string
         };
     }
 
-    public function supportsReasoningEffort(): bool
+    public function supportsReasoningEffort(?string $model = null): bool
     {
+        if ($model === null) {
+            return match ($this) {
+                Provider::Anthropic, Provider::OpenAI, Provider::Gemini, Provider::Groq => true,
+            };
+        }
+
         return match ($this) {
-            Provider::OpenAI => true,
-            default => false,
+            Provider::Anthropic => in_array($model, [
+                'claude-fable-5',
+                'claude-opus-4-8',
+                'claude-sonnet-4-6',
+            ], true),
+            Provider::OpenAI => str_starts_with($model, 'gpt-5'),
+            Provider::Gemini => str_starts_with($model, 'gemini-3')
+                || str_starts_with($model, 'gemini-2.5'),
+            Provider::Groq => in_array($model, [
+                'openai/gpt-oss-120b',
+                'openai/gpt-oss-20b',
+            ], true),
+        };
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function reasoningEffortOptions(string $model, ReasoningEffort $effort): array
+    {
+        if (! $this->supportsReasoningEffort($model)) {
+            return [];
+        }
+
+        return match ($this) {
+            Provider::Anthropic => $this->anthropicReasoningEffortOptions($model, $effort),
+            Provider::OpenAI => [
+                'reasoning' => [
+                    'effort' => $effort->value,
+                ],
+            ],
+            Provider::Gemini => str_starts_with($model, 'gemini-3')
+                ? [
+                    'thinkingConfig' => [
+                        'thinkingLevel' => $effort->value,
+                    ],
+                ]
+                : [
+                    'thinkingConfig' => [
+                        'thinkingBudget' => $this->geminiThinkingBudget($effort),
+                    ],
+                ],
+            Provider::Groq => [
+                'reasoning_effort' => $effort->value,
+            ],
+        };
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function anthropicReasoningEffortOptions(string $model, ReasoningEffort $effort): array
+    {
+        $options = [
+            'output_config' => [
+                'effort' => $effort->value,
+            ],
+        ];
+
+        if ($model !== 'claude-fable-5') {
+            $options['thinking'] = ['type' => 'adaptive'];
+        }
+
+        return $options;
+    }
+
+    private function geminiThinkingBudget(ReasoningEffort $effort): int
+    {
+        return match ($effort) {
+            ReasoningEffort::Low => 1024,
+            ReasoningEffort::Medium => 8192,
+            ReasoningEffort::High => 24576,
         };
     }
 }

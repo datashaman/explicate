@@ -114,6 +114,33 @@ test('agent cannot be created for a provider without a configured key', function
     expect($this->workspace->agents()->where('name', 'No Key Agent')->exists())->toBeFalse();
 });
 
+test('agent version clears reasoning effort when the model does not support it', function () {
+    $agent = Agent::factory()->for($this->workspace)->create([
+        'name' => 'Legacy Agent',
+        'slug' => 'legacy-agent',
+    ]);
+    AgentVersion::factory()->for($agent)->create([
+        'provider' => Provider::OpenAI,
+        'model' => 'gpt-5.5',
+        'reasoning_effort' => ReasoningEffort::Medium,
+    ]);
+
+    $this->actingAs($this->user);
+
+    Livewire::test('pages::dashboard')
+        ->set('selectedAgentSlug', 'legacy-agent')
+        ->set('selectedAgentProvider', Provider::OpenAI->value)
+        ->set('selectedAgentModel', 'gpt-4.1')
+        ->set('selectedAgentReasoningEffort', ReasoningEffort::High->value)
+        ->call('saveSelectedAgentVersion')
+        ->assertHasNoErrors();
+
+    $version = $agent->fresh()->latestVersion;
+
+    expect($version?->model)->toBe('gpt-4.1')
+        ->and($version?->reasoning_effort)->toBeNull();
+});
+
 test('agent form shows and saves allowed tools on new versions', function () {
     $agent = Agent::factory()->for($this->workspace)->create([
         'name' => 'Tool Agent',

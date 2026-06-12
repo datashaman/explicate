@@ -3,6 +3,7 @@
 namespace App\Actions\Agents;
 
 use App\Enums\Provider;
+use App\Enums\ReasoningEffort;
 use App\Models\Agent;
 use App\Models\AgentVersion;
 use App\Services\AiProviderKeyService;
@@ -30,10 +31,15 @@ class CreateAgentVersion
             ]);
         }
 
+        $providerEnum = Provider::from($provider);
+        $reasoningEffortEnum = $reasoningEffort ? ReasoningEffort::from($reasoningEffort) : null;
+
         return $agent->versions()->create([
             'provider' => $provider,
             'model' => $model,
-            'reasoning_effort' => $reasoningEffort ?: null,
+            'reasoning_effort' => $reasoningEffortEnum && $providerEnum->supportsReasoningEffort($model)
+                ? $reasoningEffortEnum
+                : null,
             'prompt' => $prompt ?: null,
             'allowed_tools' => $allowedTools,
         ]);

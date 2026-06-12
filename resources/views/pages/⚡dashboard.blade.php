@@ -901,7 +901,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
 
         $provider = Provider::tryFrom($this->provider);
 
-        return $provider?->supportsReasoningEffort() ?? false;
+        return $provider?->supportsReasoningEffort($this->model) ?? false;
     }
 
     /** @return list<string> */
@@ -926,7 +926,7 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
 
         $provider = Provider::tryFrom($this->selectedAgentProvider);
 
-        return $provider?->supportsReasoningEffort() ?? false;
+        return $provider?->supportsReasoningEffort($this->selectedAgentModel) ?? false;
     }
 
     /**
@@ -944,10 +944,24 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
         $this->reasoningEffort = '';
     }
 
+    public function updatedModel(): void
+    {
+        if (! $this->showReasoningEffort) {
+            $this->reasoningEffort = '';
+        }
+    }
+
     public function updatedSelectedAgentProvider(): void
     {
         $this->selectedAgentModel = '';
         $this->selectedAgentReasoningEffort = '';
+    }
+
+    public function updatedSelectedAgentModel(): void
+    {
+        if (! $this->selectedAgentShowReasoningEffort) {
+            $this->selectedAgentReasoningEffort = '';
+        }
     }
 
     public function updatedMobilePanel(): void
