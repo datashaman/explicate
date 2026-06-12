@@ -946,9 +946,11 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
 
     public function updatedModel(): void
     {
-        if (! $this->showReasoningEffort) {
-            $this->reasoningEffort = '';
-        }
+        $this->reasoningEffort = $this->normalizedReasoningEffort(
+            $this->provider,
+            $this->model,
+            $this->reasoningEffort,
+        );
     }
 
     public function updatedSelectedAgentProvider(): void
@@ -959,9 +961,11 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
 
     public function updatedSelectedAgentModel(): void
     {
-        if (! $this->selectedAgentShowReasoningEffort) {
-            $this->selectedAgentReasoningEffort = '';
-        }
+        $this->selectedAgentReasoningEffort = $this->normalizedReasoningEffort(
+            $this->selectedAgentProvider,
+            $this->selectedAgentModel,
+            $this->selectedAgentReasoningEffort,
+        );
     }
 
     public function updatedMobilePanel(): void
@@ -1777,9 +1781,24 @@ new #[Layout('layouts::workspace'), Title('Dashboard')] class extends Component
         $this->selectedAgentName = $agent?->name ?? '';
         $this->selectedAgentProvider = $latest?->provider->value ?? '';
         $this->selectedAgentModel = $latest?->model ?? '';
-        $this->selectedAgentReasoningEffort = $latest?->reasoning_effort?->value ?? '';
+        $this->selectedAgentReasoningEffort = $this->normalizedReasoningEffort(
+            $this->selectedAgentProvider,
+            $this->selectedAgentModel,
+            $latest?->reasoning_effort?->value,
+        );
         $this->selectedAgentPrompt = $latest?->prompt ?? '';
         $this->selectedAgentAllowedTools = app(AgentToolCatalog::class)->normalize($latest?->allowed_tools);
+    }
+
+    private function normalizedReasoningEffort(?string $providerValue, ?string $model, ?string $reasoningEffort): string
+    {
+        $provider = $providerValue ? Provider::tryFrom($providerValue) : null;
+
+        if (! $provider?->supportsReasoningEffort((string) $model)) {
+            return '';
+        }
+
+        return $reasoningEffort ?: ReasoningEffort::Medium->value;
     }
 }; ?>
 

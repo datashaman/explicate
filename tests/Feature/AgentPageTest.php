@@ -114,6 +114,34 @@ test('agent cannot be created for a provider without a configured key', function
     expect($this->workspace->agents()->where('name', 'No Key Agent')->exists())->toBeFalse();
 });
 
+test('agent version defaults reasoning effort to medium when the model supports it', function () {
+    $this->actingAs($this->user);
+
+    Livewire::test('pages::dashboard')
+        ->set('agentName', 'Default Effort Agent')
+        ->set('provider', Provider::OpenAI->value)
+        ->set('model', 'gpt-5.5')
+        ->set('prompt', 'Be predictable.')
+        ->call('createAgent')
+        ->assertHasNoErrors();
+
+    $version = $this->workspace->agents()
+        ->where('name', 'Default Effort Agent')
+        ->sole()
+        ->latestVersion;
+
+    expect($version?->reasoning_effort)->toBe(ReasoningEffort::Medium);
+});
+
+test('agent form selects medium reasoning effort when a supported model is selected', function () {
+    $this->actingAs($this->user);
+
+    Livewire::test('pages::dashboard')
+        ->set('provider', Provider::OpenAI->value)
+        ->set('model', 'gpt-5.5')
+        ->assertSet('reasoningEffort', ReasoningEffort::Medium->value);
+});
+
 test('agent version clears reasoning effort when the model does not support it', function () {
     $agent = Agent::factory()->for($this->workspace)->create([
         'name' => 'Legacy Agent',

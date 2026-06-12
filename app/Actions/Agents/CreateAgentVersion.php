@@ -32,14 +32,17 @@ class CreateAgentVersion
         }
 
         $providerEnum = Provider::from($provider);
-        $reasoningEffortEnum = $reasoningEffort ? ReasoningEffort::from($reasoningEffort) : null;
+        $supportsReasoningEffort = $providerEnum->supportsReasoningEffort($model);
+        $reasoningEffortEnum = match (true) {
+            ! $supportsReasoningEffort => null,
+            filled($reasoningEffort) => ReasoningEffort::from($reasoningEffort),
+            default => ReasoningEffort::Medium,
+        };
 
         return $agent->versions()->create([
             'provider' => $provider,
             'model' => $model,
-            'reasoning_effort' => $reasoningEffortEnum && $providerEnum->supportsReasoningEffort($model)
-                ? $reasoningEffortEnum
-                : null,
+            'reasoning_effort' => $reasoningEffortEnum,
             'prompt' => $prompt ?: null,
             'allowed_tools' => $allowedTools,
         ]);
