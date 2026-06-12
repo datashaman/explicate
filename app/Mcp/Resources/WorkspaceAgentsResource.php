@@ -2,6 +2,7 @@
 
 namespace App\Mcp\Resources;
 
+use App\Actions\Agents\AgentToolCatalog;
 use App\Mcp\ExplicateContext;
 use App\Mcp\ExplicateUris;
 use App\Mcp\Resources\Concerns\HandlesResourceExceptions;
@@ -41,6 +42,7 @@ class WorkspaceAgentsResource extends Resource implements HasUriTemplate
                     'slug' => $agent->slug,
                     'latest_version' => $agent->latestVersion?->version,
                     'latest_model' => $agent->latestVersion?->model,
+                    'allowed_tools' => app(AgentToolCatalog::class)->normalize($agent->latestVersion?->allowed_tools),
                     'resource_uri' => ExplicateUris::agent($agent),
                 ])
                 ->values()

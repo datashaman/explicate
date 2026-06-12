@@ -120,7 +120,7 @@ class UpdateAgentTool extends Tool
                 ->nullable(),
             'allowed_tools' => $schema->array()
                 ->description('Optional replacement list of MCP tool names for a new agent version.')
-                ->items($schema->string())
+                ->items($schema->string()->enum(app(AgentToolCatalog::class)->names()))
                 ->nullable(),
         ];
     }

@@ -41,6 +41,7 @@ class PlaybookResource extends Resource
                 'agent' => ExplicateUris::AgentTemplate,
                 'agent_tasks' => ExplicateUris::AgentTasksTemplate,
                 'agent_task' => ExplicateUris::AgentTaskTemplate,
+                'agent_tool_catalog' => ExplicateUris::AgentToolCatalog,
             ],
         ]);
     }

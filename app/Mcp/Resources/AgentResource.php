@@ -2,6 +2,7 @@
 
 namespace App\Mcp\Resources;
 
+use App\Actions\Agents\AgentToolCatalog;
 use App\Mcp\ExplicateContext;
 use App\Mcp\ExplicateUris;
 use App\Mcp\Resources\Concerns\HandlesResourceExceptions;
@@ -57,6 +58,7 @@ class AgentResource extends Resource implements HasUriTemplate
                         'model' => $version->model,
                         'reasoning_effort' => $version->reasoning_effort?->value,
                         'prompt' => $version->prompt,
+                        'allowed_tools' => app(AgentToolCatalog::class)->normalize($version->allowed_tools),
                         'created_at' => $version->created_at?->toIso8601String(),
                     ])
                     ->all(),

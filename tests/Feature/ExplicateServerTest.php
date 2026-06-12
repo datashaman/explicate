@@ -11,6 +11,7 @@ use App\Mcp\ExplicateTools;
 use App\Mcp\Resources\AgentResource;
 use App\Mcp\Resources\AgentTaskResource;
 use App\Mcp\Resources\AgentTasksResource;
+use App\Mcp\Resources\AgentToolCatalogResource;
 use App\Mcp\Resources\BriefResource;
 use App\Mcp\Resources\PlanResource;
 use App\Mcp\Resources\PlaybookResource;
@@ -277,6 +278,8 @@ test('topic forge tools expose switch workspace instead of workspace slug parame
     expect($tools)->toHaveKey('switch-workspace');
     expect($tools)->toHaveKey('delete-post');
     expect($tools['switch-workspace']['inputSchema']['properties'])->toHaveKey('workspace_slug');
+    expect($tools['create-agent']['inputSchema']['properties']['allowed_tools']['items']['enum'])->toContain('get-thread', 'write-file');
+    expect($tools['update-agent']['inputSchema']['properties']['allowed_tools']['items']['enum'])->toContain('get-thread', 'write-file');
 
     foreach ([
         'list-topics',
@@ -472,6 +475,7 @@ test('list agents returns workspace agents with latest versions', function () {
     AgentVersion::factory()->for($agent)->create([
         'version' => 3,
         'model' => 'o4-mini',
+        'allowed_tools' => ['get-thread', 'write-file'],
     ]);
 
     Agent::factory()->for($otherWorkspace)->create([
@@ -488,6 +492,7 @@ test('list agents returns workspace agents with latest versions', function () {
             ->where('agents.0.slug', 'research-agent')
             ->where('agents.0.latest_version', 3)
             ->where('agents.0.latest_model', 'o4-mini')
+            ->where('agents.0.allowed_tools', ['get-thread', 'write-file'])
             ->where('agents.0.resource_uri', 'explicate://workspaces/strategy/agents/research-agent')
             ->etc()
         );
@@ -565,6 +570,7 @@ test('get agent returns version history for an accessible workspace', function (
         'version' => 2,
         'model' => 'o4-mini',
         'prompt' => 'Second prompt',
+        'allowed_tools' => ['get-thread', 'write-file'],
     ]);
     $response = ExplicateServer::actingAs($user)->tool(GetAgentTool::class, [
         'agent_slug' => 'research-agent',
@@ -580,6 +586,7 @@ test('get agent returns version history for an accessible workspace', function (
             ->where('versions.0.version', 2)
             ->where('versions.0.model', 'o4-mini')
             ->where('versions.0.prompt', 'Second prompt')
+            ->where('versions.0.allowed_tools', ['get-thread', 'write-file'])
             ->where('versions.1.version', 1)
             ->etc()
         );
@@ -1411,6 +1418,7 @@ test('workspace agents resource returns agents for a workspace by uri template',
     AgentVersion::factory()->for($agent)->create([
         'version' => 3,
         'model' => 'o4-mini',
+        'allowed_tools' => ['get-thread', 'write-file'],
     ]);
     $resource = new class(app(ExplicateContext::class)) extends WorkspaceAgentsResource
     {
@@ -1426,6 +1434,7 @@ test('workspace agents resource returns agents for a workspace by uri template',
         ->assertOk()
         ->assertSee('"slug":"strategy"')
         ->assertSee('"slug":"research-agent"')
+        ->assertSee('"allowed_tools":["get-thread","write-file"]')
         ->assertSee('"resource_uri":"explicate://workspaces/strategy/agents/research-agent"');
 });
 
@@ -1708,6 +1717,7 @@ test('agent resource returns agent context by uri template', function () {
         'version' => 2,
         'model' => 'o4-mini',
         'prompt' => 'Second prompt',
+        'allowed_tools' => ['get-thread', 'write-file'],
     ]);
     $resource = new class(app(ExplicateContext::class)) extends AgentResource
     {
@@ -1722,6 +1732,7 @@ test('agent resource returns agent context by uri template', function () {
     $response
         ->assertOk()
         ->assertSee('"slug":"research-agent"')
+        ->assertSee('"allowed_tools":["get-thread","write-file"]')
         ->assertSee('"resource_uri":"explicate://workspaces/strategy/agents/research-agent"')
         ->assertSee('"tasks_resource_uri":"explicate://workspaces/strategy/agents/research-agent/tasks"');
 });
@@ -1729,7 +1740,7 @@ test('agent resource returns agent context by uri template', function () {
 test('topic forge server lists root resources', function () {
     $response = topicForgeServerMethodResponse('resources/list');
 
-    expect($response['result']['resources'])->toHaveCount(3);
+    expect($response['result']['resources'])->toHaveCount(4);
 
     expect(collect($response['result']['resources'])->contains(
         fn (array $resource): bool => $resource['name'] === 'whoami-resource'
@@ -1740,6 +1751,12 @@ test('topic forge server lists root resources', function () {
     expect(collect($response['result']['resources'])->contains(
         fn (array $resource): bool => $resource['name'] === 'playbook-resource'
             && $resource['uri'] === 'explicate://playbook'
+            && $resource['mimeType'] === 'application/json'
+    ))->toBeTrue();
+
+    expect(collect($response['result']['resources'])->contains(
+        fn (array $resource): bool => $resource['name'] === 'agent-tool-catalog-resource'
+            && $resource['uri'] === 'explicate://agent-tool-catalog'
             && $resource['mimeType'] === 'application/json'
     ))->toBeTrue();
 
@@ -1756,7 +1773,20 @@ test('playbook resource returns root navigation guidance', function () {
     $response
         ->assertOk()
         ->assertSee('"resource_uri":"explicate://playbook"')
+        ->assertSee('"agent_tool_catalog":"explicate://agent-tool-catalog"')
         ->assertSee('explicate://workspaces/{workspace}/posts/{post}');
+});
+
+test('agent tool catalog resource returns assignable agent tools', function () {
+    $response = ExplicateServer::resource(AgentToolCatalogResource::class);
+
+    $response
+        ->assertOk()
+        ->assertSee('"resource_uri":"explicate://agent-tool-catalog"')
+        ->assertSee('"allowed_tools":["who-am-i"')
+        ->assertSee('"get-thread"')
+        ->assertSee('"write-file"')
+        ->assertSee('"Repositories"');
 });
 
 test('playbook resource is readable by its static uri', function () {

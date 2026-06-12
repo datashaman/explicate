@@ -6,6 +6,7 @@ use App\Mcp\ExplicateTools;
 use App\Mcp\Resources\AgentResource;
 use App\Mcp\Resources\AgentTaskResource;
 use App\Mcp\Resources\AgentTasksResource;
+use App\Mcp\Resources\AgentToolCatalogResource;
 use App\Mcp\Resources\BriefResource;
 use App\Mcp\Resources\PlanResource;
 use App\Mcp\Resources\PlaybookResource;
@@ -45,6 +46,7 @@ class ExplicateServer extends Server
         WhoamiResource::class,
         WorkspacesResource::class,
         PlaybookResource::class,
+        AgentToolCatalogResource::class,
         WorkspaceTopicsResource::class,
         WorkspaceThreadsResource::class,
         WorkspaceBriefsResource::class,

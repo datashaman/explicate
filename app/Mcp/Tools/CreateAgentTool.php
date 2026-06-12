@@ -99,7 +99,7 @@ class CreateAgentTool extends Tool
                 ->nullable(),
             'allowed_tools' => $schema->array()
                 ->description('Optional list of MCP tool names this agent version may call. Omit to allow all agent tools.')
-                ->items($schema->string())
+                ->items($schema->string()->enum(app(AgentToolCatalog::class)->names()))
                 ->nullable(),
         ];
     }

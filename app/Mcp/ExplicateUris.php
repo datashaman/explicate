@@ -18,6 +18,8 @@ final class ExplicateUris
 
     public const Playbook = 'explicate://playbook';
 
+    public const AgentToolCatalog = 'explicate://agent-tool-catalog';
+
     public const Workspaces = 'explicate://workspaces';
 
     public const WorkspaceTopicsTemplate = 'explicate://workspaces/{workspace}/topics';

@@ -15,6 +15,7 @@ use App\Models\ProviderKey;
 use App\Models\Thread;
 use App\Models\Topic;
 use App\Models\Workspace;
+use App\Services\AiProviderKeyService;
 use Illuminate\Support\Facades\Queue;
 
 afterEach(function () {
@@ -144,6 +145,35 @@ test('it injects the decrypted team provider key before prompting the agent', fu
     $task = AgentTask::query()->whereBelongsTo($post)->sole();
 
     app(ExecuteAgentTask::class)->handle($task);
+});
+
+test('it normalizes nested anthropic beta config while prompting with a workspace key', function () {
+    config([
+        'ai.providers.anthropic.key' => '',
+        'ai.providers.anthropic.anthropic_beta' => [
+            ['web-fetch-2025-09-10'],
+            ['context-management-2025-06-27'],
+        ],
+    ]);
+
+    ProviderKey::create([
+        'team_id' => $this->user->currentTeam->id,
+        'provider' => Provider::Anthropic,
+        'api_key' => 'sk-ant-team-key',
+    ]);
+
+    $service = app(AiProviderKeyService::class);
+    $configuredBeta = null;
+
+    $service->withWorkspaceKey($this->workspace, Provider::Anthropic->value, function () use (&$configuredBeta): void {
+        $configuredBeta = config('ai.providers.anthropic.anthropic_beta');
+    });
+
+    expect($configuredBeta)->toBe('web-fetch-2025-09-10,context-management-2025-06-27')
+        ->and(config('ai.providers.anthropic.anthropic_beta'))->toBe([
+            ['web-fetch-2025-09-10'],
+            ['context-management-2025-06-27'],
+        ]);
 });
 
 test('it only exposes MCP tools allowed by the latest agent version', function () {
