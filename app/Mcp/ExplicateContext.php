@@ -4,6 +4,8 @@ namespace App\Mcp;
 
 use App\Models\Agent;
 use App\Models\AgentTask;
+use App\Models\Brief;
+use App\Models\Plan;
 use App\Models\Post;
 use App\Models\Thread;
 use App\Models\Topic;
@@ -153,6 +155,34 @@ class ExplicateContext
         }
 
         return $post;
+    }
+
+    public function briefFor(User $user, int|string $briefId, ?string $workspaceSlug = null): Brief
+    {
+        $workspace = $this->workspaceFor($user, $workspaceSlug);
+
+        $brief = $workspace->briefs()
+            ->whereKey((int) $briefId)
+            ->first();
+
+        if (! $brief instanceof Brief) {
+            throw new AuthorizationException('The requested brief is not accessible for the authenticated user.');
+        }
+
+        return $brief;
+    }
+
+    public function planFor(User $user, int|string $briefId, ?string $workspaceSlug = null): Plan
+    {
+        $brief = $this->briefFor($user, $briefId, $workspaceSlug);
+
+        $plan = $brief->plan()->first();
+
+        if (! $plan instanceof Plan) {
+            throw new AuthorizationException('The requested brief does not have a plan.');
+        }
+
+        return $plan;
     }
 
     public function agentTaskFor(User $user, string $agentSlug, int $taskId, ?string $workspaceSlug = null): AgentTask

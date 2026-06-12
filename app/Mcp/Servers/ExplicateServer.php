@@ -6,6 +6,8 @@ use App\Mcp\ExplicateTools;
 use App\Mcp\Resources\AgentResource;
 use App\Mcp\Resources\AgentTaskResource;
 use App\Mcp\Resources\AgentTasksResource;
+use App\Mcp\Resources\BriefResource;
+use App\Mcp\Resources\PlanResource;
 use App\Mcp\Resources\PlaybookResource;
 use App\Mcp\Resources\PostResource;
 use App\Mcp\Resources\ThreadResource;
@@ -13,6 +15,7 @@ use App\Mcp\Resources\TopicResource;
 use App\Mcp\Resources\TopicThreadsResource;
 use App\Mcp\Resources\WhoamiResource;
 use App\Mcp\Resources\WorkspaceAgentsResource;
+use App\Mcp\Resources\WorkspaceBriefsResource;
 use App\Mcp\Resources\WorkspacesResource;
 use App\Mcp\Resources\WorkspaceThreadsResource;
 use App\Mcp\Resources\WorkspaceTopicsResource;
@@ -44,6 +47,7 @@ class ExplicateServer extends Server
         PlaybookResource::class,
         WorkspaceTopicsResource::class,
         WorkspaceThreadsResource::class,
+        WorkspaceBriefsResource::class,
         WorkspaceAgentsResource::class,
         AgentTasksResource::class,
         AgentTaskResource::class,
@@ -51,6 +55,8 @@ class ExplicateServer extends Server
         TopicResource::class,
         ThreadResource::class,
         PostResource::class,
+        BriefResource::class,
+        PlanResource::class,
         AgentResource::class,
     ];
 

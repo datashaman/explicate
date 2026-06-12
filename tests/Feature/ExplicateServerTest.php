@@ -1,35 +1,44 @@
 <?php
 
+use App\Enums\BriefCategory;
 use App\Enums\PostStatus;
 use App\Enums\Provider;
 use App\Enums\ReasoningEffort;
+use App\Enums\TaskStatus;
 use App\Jobs\ProcessAgentTask;
 use App\Mcp\ExplicateContext;
 use App\Mcp\ExplicateTools;
 use App\Mcp\Resources\AgentResource;
 use App\Mcp\Resources\AgentTaskResource;
 use App\Mcp\Resources\AgentTasksResource;
+use App\Mcp\Resources\BriefResource;
+use App\Mcp\Resources\PlanResource;
 use App\Mcp\Resources\PlaybookResource;
 use App\Mcp\Resources\PostResource;
 use App\Mcp\Resources\TopicResource;
 use App\Mcp\Resources\TopicThreadsResource;
 use App\Mcp\Resources\WhoamiResource;
 use App\Mcp\Resources\WorkspaceAgentsResource;
+use App\Mcp\Resources\WorkspaceBriefsResource;
 use App\Mcp\Resources\WorkspacesResource;
 use App\Mcp\Resources\WorkspaceTopicsResource;
 use App\Mcp\Servers\ExplicateServer;
 use App\Mcp\Tools\CreateAgentTool;
+use App\Mcp\Tools\CreateBriefTool;
 use App\Mcp\Tools\CreateThreadTool;
 use App\Mcp\Tools\CreateTopicTool;
 use App\Mcp\Tools\DeleteFileTool;
 use App\Mcp\Tools\DeletePostTool;
 use App\Mcp\Tools\GetAgentTaskTool;
 use App\Mcp\Tools\GetAgentTool;
+use App\Mcp\Tools\GetBriefTool;
 use App\Mcp\Tools\GetFileTool;
+use App\Mcp\Tools\GetPlanTool;
 use App\Mcp\Tools\GetPostTool;
 use App\Mcp\Tools\GetTopicTool;
 use App\Mcp\Tools\ListAgentsTool;
 use App\Mcp\Tools\ListAgentTasksTool;
+use App\Mcp\Tools\ListBriefsTool;
 use App\Mcp\Tools\ListFilesTool;
 use App\Mcp\Tools\ListReposTool;
 use App\Mcp\Tools\ListThreadsTool;
@@ -39,6 +48,8 @@ use App\Mcp\Tools\RunGitCommandTool;
 use App\Mcp\Tools\SearchThreadsTool;
 use App\Mcp\Tools\SwitchWorkspaceTool;
 use App\Mcp\Tools\UpdateAgentTool;
+use App\Mcp\Tools\UpdateBriefTool;
+use App\Mcp\Tools\UpdatePlanTool;
 use App\Mcp\Tools\UpdatePostTool;
 use App\Mcp\Tools\WhoAmITool;
 use App\Mcp\Tools\WriteFileTool;
@@ -46,7 +57,10 @@ use App\Models\Agent;
 use App\Models\AgentTask;
 use App\Models\AgentVersion;
 use App\Models\Attachment;
+use App\Models\Brief;
+use App\Models\Plan;
 use App\Models\Post;
+use App\Models\Task;
 use App\Models\Thread;
 use App\Models\Topic;
 use App\Models\User;
@@ -269,12 +283,18 @@ test('topic forge tools expose switch workspace instead of workspace slug parame
         'list-agents',
         'list-agent-tasks',
         'get-agent-task',
+        'list-briefs',
+        'get-brief',
+        'get-plan',
         'get-topic',
         'get-agent',
         'list-threads',
         'search-threads',
         'get-post',
         'create-topic',
+        'create-brief',
+        'update-brief',
+        'update-plan',
         'create-agent',
         'update-agent',
         'create-post',
@@ -299,6 +319,7 @@ test('agent tools exclude create-agent and update-agent', function () {
     expect($agentTools)->not->toContain('create-agent')
         ->and($agentTools)->not->toContain('update-agent')
         ->and($agentTools)->toContain('create-post')
+        ->and($agentTools)->toContain('update-plan')
         ->and($agentTools)->toContain('list-agents');
 });
 
@@ -878,6 +899,199 @@ test('get agent task returns full post context for agent work', function () {
         );
 });
 
+test('list briefs returns workspace brief summaries', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->for($user->currentTeam)->create([
+        'slug' => 'strategy',
+    ]);
+    $user->switchWorkspace($workspace);
+
+    $brief = Brief::factory()->for($workspace)->create([
+        'summary' => 'Clarify queue handling',
+        'category' => BriefCategory::Bug,
+    ]);
+    Brief::factory()->create([
+        'summary' => 'Other workspace brief',
+    ]);
+
+    $response = ExplicateServer::actingAs($user)->tool(ListBriefsTool::class, []);
+
+    $response
+        ->assertOk()
+        ->assertStructuredContent(fn ($json) => $json
+            ->where('workspace.slug', 'strategy')
+            ->where('resource_uri', 'explicate://workspaces/strategy/briefs')
+            ->where('briefs.0.id', $brief->id)
+            ->where('briefs.0.summary', 'Clarify queue handling')
+            ->where('briefs.0.category', 'bug')
+            ->where('briefs.0.resource_uri', "explicate://workspaces/strategy/briefs/{$brief->id}")
+            ->etc()
+        )
+        ->assertDontSee('Other workspace brief');
+});
+
+test('create and update brief tools persist scoped brief state', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->for($user->currentTeam)->create([
+        'slug' => 'strategy',
+    ]);
+    $user->switchWorkspace($workspace);
+    $thread = Thread::factory()->for($workspace)->create([
+        'title' => 'Planning thread',
+        'slug' => 'planning-thread',
+    ]);
+
+    $created = ExplicateServer::actingAs($user)->tool(CreateBriefTool::class, [
+        'category' => 'feature',
+        'summary' => 'Create shareable brief views',
+        'current_behaviour' => 'Brief selection only changes local page state.',
+        'expected_behaviour' => 'Brief selection updates to a shareable URL.',
+        'acceptance_criteria' => [
+            ['text' => 'Rows link to brief routes.'],
+        ],
+        'source_thread' => 'planning-thread',
+    ]);
+
+    $brief = $workspace->briefs()->sole();
+
+    $created
+        ->assertOk()
+        ->assertStructuredContent(fn ($json) => $json
+            ->where('brief.id', $brief->id)
+            ->where('brief.category', 'feature')
+            ->where('brief.acceptance_criteria.0.done', false)
+            ->where('brief.source_thread.slug', 'planning-thread')
+            ->where('brief.dashboard_url', route('briefs.show', $brief))
+            ->etc()
+        );
+
+    $updated = ExplicateServer::actingAs($user)->tool(UpdateBriefTool::class, [
+        'brief_id' => $brief->id,
+        'category' => 'bug',
+        'summary' => 'Fix shareable brief views',
+        'acceptance_criteria' => [
+            ['text' => 'Rows link to brief routes.', 'done' => true],
+            ['text' => 'The index redirects to the first brief URL.'],
+        ],
+        'clear_source_thread' => true,
+    ]);
+
+    $updated
+        ->assertOk()
+        ->assertStructuredContent(fn ($json) => $json
+            ->where('brief.id', $brief->id)
+            ->where('brief.category', 'bug')
+            ->where('brief.summary', 'Fix shareable brief views')
+            ->where('brief.acceptance_criteria.0.done', true)
+            ->where('brief.acceptance_criteria.1.text', 'The index redirects to the first brief URL.')
+            ->where('brief.source_thread', null)
+            ->etc()
+        );
+});
+
+test('get brief rejects briefs outside the current workspace', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->for($user->currentTeam)->create([
+        'slug' => 'strategy',
+    ]);
+    $user->switchWorkspace($workspace);
+    $otherBrief = Brief::factory()->create();
+
+    ExplicateServer::actingAs($user)->tool(GetBriefTool::class, [
+        'brief_id' => $otherBrief->id,
+    ])->assertHasErrors([
+        'The requested brief is not accessible for the authenticated user.',
+    ]);
+});
+
+test('update plan creates a plan and replaces ordered tasks', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->for($user->currentTeam)->create([
+        'slug' => 'strategy',
+    ]);
+    $user->switchWorkspace($workspace);
+    $brief = Brief::factory()->for($workspace)->create([
+        'summary' => 'Plan the work',
+    ]);
+
+    $created = ExplicateServer::actingAs($user)->tool(UpdatePlanTool::class, [
+        'brief_id' => $brief->id,
+        'summary' => 'Implementation steps',
+        'tasks' => [
+            [
+                'text' => 'Add MCP resources.',
+                'expected_artifact' => 'Resource classes and registration',
+                'status' => 'in_progress',
+            ],
+            [
+                'text' => 'Add MCP tool tests.',
+                'status' => 'pending',
+            ],
+        ],
+    ]);
+
+    $plan = $brief->fresh()->plan;
+
+    $created
+        ->assertOk()
+        ->assertStructuredContent(fn ($json) => $json
+            ->where('plan.id', $plan->id)
+            ->where('plan.resource_uri', "explicate://workspaces/strategy/briefs/{$brief->id}/plan")
+            ->where('plan.tasks.0.text', 'Add MCP resources.')
+            ->where('plan.tasks.0.expected_artifact', 'Resource classes and registration')
+            ->where('plan.tasks.0.status', 'in_progress')
+            ->where('plan.tasks.0.position', 1)
+            ->where('plan.tasks.1.position', 2)
+            ->etc()
+        );
+
+    ExplicateServer::actingAs($user)->tool(UpdatePlanTool::class, [
+        'brief_id' => $brief->id,
+        'tasks' => [
+            [
+                'text' => 'Ship the MCP surface.',
+                'status' => 'done',
+            ],
+        ],
+    ])->assertOk();
+
+    expect($plan->tasks()->count())->toBe(1)
+        ->and($plan->tasks()->sole()->text)->toBe('Ship the MCP surface.')
+        ->and($plan->tasks()->sole()->status)->toBe(TaskStatus::Done);
+});
+
+test('get plan returns full plan context', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->for($user->currentTeam)->create([
+        'slug' => 'strategy',
+    ]);
+    $user->switchWorkspace($workspace);
+    $brief = Brief::factory()->for($workspace)->create([
+        'summary' => 'Plan context brief',
+    ]);
+    $plan = Plan::factory()->for($brief)->create([
+        'summary' => 'Plan context',
+    ]);
+    Task::factory()->for($plan)->create([
+        'text' => 'Read the brief.',
+        'position' => 1,
+        'status' => TaskStatus::Done,
+    ]);
+
+    ExplicateServer::actingAs($user)->tool(GetPlanTool::class, [
+        'brief_id' => $brief->id,
+    ])
+        ->assertOk()
+        ->assertStructuredContent(fn ($json) => $json
+            ->where('workspace.slug', 'strategy')
+            ->where('plan.summary', 'Plan context')
+            ->where('plan.brief.summary', 'Plan context brief')
+            ->where('plan.tasks.0.text', 'Read the brief.')
+            ->where('plan.tasks.0.status', 'done')
+            ->etc()
+        );
+});
+
 test('create thread creates a draft first post when requested', function () {
     $user = User::factory()->create();
     $workspace = Workspace::factory()->for($user->currentTeam)->create([
@@ -1328,6 +1542,106 @@ test('agent tasks resource returns queued work by uri template', function () {
         ->assertSee('"resource_uri":"explicate://workspaces/strategy/agents/research-agent/tasks/'.$task->id.'"');
 });
 
+test('workspace briefs resource returns briefs by uri template', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->for($user->currentTeam)->create([
+        'slug' => 'strategy',
+    ]);
+    $user->switchWorkspace($workspace);
+    $brief = Brief::factory()->for($workspace)->create([
+        'summary' => 'Brief resource summary',
+    ]);
+
+    $resource = new class(app(ExplicateContext::class)) extends WorkspaceBriefsResource
+    {
+        public function uri(): string
+        {
+            return 'explicate://workspaces/strategy/briefs';
+        }
+    };
+
+    $response = ExplicateServer::actingAs($user)->resource($resource);
+
+    $response
+        ->assertOk()
+        ->assertSee('"slug":"strategy"')
+        ->assertSee('"summary":"Brief resource summary"')
+        ->assertSee('"resource_uri":"explicate://workspaces/strategy/briefs/'.$brief->id.'"');
+});
+
+test('brief resource returns full brief by uri template', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->for($user->currentTeam)->create([
+        'slug' => 'strategy',
+    ]);
+    $user->switchWorkspace($workspace);
+    $brief = Brief::factory()->for($workspace)->create([
+        'summary' => 'Brief item summary',
+        'expected_behaviour' => 'The resource includes complete brief fields.',
+    ]);
+
+    $resource = new class(app(ExplicateContext::class), $brief->id) extends BriefResource
+    {
+        public function __construct(ExplicateContext $context, private int $briefId)
+        {
+            parent::__construct($context);
+        }
+
+        public function uri(): string
+        {
+            return "explicate://workspaces/strategy/briefs/{$this->briefId}";
+        }
+    };
+
+    $response = ExplicateServer::actingAs($user)->resource($resource);
+
+    $response
+        ->assertOk()
+        ->assertSee('"summary":"Brief item summary"')
+        ->assertSee('"expected_behaviour":"The resource includes complete brief fields."')
+        ->assertSee('"dashboard_url":"'.route('briefs.show', $brief).'"');
+});
+
+test('plan resource returns plan by uri template', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->for($user->currentTeam)->create([
+        'slug' => 'strategy',
+    ]);
+    $user->switchWorkspace($workspace);
+    $brief = Brief::factory()->for($workspace)->create([
+        'summary' => 'Plan resource brief',
+    ]);
+    $plan = Plan::factory()->for($brief)->create([
+        'summary' => 'Plan resource summary',
+    ]);
+    Task::factory()->for($plan)->create([
+        'text' => 'Expose plan resource.',
+        'position' => 1,
+    ]);
+
+    $resource = new class(app(ExplicateContext::class), $brief->id) extends PlanResource
+    {
+        public function __construct(ExplicateContext $context, private int $briefId)
+        {
+            parent::__construct($context);
+        }
+
+        public function uri(): string
+        {
+            return "explicate://workspaces/strategy/briefs/{$this->briefId}/plan";
+        }
+    };
+
+    $response = ExplicateServer::actingAs($user)->resource($resource);
+
+    $response
+        ->assertOk()
+        ->assertSee('"summary":"Plan resource summary"')
+        ->assertSee('"summary":"Plan resource brief"')
+        ->assertSee('"text":"Expose plan resource."')
+        ->assertSee('"resource_uri":"explicate://workspaces/strategy/briefs/'.$brief->id.'/plan"');
+});
+
 test('agent task resource returns queued work by uri template', function () {
     Queue::fake();
 
@@ -1615,7 +1929,7 @@ test('invalid local mcp auth config does not write laravel exceptions to stdout'
 test('topic forge server lists topic, post, and agent resource templates', function () {
     $response = topicForgeServerMethodResponse('resources/templates/list');
 
-    expect($response['result']['resourceTemplates'])->toHaveCount(10);
+    expect($response['result']['resourceTemplates'])->toHaveCount(13);
 
     expect(collect($response['result']['resourceTemplates'])->contains(
         fn (array $resource): bool => $resource['uriTemplate'] === 'explicate://workspaces/{workspace}/topics'
@@ -1652,6 +1966,21 @@ test('topic forge server lists topic, post, and agent resource templates', funct
     expect(collect($response['result']['resourceTemplates'])->contains(
         fn (array $resource): bool => $resource['name'] === 'agent-task-resource'
             && $resource['uriTemplate'] === 'explicate://workspaces/{workspace}/agents/{agent}/tasks/{task}'
+    ))->toBeTrue();
+
+    expect(collect($response['result']['resourceTemplates'])->contains(
+        fn (array $resource): bool => $resource['name'] === 'workspace-briefs-resource'
+            && $resource['uriTemplate'] === 'explicate://workspaces/{workspace}/briefs'
+    ))->toBeTrue();
+
+    expect(collect($response['result']['resourceTemplates'])->contains(
+        fn (array $resource): bool => $resource['name'] === 'brief-resource'
+            && $resource['uriTemplate'] === 'explicate://workspaces/{workspace}/briefs/{brief}'
+    ))->toBeTrue();
+
+    expect(collect($response['result']['resourceTemplates'])->contains(
+        fn (array $resource): bool => $resource['name'] === 'plan-resource'
+            && $resource['uriTemplate'] === 'explicate://workspaces/{workspace}/briefs/{brief}/plan'
     ))->toBeTrue();
 });
 

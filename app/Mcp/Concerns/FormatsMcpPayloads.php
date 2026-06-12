@@ -2,9 +2,13 @@
 
 namespace App\Mcp\Concerns;
 
+use App\Enums\TaskStatus;
 use App\Mcp\ExplicateUris;
 use App\Models\AgentTask;
+use App\Models\Brief;
+use App\Models\Plan;
 use App\Models\Post;
+use App\Models\Task;
 use App\Models\Thread;
 use App\Models\Workspace;
 
@@ -103,6 +107,90 @@ trait FormatsMcpPayloads
         return [
             ...$this->agentTaskPayload($task),
             'post' => $this->postPayload($task->post),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function briefSummaryPayload(Brief $brief): array
+    {
+        $brief->loadMissing(['workspace', 'sourceThread', 'plan.tasks']);
+
+        return [
+            'id' => $brief->id,
+            'category' => $brief->category->value,
+            'summary' => $brief->summary,
+            'source_thread' => $brief->sourceThread ? [
+                'id' => $brief->sourceThread->id,
+                'title' => $brief->sourceThread->title,
+                'slug' => $brief->sourceThread->slug,
+                'resource_uri' => ExplicateUris::thread($brief->sourceThread),
+            ] : null,
+            'acceptance_criteria_count' => count($brief->acceptance_criteria ?? []),
+            'plan' => $brief->plan ? [
+                'id' => $brief->plan->id,
+                'summary' => $brief->plan->summary,
+                'tasks_count' => $brief->plan->tasks->count(),
+                'done_tasks_count' => $brief->plan->tasks->where('status', TaskStatus::Done)->count(),
+                'resource_uri' => ExplicateUris::plan($brief->plan),
+                'dashboard_url' => route('briefs.plan', $brief),
+            ] : null,
+            'resource_uri' => ExplicateUris::brief($brief),
+            'dashboard_url' => route('briefs.show', $brief),
+            'updated_at' => $brief->updated_at?->toIso8601String(),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function briefPayload(Brief $brief): array
+    {
+        $brief->loadMissing(['workspace', 'sourceThread', 'plan.tasks']);
+
+        return [
+            ...$this->briefSummaryPayload($brief),
+            'current_behaviour' => $brief->current_behaviour,
+            'expected_behaviour' => $brief->expected_behaviour,
+            'acceptance_criteria' => $brief->acceptance_criteria ?? [],
+            'out_of_scope' => $brief->out_of_scope,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function planPayload(Plan $plan): array
+    {
+        $plan->loadMissing(['brief.workspace', 'brief.sourceThread', 'tasks']);
+
+        return [
+            'id' => $plan->id,
+            'summary' => $plan->summary,
+            'resource_uri' => ExplicateUris::plan($plan),
+            'dashboard_url' => route('briefs.plan', $plan->brief),
+            'brief' => $this->briefSummaryPayload($plan->brief),
+            'tasks' => $plan->tasks
+                ->map(fn (Task $task) => $this->taskPayload($task))
+                ->values()
+                ->all(),
+            'updated_at' => $plan->updated_at?->toIso8601String(),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function taskPayload(Task $task): array
+    {
+        return [
+            'id' => $task->id,
+            'text' => $task->text,
+            'expected_artifact' => $task->expected_artifact,
+            'status' => $task->status->value,
+            'position' => $task->position,
+            'updated_at' => $task->updated_at?->toIso8601String(),
         ];
     }
 

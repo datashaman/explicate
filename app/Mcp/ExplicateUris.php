@@ -5,6 +5,8 @@ namespace App\Mcp;
 use App\Data\UserWorkspace;
 use App\Models\Agent;
 use App\Models\AgentTask;
+use App\Models\Brief;
+use App\Models\Plan;
 use App\Models\Post;
 use App\Models\Thread;
 use App\Models\Topic;
@@ -32,9 +34,15 @@ final class ExplicateUris
 
     public const WorkspaceThreadsTemplate = 'explicate://workspaces/{workspace}/threads';
 
+    public const WorkspaceBriefsTemplate = 'explicate://workspaces/{workspace}/briefs';
+
     public const ThreadTemplate = 'explicate://workspaces/{workspace}/threads/{thread}';
 
     public const PostTemplate = 'explicate://workspaces/{workspace}/posts/{post}';
+
+    public const BriefTemplate = 'explicate://workspaces/{workspace}/briefs/{brief}';
+
+    public const PlanTemplate = 'explicate://workspaces/{workspace}/briefs/{brief}/plan';
 
     public const AgentTemplate = 'explicate://workspaces/{workspace}/agents/{agent}';
 
@@ -79,6 +87,11 @@ final class ExplicateUris
         return self::Workspaces.'/'.self::workspaceSlug($workspace).'/threads';
     }
 
+    public static function workspaceBriefs(Workspace|UserWorkspace|string $workspace): string
+    {
+        return self::Workspaces.'/'.self::workspaceSlug($workspace).'/briefs';
+    }
+
     public static function thread(Thread $thread): string
     {
         $thread->loadMissing('workspace');
@@ -91,6 +104,20 @@ final class ExplicateUris
         $post->loadMissing('thread.workspace');
 
         return self::Workspaces."/{$post->thread->workspace->slug}/posts/{$post->ulid}";
+    }
+
+    public static function brief(Brief $brief): string
+    {
+        $brief->loadMissing('workspace');
+
+        return self::workspaceBriefs($brief->workspace)."/{$brief->id}";
+    }
+
+    public static function plan(Plan $plan): string
+    {
+        $plan->loadMissing('brief.workspace');
+
+        return self::brief($plan->brief).'/plan';
     }
 
     public static function agent(Agent $agent): string
