@@ -1066,9 +1066,10 @@ test('dashboard post panel shows attachments', function () {
     $this->actingAs($user)
         ->get(route('dashboard', ['topic' => $topic->slug, 'post' => $post->ulid, 'panel' => 'posts']))
         ->assertOk()
-        ->assertSee('Attachments')
+        ->assertSee('data-test="post-message-attachments"', escape: false)
         ->assertSee('roadmap.pdf')
         ->assertSee('2 KB')
+        ->assertDontSee('Attachments')
         ->assertDontSee('wire:model="postUploads"', escape: false);
 });
 

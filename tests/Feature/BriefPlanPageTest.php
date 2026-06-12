@@ -17,7 +17,9 @@ test('brief plan page renders brief context', function () {
         ->get(route('briefs.plan', $brief))
         ->assertOk()
         ->assertSee('data-test="brief-plan-page"', false)
+        ->assertSee('data-test="brief-plan-view"', false)
         ->assertSee('data-test="plans-nav-link"', false)
+        ->assertSee('data-test="edit-plan-button"', false)
         ->assertSee('Improve onboarding')
         ->assertSee('Users can finish setup without help.');
 });
@@ -58,7 +60,7 @@ test('brief plan page creates a plan for a brief', function () {
     $brief = Brief::factory()->for($workspace)->create();
 
     Livewire::actingAs($user)
-        ->test('pages::brief-plan', ['brief' => $brief])
+        ->test('pages::brief-plan-edit', ['brief' => $brief])
         ->set('planSummary', 'Ship this in small, reviewable steps.')
         ->set('newPlanTask', 'Create the migration.')
         ->call('addPlanTask')
@@ -90,7 +92,7 @@ test('brief plan page updates plan tasks', function () {
     $second = Task::factory()->for($plan)->create(['text' => 'Second task.', 'position' => 2]);
 
     Livewire::actingAs($user)
-        ->test('pages::brief-plan', ['brief' => $brief])
+        ->test('pages::brief-plan-edit', ['brief' => $brief])
         ->set('planSummary', 'Updated plan.')
         ->set('planTasks.0.status', TaskStatus::Done->value)
         ->set('planTasks.1.text', 'Updated second task.')
@@ -107,4 +109,16 @@ test('brief plan page updates plan tasks', function () {
         ->and($tasks->first()->expected_artifact)->toBe('Updated artifact.')
         ->and($tasks->pluck('position')->all())->toBe([1, 2])
         ->and($tasks->last()->status)->toBe(TaskStatus::Done);
+});
+
+test('brief plan edit page renders the current editor UI', function () {
+    [$user, $workspace] = userWithWorkspace();
+    $brief = Brief::factory()->for($workspace)->create(['summary' => 'Editable plan']);
+
+    $this->actingAs($user)
+        ->get(route('briefs.plan.edit', $brief))
+        ->assertOk()
+        ->assertSee('data-test="brief-plan-form"', false)
+        ->assertSee('Editable plan')
+        ->assertSee('data-test="plan-save"', false);
 });

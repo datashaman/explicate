@@ -195,13 +195,17 @@
                         <a
                             href="{{ $attachment->url() }}"
                             target="_blank"
-                            class="inline-flex max-w-full items-center gap-1.5 rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1 text-xs text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900 dark:border-white/10 dark:bg-white/5 dark:text-neutral-300 dark:hover:bg-white/10"
+                            class="group flex w-40 flex-col overflow-hidden rounded-md border border-neutral-200 bg-neutral-50 hover:border-neutral-300 dark:border-white/10 dark:bg-white/5 dark:hover:border-white/20"
                             title="{{ $attachment->filename }} · {{ $attachment->formattedSize() }}"
                             data-test="post-message-attachment"
                         >
-                            <flux:icon name="paper-clip" variant="mini" class="size-3.5 shrink-0 text-neutral-400" />
-                            <span class="truncate">{{ $attachment->filename }}</span>
-                            <span class="shrink-0 text-neutral-400">{{ $attachment->formattedSize() }}</span>
+                            <span class="flex aspect-video w-full items-center justify-center bg-white dark:bg-zinc-900/60">
+                                <flux:icon name="document" class="size-8 text-neutral-400 group-hover:text-neutral-600 dark:text-neutral-500 dark:group-hover:text-neutral-300" />
+                            </span>
+                            <span class="min-w-0 px-2 py-1">
+                                <span class="block truncate text-xs text-neutral-600 group-hover:text-neutral-900 dark:text-neutral-300 dark:group-hover:text-neutral-100">{{ $attachment->filename }}</span>
+                                <span class="block text-xs text-neutral-400">{{ $attachment->formattedSize() }}</span>
+                            </span>
                         </a>
                     @endif
                 @endforeach

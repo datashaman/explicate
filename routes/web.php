@@ -20,8 +20,12 @@ Route::middleware(['auth', 'verified', EnsureTeamMembership::class, EnsureOnboar
     ->group(function () {
         Route::livewire('dashboard', 'pages::dashboard')->name('dashboard');
         Route::livewire('briefs', 'pages::briefs')->name('briefs');
+        Route::livewire('briefs/create', 'pages::briefs-edit')->name('briefs.create');
+        Route::livewire('briefs/{brief}/edit', 'pages::briefs-edit')->name('briefs.edit');
+        Route::livewire('briefs/{brief}', 'pages::brief')->name('briefs.show');
         Route::livewire('plans', 'pages::plans')->name('plans');
         Route::livewire('briefs/{brief}/plan', 'pages::brief-plan')->name('briefs.plan');
+        Route::livewire('briefs/{brief}/plan/edit', 'pages::brief-plan-edit')->name('briefs.plan.edit');
         Route::get('attachments/{attachment}', AttachmentController::class)->name('attachments.show');
     });
 
